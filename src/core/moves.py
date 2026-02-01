@@ -57,10 +57,10 @@ def make_move(
     move: Move = ""
 
     move += piece
-    move += chr(initial_position[0] + ord('a') - 1)
+    move += chr(initial_position[0] + ord("a") - 1)
     move += str(initial_position[1])
     move += "x" if capture else "-"
-    move += chr(final_position[0] + ord('a') - 1)
+    move += chr(final_position[0] + ord("a") - 1)
     move += str(final_position[1])
     move += "T" if en_passant else "F"
     move += "T" if check else "F"
@@ -76,7 +76,7 @@ def get_piece(move: Move) -> str:
 
 
 def get_initial_position(move: Move) -> tuple[int, int]:
-    return (int(ord(move[1]) - ord('a') + 1), int(move[2]))
+    return (int(ord(move[1]) - ord("a") + 1), int(move[2]))
 
 
 def is_capture(move: Move) -> bool:
@@ -84,7 +84,7 @@ def is_capture(move: Move) -> bool:
 
 
 def get_final_position(move: Move) -> tuple[int, int]:
-    return (int(ord(move[4]) - ord('a') + 1), int(move[5]))
+    return (int(ord(move[4]) - ord("a") + 1), int(move[5]))
 
 
 def is_en_passant(move: Move) -> bool:
