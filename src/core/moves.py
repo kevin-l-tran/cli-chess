@@ -18,8 +18,8 @@ where
 def _verify_position(position: tuple[int, int]) -> bool:
     return (
         len(position) == 2
-        and position[0] in [1, 2, 3, 4, 5, 6, 7, 8]
-        and position[1] in [1, 2, 3, 4, 5, 6, 7, 8]
+        and position[0] in [0, 1, 2, 3, 4, 5, 6, 7]
+        and position[1] in [0, 1, 2, 3, 4, 5, 6, 7]
     )
 
 
@@ -76,7 +76,7 @@ def get_piece(move: Move) -> str:
 
 
 def get_initial_position(move: Move) -> tuple[int, int]:
-    return (int(ord(move[1]) - ord("a") + 1), int(move[2]))
+    return (int(ord(move[1]) - ord("a")), int(move[2]))
 
 
 def is_capture(move: Move) -> bool:
@@ -84,7 +84,7 @@ def is_capture(move: Move) -> bool:
 
 
 def get_final_position(move: Move) -> tuple[int, int]:
-    return (int(ord(move[4]) - ord("a") + 1), int(move[5]))
+    return (int(ord(move[4]) - ord("a")), int(move[5]))
 
 
 def is_en_passant(move: Move) -> bool:
