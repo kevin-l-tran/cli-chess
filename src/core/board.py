@@ -151,7 +151,19 @@ class Board:
         return moves
 
     def _get_knight_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
-        return []
+        moves: list[Move] = []
+        relative_moves: list[tuple[int, int]] = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (-1, 2), (1, -2), (-1, -2)
+        ]
+
+        for rel in relative_moves:
+            final = (position[0] + rel[0], position[1] + rel[1])
+            square = self.board[final[0]][final[1]]
+            move = _move_or_capture_or_halt(piece, square, position, final)
+            if move is not None:
+                moves.append(move)
+
+        return moves
 
     def _get_bishop_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
         moves: list[Move] = []
