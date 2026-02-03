@@ -187,8 +187,35 @@ class Board:
 
         return moves
 
-    def _get_horizontal_slide_moves(self, position: tuple[int, int]) -> list[Move]:
-        return []
+    def _get_horizontal_slide_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
+        moves: list[Move] = []
+        file = position[0]
+
+        right_index = position[1] + 1
+        while _check_bounds((file, right_index)):
+            square = self.board[file][right_index]
+            move = _move_or_capture_or_halt(
+                piece, square, position, (file, right_index)
+            )
+            if move is None:
+                break
+            else:
+                moves.append(move)
+            right_index += 1
+
+        left_index = position[1] - 1
+        while _check_bounds((file, left_index)):
+            square = self.board[file][left_index]
+            move = _move_or_capture_or_halt(
+                piece, square, position, (file, left_index)
+            )
+            if move is None:
+                break
+            else:
+                moves.append(move)
+            left_index -= 1
+
+        return moves
 
     def _get_diagonal_slide_moves(self, position: tuple[int, int]) -> list[Move]:
         return []
