@@ -34,11 +34,11 @@ def get_name(p: Piece) -> str:
     return p[0]
 
 
-def get_is_white(p: Piece) -> bool:
+def is_white(p: Piece) -> bool:
     return p[1] == "T"
 
 
-def get_has_moved(p: Piece) -> bool:
+def has_moved(p: Piece) -> bool:
     return p[2] == "T"
 
 
@@ -128,13 +128,13 @@ class Board:
         self.board[position[0]][position[1]] = piece
         self.pieces[position] = piece
 
-        if get_is_white(piece):
+        if is_white(piece):
             self.white_pieces.append(position)
         else:
             self.black_pieces.append(position)
 
         if get_name(piece) == "K":
-            if get_is_white(piece):
+            if is_white(piece):
                 self.white_king = position
             else:
                 self.black_king = position
@@ -142,8 +142,54 @@ class Board:
     def _get_psuedo_moves(self) -> list[Move]:
         return []
 
-    def _get_pawn_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
-        return []
+    def _get_pawn_moves(self, pawn: Piece, position: tuple[int, int]) -> list[Move]:
+        moves: list[Move] = []
+        file = position[0]
+        rank = position[1]
+        white_multiplier = 1 if is_white(pawn) else -1
+
+        # foward move
+        if _is_in_bounds((file + 1 * white_multiplier, rank)):
+            square = self.board[file + 1 * white_multiplier][rank]
+            if square is None:
+                move = make_move(
+                    pawn, position, (file + 1 * white_multiplier, rank), False
+                )
+                moves.append(move)
+
+        # second forward move
+        if _is_in_bounds((file + 2 * white_multiplier, rank)) and not has_moved(pawn):
+            square = self.board[file + 2 * white_multiplier][rank]
+            if square is None:
+                move = make_move(
+                    pawn, position, (file + 2 * white_multiplier, rank), False
+                )
+                moves.append(move)
+
+        # diagonal attacks
+        if _is_in_bounds((file + 1 * white_multiplier, rank - 1)):
+            square = self.board[file + 1 * white_multiplier][rank - 1]
+            if square is not None:
+                move = make_move(
+                    pawn,
+                    position,
+                    (file + 1 * white_multiplier, rank - 1),
+                    False,
+                    get_name(square),
+                )
+
+        if _is_in_bounds((file + 1 * white_multiplier, rank + 1)):
+            square = self.board[file + 1 * white_multiplier][rank + 1]
+            if square is not None:
+                move = make_move(
+                    pawn,
+                    position,
+                    (file + 1 * white_multiplier, rank + 1),
+                    False,
+                    get_name(square),
+                )
+
+        return moves
 
     def _get_rook_moves(self, rook: Piece, position: tuple[int, int]) -> list[Move]:
         moves: list[Move] = []
@@ -214,7 +260,7 @@ class Board:
         rank = position[1]
 
         up_index = position[0] + 1
-        while _check_bounds((up_index, rank)):
+        while _is_in_bounds((up_index, rank)):
             square = self.board[up_index][rank]
             move = _move_or_capture_or_halt(piece, square, position, (up_index, rank))
             if move is None:
@@ -224,7 +270,7 @@ class Board:
             up_index += 1
 
         down_index = position[0] - 1
-        while _check_bounds((down_index, rank)):
+        while _is_in_bounds((down_index, rank)):
             square = self.board[down_index][rank]
             move = _move_or_capture_or_halt(piece, square, position, (down_index, rank))
             if move is None:
@@ -242,7 +288,7 @@ class Board:
         file = position[0]
 
         right_index = position[1] + 1
-        while _check_bounds((file, right_index)):
+        while _is_in_bounds((file, right_index)):
             square = self.board[file][right_index]
             move = _move_or_capture_or_halt(
                 piece, square, position, (file, right_index)
@@ -254,7 +300,7 @@ class Board:
             right_index += 1
 
         left_index = position[1] - 1
-        while _check_bounds((file, left_index)):
+        while _is_in_bounds((file, left_index)):
             square = self.board[file][left_index]
             move = _move_or_capture_or_halt(piece, square, position, (file, left_index))
             if move is None:
@@ -274,7 +320,7 @@ class Board:
 
         up_index = file + 1
         left_index = rank - 1
-        while _check_bounds((up_index, left_index)):
+        while _is_in_bounds((up_index, left_index)):
             square = self.board[up_index][left_index]
             move = _move_or_capture_or_halt(
                 piece, square, position, (up_index, left_index)
@@ -288,7 +334,7 @@ class Board:
 
         up_index = file + 1
         right_index = rank + 1
-        while _check_bounds((up_index, right_index)):
+        while _is_in_bounds((up_index, right_index)):
             square = self.board[up_index][right_index]
             move = _move_or_capture_or_halt(
                 piece, square, position, (up_index, right_index)
@@ -302,7 +348,7 @@ class Board:
 
         down_index = file - 1
         right_index = rank + 1
-        while _check_bounds((down_index, right_index)):
+        while _is_in_bounds((down_index, right_index)):
             square = self.board[down_index][right_index]
             move = _move_or_capture_or_halt(
                 piece, square, position, (down_index, right_index)
@@ -316,7 +362,7 @@ class Board:
 
         down_index = file - 1
         left_index = rank - 1
-        while _check_bounds((down_index, left_index)):
+        while _is_in_bounds((down_index, left_index)):
             square = self.board[down_index][left_index]
             move = _move_or_capture_or_halt(
                 piece, square, position, (down_index, left_index)
@@ -331,7 +377,7 @@ class Board:
         return moves
 
 
-def _check_bounds(position: tuple[int, int]):
+def _is_in_bounds(position: tuple[int, int]):
     return (position[0] >= 0 and position[0] <= 7) and (
         position[1] >= 0 and position[1] <= 7
     )
@@ -342,7 +388,7 @@ def _move_or_capture_or_halt(
 ) -> Move | None:
     if square is None:
         return make_move(get_name(piece), initial, final, False)
-    elif get_is_white(square) != get_is_white(piece):
+    elif is_white(square) != is_white(piece):
         return make_move(get_name(piece), initial, final, False, get_name(square))
     else:
         return None
