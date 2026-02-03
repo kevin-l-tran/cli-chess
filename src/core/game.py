@@ -8,20 +8,20 @@ class Game:
 
     Attributes:
         board (Board): The game board object.
-        positions (set[str]): A hashmap of all encountered board positions.
+        encountered_positions (dict[str, int]): A hashmap of encountered board positions to number of encounters.
         stale_moves (int): Number of moves since the last capture or pawn movement.
         is_white_turn (bool): Whether it is the white player's turn.
-        outcome (str): String indicating the game outcome.
+        outcome (str): String indicating the game outcome. It is empty if the game is ongoing.
     """
 
     def __init__(self) -> None:
         self.board = Board()
-        self.positions: set[str] = set()
+        self.encountered_positions: dict[str, int] = {}
         self.stale_moves = 0
         self.is_white_turn = True
         self.outcome = ""
 
-        self.positions.add(self._get_position_hash())
+        self.encountered_positions[self._get_position_hash()] = 1
 
     def _get_position_hash(self):
         hash = ""

@@ -1,3 +1,6 @@
+from core.moves import Move, make_move
+
+
 Piece = str
 """
 Represents a chess piece. The complete representation of a piece has the form:
@@ -64,60 +67,63 @@ class Board:
         # add white pawns
         pawn = make_piece("P", True, False)
         for i in range(8):
-            self.add_piece(pawn, (1, i))
+            self._add_piece(pawn, (1, i))
 
         # add white rooks
         rook = make_piece("R", True, False)
-        self.add_piece(rook, (0, 0))
-        self.add_piece(rook, (0, 7))
+        self._add_piece(rook, (0, 0))
+        self._add_piece(rook, (0, 7))
 
         # add white knights
         knight = make_piece("N", True, False)
-        self.add_piece(knight, (0, 1))
-        self.add_piece(knight, (0, 6))
+        self._add_piece(knight, (0, 1))
+        self._add_piece(knight, (0, 6))
 
         # add white bishops
         bishop = make_piece("B", True, False)
-        self.add_piece(bishop, (0, 2))
-        self.add_piece(bishop, (0, 5))
+        self._add_piece(bishop, (0, 2))
+        self._add_piece(bishop, (0, 5))
 
         # add white queen
         queen = make_piece("Q", True, False)
-        self.add_piece(queen, (0, 3))
+        self._add_piece(queen, (0, 3))
 
         # add white king
         king = make_piece("K", True, False)
-        self.add_piece(king, (0, 4))
+        self._add_piece(king, (0, 4))
 
         # add black pawns
         pawn = make_piece("P", False, False)
         for i in range(8):
-            self.add_piece(pawn, (6, i))
+            self._add_piece(pawn, (6, i))
 
         # add black rooks
         rook = make_piece("R", False, False)
-        self.add_piece(rook, (7, 0))
-        self.add_piece(rook, (7, 7))
+        self._add_piece(rook, (7, 0))
+        self._add_piece(rook, (7, 7))
 
         # add black knights
         knight = make_piece("N", False, False)
-        self.add_piece(knight, (7, 1))
-        self.add_piece(knight, (7, 6))
+        self._add_piece(knight, (7, 1))
+        self._add_piece(knight, (7, 6))
 
         # add black bishops
         bishop = make_piece("B", False, False)
-        self.add_piece(bishop, (7, 2))
-        self.add_piece(bishop, (7, 5))
+        self._add_piece(bishop, (7, 2))
+        self._add_piece(bishop, (7, 5))
 
         # add black queen
         queen = make_piece("Q", False, False)
-        self.add_piece(queen, (7, 3))
+        self._add_piece(queen, (7, 3))
 
         # add black king
         king = make_piece("K", False, False)
-        self.add_piece(king, (7, 4))
+        self._add_piece(king, (7, 4))
 
-    def add_piece(self, piece: Piece, position: tuple[int, int]) -> None:
+    def get_moves(self) -> list[Move]:
+        return []
+
+    def _add_piece(self, piece: Piece, position: tuple[int, int]) -> None:
         self.board[position[0]][position[1]] = piece
         self.pieces[position] = piece
 
@@ -131,3 +137,76 @@ class Board:
                 self.white_king = position
             else:
                 self.black_king = position
+
+    def _get_psuedo_moves(self) -> list[Move]:
+        return []
+
+    def _get_pawn_moves(self, position: tuple[int, int]) -> list[Move]:
+        return []
+
+    def _get_rook_moves(self, position: tuple[int, int]) -> list[Move]:
+        return []
+
+    def _get_knight_moves(self, position: tuple[int, int]) -> list[Move]:
+        return []
+
+    def _get_bishop_moves(self, position: tuple[int, int]) -> list[Move]:
+        return []
+
+    def _get_queen_moves(self, position: tuple[int, int]) -> list[Move]:
+        return []
+
+    def _get_king_moves(self, position: tuple[int, int]) -> list[Move]:
+        return []
+
+    def _get_vertical_slide_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
+        moves: list[Move] = []
+        rank = position[1]
+
+        up_index = position[0] + 1
+        while _check_bounds((up_index, rank)):
+            square = self.board[up_index][rank]
+            move = _move_or_capture_or_halt(
+                piece, square, position, (up_index, rank))
+            if move is None:
+                break
+            else:
+                moves.append(move)
+            up_index += 1
+
+        down_index = position[0] - 1
+        while _check_bounds((down_index, rank)):
+            square = self.board[down_index][rank]
+            move = _move_or_capture_or_halt(
+                piece, square, position, (down_index, rank))
+            if move is None:
+                break
+            else:
+                moves.append(move)
+            down_index -= 1
+
+        return moves
+
+    def _get_horizontal_slide_moves(self, position: tuple[int, int]) -> list[Move]:
+        return []
+
+    def _get_diagonal_slide_moves(self, position: tuple[int, int]) -> list[Move]:
+        return []
+
+
+def _check_bounds(position: tuple[int, int]):
+    return (position[0] >= 0 and position[0] <= 7) and (position[1] >= 0 and position[1] <= 7)
+
+
+def _move_or_capture_or_halt(
+    piece: Piece,
+    square: Piece | None,
+    initial: tuple[int, int],
+    final: tuple[int, int]
+) -> Move | None:
+    if square is None:
+        return make_move(get_name(piece), initial, final, False)
+    elif get_is_white(square) != get_is_white(piece):
+        return make_move(get_name(piece), initial, final, False, get_name(square))
+    else:
+        return None

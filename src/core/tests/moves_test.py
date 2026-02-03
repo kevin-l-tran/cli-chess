@@ -10,16 +10,13 @@ from src.core import moves
 def test_make_move_encodes_correctly_all_fields() -> None:
     m: str = moves.make_move(
         piece="N",
-        initial_position=(2, 1),  # b1
-        final_position=(3, 3),  # c3
-        capture=True,
+        initial_position=(1, 0),  # b1
+        final_position=(2, 2),  # c3
+        capture="P",
         en_passant=False,
-        check=True,
-        checkmate=False,
         promotion=None,
-        annotation="!?",
     )
-    assert m == "Nb1xc3FTF_!?"
+    assert m == "Nb1Pc3F_"
 
 
 @pytest.mark.parametrize(
@@ -28,44 +25,35 @@ def test_make_move_encodes_correctly_all_fields() -> None:
         (
             dict(
                 piece="P",
-                initial_position=(1, 2),  # a2
-                final_position=(1, 4),  # a4
-                capture=False,
+                initial_position=(0, 1),  # a2
+                final_position=(0, 3),  # a4
+                capture=None,
                 en_passant=False,
-                check=False,
-                checkmate=False,
                 promotion=None,
-                annotation=None,
             ),
-            "Pa2-a4FFF__",
+            "Pa2-a4F_",
         ),
         (
             dict(
                 piece="P",
-                initial_position=(5, 7),  # e7
-                final_position=(5, 8),  # e8
-                capture=True,
+                initial_position=(4, 6),  # e7
+                final_position=(4, 7),  # e8
+                capture="R",
                 en_passant=False,
-                check=False,
-                checkmate=True,
                 promotion="Q",
-                annotation="!!",
             ),
-            "Pe7xe8FFTQ!!",
+            "Pe7Re8FQ",
         ),
         (
             dict(
                 piece="P",
-                initial_position=(4, 5),  # d5
-                final_position=(5, 6),  # e6
-                capture=True,
+                initial_position=(3, 4),  # d5
+                final_position=(4, 5),  # e6
+                capture="B",
                 en_passant=True,
-                check=False,
-                checkmate=False,
                 promotion=None,
-                annotation="--",
             ),
-            "Pd5xe6TFF_--",
+            "Pd5Be6T_",
         ),
     ],
 )
@@ -77,41 +65,31 @@ def test_make_move_various_cases(kwargs: Mapping[str, Any], expected_move: str) 
 def test_getters_round_trip_for_basic_move() -> None:
     m: str = moves.make_move(
         piece="B",
-        initial_position=(3, 1),  # c1
-        final_position=(6, 4),  # f4
-        capture=False,
+        initial_position=(2, 0),  # c1
+        final_position=(5, 3),  # f4
+        capture="P",
         en_passant=False,
-        check=False,
-        checkmate=False,
         promotion=None,
-        annotation=None,
     )
 
     assert moves.get_piece(m) == "B"
-    assert moves.get_initial_position(m) == (3, 1)
-    assert moves.is_capture(m) is False
-    assert moves.get_final_position(m) == (6, 4)
+    assert moves.get_initial_position(m) == (2, 0)
+    assert moves.get_captured_piece(m) == "P"
+    assert moves.get_final_position(m) == (5, 3)
     assert moves.is_en_passant(m) is False
-    assert moves.is_check(m) is False
-    assert moves.is_checkmate(m) is False
     assert moves.get_promotion(m) is None
-    assert moves.get_rating(m) is None
 
 
-def test_get_promotion_and_rating_present() -> None:
+def test_get_promotion() -> None:
     m: str = moves.make_move(
         piece="P",
-        initial_position=(7, 7),  # g7
-        final_position=(8, 8),  # h8
-        capture=True,
+        initial_position=(6, 6),  # g7
+        final_position=(7, 7),  # h8
+        capture=None,
         en_passant=False,
-        check=True,
-        checkmate=True,
         promotion="N",
-        annotation="??",
     )
     assert moves.get_promotion(m) == "N"
-    assert moves.get_rating(m) == "??"
 
 
 @pytest.mark.parametrize(
@@ -124,25 +102,22 @@ def test_make_move_rejects_invalid_piece(bad_piece: Any) -> None:
             piece=bad_piece,
             initial_position=(1, 2),
             final_position=(1, 3),
-            capture=False,
+            capture=None,
             en_passant=False,
-            check=False,
-            checkmate=False,
             promotion=None,
-            annotation=None,
         )
 
 
 @pytest.mark.parametrize(
     "bad_position",
     [
-        (0, 1),
-        (1, 0),
-        (9, 1),
-        (1, 9),
-        (1,),
-        (1, 2, 3),
-        ("a", 2),
+        (-1, 0),
+        (0, -1),
+        (8, 0),
+        (0, 8),
+        (0,),
+        (0, 1, 2),
+        ("a", 1),
     ],
 )
 def test_make_move_rejects_invalid_positions(bad_position: Any) -> None:
@@ -151,12 +126,9 @@ def test_make_move_rejects_invalid_positions(bad_position: Any) -> None:
             piece="P",
             initial_position=bad_position,
             final_position=(1, 3),
-            capture=False,
+            capture=None,
             en_passant=False,
-            check=False,
-            checkmate=False,
             promotion=None,
-            annotation=None,
         )
 
     with pytest.raises(AssertionError):
@@ -164,12 +136,9 @@ def test_make_move_rejects_invalid_positions(bad_position: Any) -> None:
             piece="P",
             initial_position=(1, 2),
             final_position=bad_position,
-            capture=False,
+            capture=None,
             en_passant=False,
-            check=False,
-            checkmate=False,
             promotion=None,
-            annotation=None,
         )
 
 
@@ -178,30 +147,9 @@ def test_make_move_rejects_invalid_promotion(bad_promotion: str) -> None:
     with pytest.raises(AssertionError):
         moves.make_move(
             piece="P",
-            initial_position=(1, 7),
-            final_position=(1, 8),
-            capture=False,
+            initial_position=(0, 6),
+            final_position=(0, 7),
+            capture=None,
             en_passant=False,
-            check=False,
-            checkmate=False,
             promotion=bad_promotion,
-            annotation=None,
-        )
-
-
-@pytest.mark.parametrize(
-    "bad_annotation", ["", "good", "+=", "??!", "!!!", " -", "x", "?? "]
-)
-def test_make_move_rejects_invalid_annotation(bad_annotation: str) -> None:
-    with pytest.raises(AssertionError):
-        moves.make_move(
-            piece="P",
-            initial_position=(1, 2),
-            final_position=(1, 3),
-            capture=False,
-            en_passant=False,
-            check=False,
-            checkmate=False,
-            promotion=None,
-            annotation=bad_annotation,
         )
