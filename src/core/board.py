@@ -139,8 +139,49 @@ class Board:
             else:
                 self.black_king = position
 
-    def _get_psuedo_moves(self) -> list[Move]:
-        return []
+    def _get_psuedo_moves(self, get_white: bool) -> list[Move]:
+        moves: list[Move] = []
+
+        if get_white:
+            positions = self.white_pieces
+        else:
+            positions = self.black_pieces
+
+        # get regular moves
+        for position in positions:
+            piece = self.board[position[0]][position[1]]
+            assert piece is not None, "Positions and board are not aligned."
+
+            piece_name = get_name(piece)
+            if piece_name == "K":
+                moves += self._get_king_moves(piece, position)
+            elif piece_name == "Q":
+                moves += self._get_queen_moves(piece, position)
+            elif piece_name == "B":
+                moves += self._get_bishop_moves(piece, position)
+            elif piece_name == "N":
+                moves += self._get_knight_moves(piece, position)
+            elif piece_name == "R":
+                moves += self._get_rook_moves(piece, position)
+            else:
+                moves += self._get_pawn_moves(piece, position)
+
+        # get castle moves
+        if get_white:
+            king = self.board[0][4]
+            q_rook = self.board[0][0]
+            k_rook = self.board[0][7]
+        else:
+            king = self.board[7][4]
+            q_rook = self.board[7][0]
+            k_rook = self.board[7][7]
+        if king is not None and get_name(king) == "K" and not has_moved(king):
+            if q_rook is not None and get_name(q_rook) == "R" and not has_moved(q_rook):
+                moves.append("0-0-0")
+            if k_rook is not None and get_name(k_rook) == "R" and not has_moved(k_rook):
+                moves.append("0-0")
+
+        return moves
 
     def _get_pawn_moves(self, pawn: Piece, position: tuple[int, int]) -> list[Move]:
         moves: list[Move] = []
