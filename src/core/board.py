@@ -141,22 +141,31 @@ class Board:
     def _get_psuedo_moves(self) -> list[Move]:
         return []
 
-    def _get_pawn_moves(self, position: tuple[int, int]) -> list[Move]:
+    def _get_pawn_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
         return []
 
-    def _get_rook_moves(self, position: tuple[int, int]) -> list[Move]:
+    def _get_rook_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
+        moves: list[Move] = []
+        moves += self._get_horizontal_slide_moves(piece, position)
+        moves += self._get_vertical_slide_moves(piece, position)
+        return moves
+
+    def _get_knight_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
         return []
 
-    def _get_knight_moves(self, position: tuple[int, int]) -> list[Move]:
-        return []
+    def _get_bishop_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
+        moves: list[Move] = []
+        moves += self._get_diagonal_slide_moves(piece, position)
+        return moves
 
-    def _get_bishop_moves(self, position: tuple[int, int]) -> list[Move]:
-        return []
+    def _get_queen_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
+        moves: list[Move] = []
+        moves += self._get_horizontal_slide_moves(piece, position)
+        moves += self._get_vertical_slide_moves(piece, position)
+        moves += self._get_diagonal_slide_moves(piece, position)
+        return moves
 
-    def _get_queen_moves(self, position: tuple[int, int]) -> list[Move]:
-        return []
-
-    def _get_king_moves(self, position: tuple[int, int]) -> list[Move]:
+    def _get_king_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
         return []
 
     def _get_vertical_slide_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
