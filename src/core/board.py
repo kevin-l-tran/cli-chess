@@ -46,7 +46,7 @@ class Board:
     """
     Represents a chess board.
 
-    Attributes: 
+    Attributes:
         board (list[list[Piece | None]]): An 8x8 array representing a board.
         white_king (tuple[int, int]): Position of the white king.
         black_king (tuple[int, int]): Position of the black king.
@@ -57,7 +57,8 @@ class Board:
 
     def __init__(self) -> None:
         self.board: list[list[Piece | None]] = [
-            [None for _ in range(8)] for _ in range(8)]
+            [None for _ in range(8)] for _ in range(8)
+        ]
         self.white_king: tuple[int, int]
         self.black_king: tuple[int, int]
         self.white_pieces: list[tuple[int, int]] = []
@@ -141,54 +142,81 @@ class Board:
     def _get_psuedo_moves(self) -> list[Move]:
         return []
 
-    def _get_pawn_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
+    def _get_pawn_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
         return []
 
-    def _get_rook_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
+    def _get_rook_moves(self, rook: Piece, position: tuple[int, int]) -> list[Move]:
         moves: list[Move] = []
-        moves += self._get_horizontal_slide_moves(piece, position)
-        moves += self._get_vertical_slide_moves(piece, position)
+        moves += self._get_horizontal_slide_moves(rook, position)
+        moves += self._get_vertical_slide_moves(rook, position)
         return moves
 
-    def _get_knight_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
+    def _get_knight_moves(self, knight: Piece, position: tuple[int, int]) -> list[Move]:
         moves: list[Move] = []
         relative_moves: list[tuple[int, int]] = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (-1, 2), (1, -2), (-1, -2)
+            (2, 1),
+            (2, -1),
+            (-2, 1),
+            (-2, -1),
+            (1, 2),
+            (-1, 2),
+            (1, -2),
+            (-1, -2),
         ]
 
         for rel in relative_moves:
             final = (position[0] + rel[0], position[1] + rel[1])
             square = self.board[final[0]][final[1]]
-            move = _move_or_capture_or_halt(piece, square, position, final)
+            move = _move_or_capture_or_halt(knight, square, position, final)
             if move is not None:
                 moves.append(move)
 
         return moves
 
-    def _get_bishop_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
+    def _get_bishop_moves(self, bishop: Piece, position: tuple[int, int]) -> list[Move]:
         moves: list[Move] = []
-        moves += self._get_diagonal_slide_moves(piece, position)
+        moves += self._get_diagonal_slide_moves(bishop, position)
         return moves
 
-    def _get_queen_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
+    def _get_queen_moves(self, queen: Piece, position: tuple[int, int]) -> list[Move]:
         moves: list[Move] = []
-        moves += self._get_horizontal_slide_moves(piece, position)
-        moves += self._get_vertical_slide_moves(piece, position)
-        moves += self._get_diagonal_slide_moves(piece, position)
+        moves += self._get_horizontal_slide_moves(queen, position)
+        moves += self._get_vertical_slide_moves(queen, position)
+        moves += self._get_diagonal_slide_moves(queen, position)
         return moves
 
-    def _get_king_moves(self, piece: Piece,  position: tuple[int, int]) -> list[Move]:
-        return []
+    def _get_king_moves(self, king: Piece, position: tuple[int, int]) -> list[Move]:
+        moves: list[Move] = []
+        relative_moves: list[tuple[int, int]] = [
+            (1, 1),
+            (1, 0),
+            (1, -1),
+            (0, 1),
+            (0, -1),
+            (-1, 1),
+            (-1, 0),
+            (-1, -1),
+        ]
 
-    def _get_vertical_slide_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
+        for rel in relative_moves:
+            final = (position[0] + rel[0], position[1] + rel[1])
+            square = self.board[final[0]][final[1]]
+            move = _move_or_capture_or_halt(king, square, position, final)
+            if move is not None:
+                moves.append(move)
+
+        return moves
+
+    def _get_vertical_slide_moves(
+        self, piece: Piece, position: tuple[int, int]
+    ) -> list[Move]:
         moves: list[Move] = []
         rank = position[1]
 
         up_index = position[0] + 1
         while _check_bounds((up_index, rank)):
             square = self.board[up_index][rank]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (up_index, rank))
+            move = _move_or_capture_or_halt(piece, square, position, (up_index, rank))
             if move is None:
                 break
             else:
@@ -198,8 +226,7 @@ class Board:
         down_index = position[0] - 1
         while _check_bounds((down_index, rank)):
             square = self.board[down_index][rank]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (down_index, rank))
+            move = _move_or_capture_or_halt(piece, square, position, (down_index, rank))
             if move is None:
                 break
             else:
@@ -208,7 +235,9 @@ class Board:
 
         return moves
 
-    def _get_horizontal_slide_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
+    def _get_horizontal_slide_moves(
+        self, piece: Piece, position: tuple[int, int]
+    ) -> list[Move]:
         moves: list[Move] = []
         file = position[0]
 
@@ -227,9 +256,7 @@ class Board:
         left_index = position[1] - 1
         while _check_bounds((file, left_index)):
             square = self.board[file][left_index]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (file, left_index)
-            )
+            move = _move_or_capture_or_halt(piece, square, position, (file, left_index))
             if move is None:
                 break
             else:
@@ -238,7 +265,9 @@ class Board:
 
         return moves
 
-    def _get_diagonal_slide_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
+    def _get_diagonal_slide_moves(
+        self, piece: Piece, position: tuple[int, int]
+    ) -> list[Move]:
         moves: list[Move] = []
         rank = position[1]
         file = position[0]
@@ -303,14 +332,13 @@ class Board:
 
 
 def _check_bounds(position: tuple[int, int]):
-    return (position[0] >= 0 and position[0] <= 7) and (position[1] >= 0 and position[1] <= 7)
+    return (position[0] >= 0 and position[0] <= 7) and (
+        position[1] >= 0 and position[1] <= 7
+    )
 
 
 def _move_or_capture_or_halt(
-    piece: Piece,
-    square: Piece | None,
-    initial: tuple[int, int],
-    final: tuple[int, int]
+    piece: Piece, square: Piece | None, initial: tuple[int, int], final: tuple[int, int]
 ) -> Move | None:
     if square is None:
         return make_move(get_name(piece), initial, final, False)
