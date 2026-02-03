@@ -217,8 +217,68 @@ class Board:
 
         return moves
 
-    def _get_diagonal_slide_moves(self, position: tuple[int, int]) -> list[Move]:
-        return []
+    def _get_diagonal_slide_moves(self, piece: Piece, position: tuple[int, int]) -> list[Move]:
+        moves: list[Move] = []
+        rank = position[1]
+        file = position[0]
+
+        up_index = file + 1
+        left_index = rank - 1
+        while _check_bounds((up_index, left_index)):
+            square = self.board[up_index][left_index]
+            move = _move_or_capture_or_halt(
+                piece, square, position, (up_index, left_index)
+            )
+            if move is None:
+                break
+            else:
+                moves.append(move)
+            up_index += 1
+            left_index -= 1
+
+        up_index = file + 1
+        right_index = rank + 1
+        while _check_bounds((up_index, right_index)):
+            square = self.board[up_index][right_index]
+            move = _move_or_capture_or_halt(
+                piece, square, position, (up_index, right_index)
+            )
+            if move is None:
+                break
+            else:
+                moves.append(move)
+            up_index += 1
+            right_index += 1
+
+        down_index = file - 1
+        right_index = rank + 1
+        while _check_bounds((down_index, right_index)):
+            square = self.board[down_index][right_index]
+            move = _move_or_capture_or_halt(
+                piece, square, position, (down_index, right_index)
+            )
+            if move is None:
+                break
+            else:
+                moves.append(move)
+            down_index -= 1
+            right_index += 1
+
+        down_index = file - 1
+        left_index = rank - 1
+        while _check_bounds((down_index, left_index)):
+            square = self.board[down_index][left_index]
+            move = _move_or_capture_or_halt(
+                piece, square, position, (down_index, left_index)
+            )
+            if move is None:
+                break
+            else:
+                moves.append(move)
+            down_index -= 1
+            left_index -= 1
+
+        return moves
 
 
 def _check_bounds(position: tuple[int, int]):
