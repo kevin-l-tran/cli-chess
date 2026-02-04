@@ -4,11 +4,13 @@ Represents a chess move. The complete representation of a move has the form:
     [N, fr(1), c, fr(2), E, C, F, P, A]
 where 
     N     = name of the piece,
-    fr(1) = initial file (str), rank (int)
-    c     = name of the captured piece, '-' otherwise
-    fr(2) = final file (str), rank (int)
-    E     = T if en-passant, F otherwise
-    P     = name of promotion piece, _ otherwise
+    fr(1) = initial file (str), rank (int),
+    c     = name of the captured piece, '-' otherwise,
+    fr(2) = final file (str), rank (int),
+    E     = T if en-passant, F otherwise,
+    P     = name of promotion piece, _ otherwise.
+
+Castling is a special move represented by 0-0 and 0-0-0 for kingside and queenside castling respectively.
 """
 
 
