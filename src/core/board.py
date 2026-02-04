@@ -197,8 +197,7 @@ class Board:
         else:
             initial_position = get_initial_position(move)
             final_position = get_final_position(move)
-            initial_piece = self.board[initial_position[0]
-                                       ][initial_position[1]]
+            initial_piece = self.board[initial_position[0]][initial_position[1]]
             final_piece = self.board[final_position[0]][final_position[1]]
 
             assert initial_piece is not None, "Move targets a nonexistent piece."
@@ -215,12 +214,10 @@ class Board:
                 updated_piece = make_piece(name, white, True, ep)
 
                 self.board[initial_position[0]][initial_position[1]] = None
-                self.board[final_position[0]
-                           ][final_position[1]] = updated_piece
+                self.board[final_position[0]][final_position[1]] = updated_piece
 
             def undo(self: Self) -> None:
-                self.board[initial_position[0]
-                           ][initial_position[1]] = initial_piece
+                self.board[initial_position[0]][initial_position[1]] = initial_piece
                 self.board[final_position[0]][final_position[1]] = final_piece
 
         return apply, undo
@@ -361,7 +358,7 @@ class Board:
             if square is None:
                 # if pawn reaches edge, get promotion moves
                 if file + 1 * white_multiplier == 7 or file + 1 * white_multiplier == 0:
-                    for promotion in ["Q", "B", "N", "R", "P"]:
+                    for promotion in ["Q", "B", "N", "R"]:
                         move = make_move(
                             pawn,
                             position,
@@ -373,8 +370,7 @@ class Board:
                 # else get regular move
                 else:
                     move = make_move(
-                        pawn, position, (file + 1 *
-                                         white_multiplier, rank), False
+                        pawn, position, (file + 1 * white_multiplier, rank), False
                     )
                     moves.add(move)
 
@@ -485,8 +481,7 @@ class Board:
         up_index = position[0] + 1
         while _is_in_bounds((up_index, rank)):
             square = self.board[up_index][rank]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (up_index, rank))
+            move = _move_or_capture_or_halt(piece, square, position, (up_index, rank))
             if move is None:
                 break
             else:
@@ -496,8 +491,7 @@ class Board:
         down_index = position[0] - 1
         while _is_in_bounds((down_index, rank)):
             square = self.board[down_index][rank]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (down_index, rank))
+            move = _move_or_capture_or_halt(piece, square, position, (down_index, rank))
             if move is None:
                 break
             else:
@@ -527,8 +521,7 @@ class Board:
         left_index = position[1] - 1
         while _is_in_bounds((file, left_index)):
             square = self.board[file][left_index]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (file, left_index))
+            move = _move_or_capture_or_halt(piece, square, position, (file, left_index))
             if move is None:
                 break
             else:
