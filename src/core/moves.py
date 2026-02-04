@@ -10,7 +10,7 @@ where
     E     = T if en-passant, F otherwise,
     P     = name of promotion piece, _ otherwise.
 
-Castling is a special move represented by 0-0 and 0-0-0 for kingside and queenside castling respectively.
+Castling is a special move represented by 0-0C and 0-0-0C for kingside and queenside castling respectively, where C is T if white castled and F otherwise.
 """
 
 

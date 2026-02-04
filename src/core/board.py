@@ -2,6 +2,8 @@ from typing import Callable, Self
 from core.moves import (
     Move,
     get_captured_piece,
+    get_final_position,
+    get_initial_position,
     make_move,
 )
 
@@ -150,11 +152,76 @@ class Board:
     def get_move_command(
         self, move: Move
     ) -> tuple[Callable[[Self], None], Callable[[Self], None]]:
-        def apply(self: Self) -> None:
-            pass
+        if move == "0-0T" or move == "0-0F":
+            white = move[3] == "T"
+            file = 0 if white else 7
 
-        def undo(self: Self) -> None:
-            pass
+            king = self.board[file][4]
+            rook = self.board[file][7]
+
+            def apply(self: Self) -> None:
+                self.board[file][6] = make_piece("K", white, True, False)
+                self.board[file][5] = make_piece("R", white, True, False)
+
+                self.board[file][4] = None
+                self.board[file][7] = None
+
+            def undo(self: Self) -> None:
+                self.board[file][4] = king
+                self.board[file][7] = rook
+
+                self.board[file][6] = None
+                self.board[file][5] = None
+
+        elif move == "0-0-0T" or move == "0-0-0F":
+            white = move[3] == "T"
+            file = 0 if white else 7
+
+            king = self.board[file][4]
+            rook = self.board[file][0]
+
+            def apply(self: Self) -> None:
+                self.board[file][1] = make_piece("K", white, True, False)
+                self.board[file][2] = make_piece("R", white, True, False)
+
+                self.board[file][4] = None
+                self.board[file][0] = None
+
+            def undo(self: Self) -> None:
+                self.board[file][4] = king
+                self.board[file][0] = rook
+
+                self.board[file][1] = None
+                self.board[file][2] = None
+
+        else:
+            initial_position = get_initial_position(move)
+            final_position = get_final_position(move)
+            initial_piece = self.board[initial_position[0]
+                                       ][initial_position[1]]
+            final_piece = self.board[final_position[0]][final_position[1]]
+
+            assert initial_piece is not None, "Move targets a nonexistent piece."
+
+            def apply(self: Self) -> None:
+                name = get_name(initial_piece)
+                white = is_white(initial_piece)
+                moved = has_moved(initial_piece)
+                ep = (
+                    name == "P"
+                    and not moved
+                    and (final_position[0] == 3 or final_position[0] == 4)
+                )
+                updated_piece = make_piece(name, white, True, ep)
+
+                self.board[initial_position[0]][initial_position[1]] = None
+                self.board[final_position[0]
+                           ][final_position[1]] = updated_piece
+
+            def undo(self: Self) -> None:
+                self.board[initial_position[0]
+                           ][initial_position[1]] = initial_piece
+                self.board[final_position[0]][final_position[1]] = final_piece
 
         return apply, undo
 
@@ -227,14 +294,18 @@ class Board:
                 and not has_moved(q_rook)
                 and all(s is None for s in q_squares)
             ):
-                moves.add("0-0-0")
+                move = "0-0-0"
+                move += "T" if get_white else "F"
+                moves.add(move)
             if (
                 k_rook is not None
                 and get_name(k_rook) == "R"
                 and not has_moved(k_rook)
                 and all(s is None for s in k_squares)
             ):
-                moves.add("0-0")
+                move = "0-0"
+                move += "T" if get_white else "F"
+                moves.add(move)
 
         # get en passant moves
         if get_white:
@@ -302,7 +373,8 @@ class Board:
                 # else get regular move
                 else:
                     move = make_move(
-                        pawn, position, (file + 1 * white_multiplier, rank), False
+                        pawn, position, (file + 1 *
+                                         white_multiplier, rank), False
                     )
                     moves.add(move)
 
@@ -413,7 +485,8 @@ class Board:
         up_index = position[0] + 1
         while _is_in_bounds((up_index, rank)):
             square = self.board[up_index][rank]
-            move = _move_or_capture_or_halt(piece, square, position, (up_index, rank))
+            move = _move_or_capture_or_halt(
+                piece, square, position, (up_index, rank))
             if move is None:
                 break
             else:
@@ -423,7 +496,8 @@ class Board:
         down_index = position[0] - 1
         while _is_in_bounds((down_index, rank)):
             square = self.board[down_index][rank]
-            move = _move_or_capture_or_halt(piece, square, position, (down_index, rank))
+            move = _move_or_capture_or_halt(
+                piece, square, position, (down_index, rank))
             if move is None:
                 break
             else:
@@ -453,7 +527,8 @@ class Board:
         left_index = position[1] - 1
         while _is_in_bounds((file, left_index)):
             square = self.board[file][left_index]
-            move = _move_or_capture_or_halt(piece, square, position, (file, left_index))
+            move = _move_or_capture_or_halt(
+                piece, square, position, (file, left_index))
             if move is None:
                 break
             else:
