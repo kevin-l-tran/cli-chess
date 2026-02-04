@@ -252,7 +252,7 @@ class Board:
             square = self.board[file + 1 * white_multiplier][rank]
             if square is None:
                 # if pawn reaches edge, get promotion moves
-                if file + 1 == 7 or file + 1 == 0:
+                if file + 1 * white_multiplier == 7 or file + 1 * white_multiplier == 0:
                     for promotion in ["Q", "B", "K", "R", "P"]:
                         move = make_move(
                             pawn,
