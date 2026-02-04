@@ -1,4 +1,9 @@
-from core.moves import Move, make_move
+from typing import Callable, Self
+from core.moves import (
+    Move,
+    get_captured_piece,
+    make_move,
+)
 
 
 Piece = str
@@ -126,8 +131,40 @@ class Board:
         king = make_piece("K", False, False, False)
         self._add_piece(king, (7, 4))
 
-    def get_moves(self) -> set[Move]:
-        return set()
+    def get_moves(self, get_white: bool) -> set[Move]:
+        moves = self._get_psuedo_moves(get_white)
+
+        invalid_moves: set[Move] = set()
+        for move in moves:
+            command = self.get_move_command(move)
+            command[0](self)
+            if self.is_checked(get_white):
+                invalid_moves.add(move)
+            command[1](self)
+
+        for move in invalid_moves:
+            moves.remove(move)
+
+        return moves
+
+    def get_move_command(
+        self, move: Move
+    ) -> tuple[Callable[[Self], None], Callable[[Self], None]]:
+        def apply(self: Self) -> None:
+            pass
+
+        def undo(self: Self) -> None:
+            pass
+
+        return apply, undo
+
+    def is_checked(self, check_white: bool) -> bool:
+        if check_white:
+            moves = self._get_psuedo_moves(False)
+        else:
+            moves = self._get_psuedo_moves(True)
+
+        return "K" in map(get_captured_piece, moves)
 
     def _add_piece(self, piece: Piece, position: tuple[int, int]) -> None:
         self.board[position[0]][position[1]] = piece
@@ -262,7 +299,7 @@ class Board:
                             promotion=promotion,
                         )
                         moves.add(move)
-                # else get regular move 
+                # else get regular move
                 else:
                     move = make_move(
                         pawn, position, (file + 1 * white_multiplier, rank), False
