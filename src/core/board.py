@@ -330,7 +330,7 @@ class Board:
                 assert pawn is not None, "Positions and board are not aligned."
 
                 move = make_move(
-                    pawn, p, (p[0] + 1 * white_multiplier, p[1] - 1), True, "P"
+                    get_name(pawn), p, (p[0] + 1 * white_multiplier, p[1] - 1), True, "P"
                 )
                 moves.add(move)
             if (p[0], p[1] + 1) in ep_positions and _is_in_bounds(
@@ -340,7 +340,7 @@ class Board:
                 assert pawn is not None, "Positions and board are not aligned."
 
                 move = make_move(
-                    pawn, p, (p[0] + 1 * white_multiplier, p[1] + 1), True, "P"
+                    get_name(pawn), p, (p[0] + 1 * white_multiplier, p[1] + 1), True, "P"
                 )
                 moves.add(move)
 
@@ -360,7 +360,7 @@ class Board:
                 if file + 1 * white_multiplier == 7 or file + 1 * white_multiplier == 0:
                     for promotion in ["Q", "B", "N", "R"]:
                         move = make_move(
-                            pawn,
+                            get_name(pawn),
                             position,
                             (file + 1 * white_multiplier, rank),
                             False,
@@ -370,7 +370,7 @@ class Board:
                 # else get regular move
                 else:
                     move = make_move(
-                        pawn, position, (file + 1 * white_multiplier, rank), False
+                        get_name(pawn), position, (file + 1 * white_multiplier, rank), False
                     )
                     moves.add(move)
 
@@ -379,7 +379,7 @@ class Board:
             square = self.board[file + 2 * white_multiplier][rank]
             if square is None:
                 move = make_move(
-                    pawn, position, (file + 2 * white_multiplier, rank), False
+                    get_name(pawn), position, (file + 2 * white_multiplier, rank), False
                 )
                 moves.add(move)
 
@@ -388,7 +388,7 @@ class Board:
             square = self.board[file + 1 * white_multiplier][rank - 1]
             if square is not None:
                 move = make_move(
-                    pawn,
+                    get_name(pawn),
                     position,
                     (file + 1 * white_multiplier, rank - 1),
                     False,
@@ -400,7 +400,7 @@ class Board:
             square = self.board[file + 1 * white_multiplier][rank + 1]
             if square is not None:
                 move = make_move(
-                    pawn,
+                    get_name(pawn),
                     position,
                     (file + 1 * white_multiplier, rank + 1),
                     False,
