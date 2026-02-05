@@ -4,6 +4,7 @@ from core.moves import (
     get_captured_piece,
     get_final_position,
     get_initial_position,
+    is_en_passant,
     make_move,
 )
 
@@ -194,6 +195,28 @@ class Board:
                 self.board[rank][1] = None
                 self.board[rank][2] = None
 
+        elif is_en_passant(move):
+            initial_position = get_initial_position(move)
+            final_position = get_final_position(move)
+            initial_piece = self.board[initial_position[0]][initial_position[1]]
+            final_piece = self.board[final_position[0]][final_position[1]]
+            captured_piece = self.board[initial_position[0]][final_position[1]]
+
+            assert initial_piece is not None, "Move targets a nonexistent piece."
+
+            def apply(self: Self) -> None:
+                updated_piece = make_piece(
+                    get_name(initial_piece), is_white(initial_piece), True, False
+                )
+                self.board[initial_position[0]][initial_position[1]] = None
+                self.board[final_position[0]][final_position[1]] = updated_piece
+                self.board[initial_position[0]][final_position[1]] = None
+
+            def undo(self: Self) -> None:
+                self.board[initial_position[0]][initial_position[1]] = initial_piece
+                self.board[final_position[0]][final_position[1]] = None
+                self.board[initial_position[0]][final_position[1]] = captured_piece
+
         else:
             initial_position = get_initial_position(move)
             final_position = get_final_position(move)
@@ -323,8 +346,10 @@ class Board:
             white_multiplier = -1
 
         for p in pawn_positions:
-            if (p[0], p[1] - 1) in ep_positions and _is_in_bounds(
-                (p[0] + 1 * white_multiplier, p[1] - 1)
+            if (
+                (p[0], p[1] - 1) in ep_positions
+                and _is_in_bounds((p[0] + 1 * white_multiplier, p[1] - 1))
+                and self.board[p[0] + 1 * white_multiplier][p[1] - 1] is None
             ):
                 pawn = self.board[p[0]][p[1]]
                 assert pawn is not None, "Positions and board are not aligned."
@@ -337,8 +362,10 @@ class Board:
                     "P",
                 )
                 moves.add(move)
-            if (p[0], p[1] + 1) in ep_positions and _is_in_bounds(
-                (p[0] + 1 * white_multiplier, p[1] + 1)
+            if (
+                (p[0], p[1] + 1) in ep_positions
+                and _is_in_bounds((p[0] + 1 * white_multiplier, p[1] + 1))
+                and self.board[p[0] + 1 * white_multiplier][p[1] + 1] is None
             ):
                 pawn = self.board[p[0]][p[1]]
                 assert pawn is not None, "Positions and board are not aligned."
@@ -387,7 +414,7 @@ class Board:
 
         # second forward move
         if (
-            _is_in_bounds((rank + 2 * white_multiplier, file)) 
+            _is_in_bounds((rank + 2 * white_multiplier, file))
             and self.board[rank + 1 * white_multiplier][file] is None
             and not has_moved(pawn)
         ):
