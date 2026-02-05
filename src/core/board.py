@@ -318,7 +318,7 @@ class Board:
                 pos for pos, pce in self.white_pieces.items() if can_ep(pce)
             ]
             pawn_positions = [
-                pos for pos, pce in self.white_pieces.items() if get_name(pce) == "P"
+                pos for pos, pce in self.black_pieces.items() if get_name(pce) == "P"
             ]
             white_multiplier = -1
 
@@ -326,21 +326,29 @@ class Board:
             if (p[0], p[1] - 1) in ep_positions and _is_in_bounds(
                 (p[0] + 1 * white_multiplier, p[1] - 1)
             ):
-                pawn = self.board[p[0]][p[1] - 1]
+                pawn = self.board[p[0]][p[1]]
                 assert pawn is not None, "Positions and board are not aligned."
 
                 move = make_move(
-                    get_name(pawn), p, (p[0] + 1 * white_multiplier, p[1] - 1), True, "P"
+                    get_name(pawn),
+                    p,
+                    (p[0] + 1 * white_multiplier, p[1] - 1),
+                    True,
+                    "P",
                 )
                 moves.add(move)
             if (p[0], p[1] + 1) in ep_positions and _is_in_bounds(
                 (p[0] + 1 * white_multiplier, p[1] + 1)
             ):
-                pawn = self.board[p[0]][p[1] + 1]
+                pawn = self.board[p[0]][p[1]]
                 assert pawn is not None, "Positions and board are not aligned."
 
                 move = make_move(
-                    get_name(pawn), p, (p[0] + 1 * white_multiplier, p[1] + 1), True, "P"
+                    get_name(pawn),
+                    p,
+                    (p[0] + 1 * white_multiplier, p[1] + 1),
+                    True,
+                    "P",
                 )
                 moves.add(move)
 
@@ -370,12 +378,19 @@ class Board:
                 # else get regular move
                 else:
                     move = make_move(
-                        get_name(pawn), position, (rank + 1 * white_multiplier, file), False
+                        get_name(pawn),
+                        position,
+                        (rank + 1 * white_multiplier, file),
+                        False,
                     )
                     moves.add(move)
 
         # second forward move
-        if _is_in_bounds((rank + 2 * white_multiplier, file)) and not has_moved(pawn):
+        if (
+            _is_in_bounds((rank + 2 * white_multiplier, file)) 
+            and self.board[rank + 1 * white_multiplier][file] is None
+            and not has_moved(pawn)
+        ):
             square = self.board[rank + 2 * white_multiplier][file]
             if square is None:
                 move = make_move(
@@ -386,7 +401,7 @@ class Board:
         # diagonal attacks
         if _is_in_bounds((rank + 1 * white_multiplier, file - 1)):
             square = self.board[rank + 1 * white_multiplier][file - 1]
-            if square is not None:
+            if square is not None and is_white(square) != is_white(pawn):
                 move = make_move(
                     get_name(pawn),
                     position,
@@ -398,7 +413,7 @@ class Board:
 
         if _is_in_bounds((rank + 1 * white_multiplier, file + 1)):
             square = self.board[rank + 1 * white_multiplier][file + 1]
-            if square is not None:
+            if square is not None and is_white(square) != is_white(pawn):
                 move = make_move(
                     get_name(pawn),
                     position,
@@ -431,10 +446,11 @@ class Board:
 
         for rel in relative_moves:
             final = (position[0] + rel[0], position[1] + rel[1])
-            square = self.board[final[0]][final[1]]
-            move = _move_or_capture_or_halt(knight, square, position, final)
-            if move is not None:
-                moves.add(move)
+            if _is_in_bounds(final):
+                square = self.board[final[0]][final[1]]
+                move = _move_or_capture_or_halt(knight, square, position, final)
+                if move is not None:
+                    moves.add(move)
 
         return moves
 
@@ -465,10 +481,11 @@ class Board:
 
         for rel in relative_moves:
             final = (position[0] + rel[0], position[1] + rel[1])
-            square = self.board[final[0]][final[1]]
-            move = _move_or_capture_or_halt(king, square, position, final)
-            if move is not None:
-                moves.add(move)
+            if _is_in_bounds(final):
+                square = self.board[final[0]][final[1]]
+                move = _move_or_capture_or_halt(king, square, position, final)
+                if move is not None:
+                    moves.add(move)
 
         return moves
 
