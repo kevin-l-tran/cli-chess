@@ -9,7 +9,7 @@ from src.core import moves
 
 def test_make_move_encodes_correctly_all_fields() -> None:
     m: str = moves.make_move(
-        piece="N",
+        piece_name="N",
         initial_position=(1, 0),  # b1
         final_position=(2, 2),  # c3
         capture="P",
@@ -64,7 +64,7 @@ def test_make_move_various_cases(kwargs: Mapping[str, Any], expected_move: str) 
 
 def test_getters_round_trip_for_basic_move() -> None:
     m: str = moves.make_move(
-        piece="B",
+        piece_name="B",
         initial_position=(2, 0),  # c1
         final_position=(5, 3),  # f4
         capture="P",
@@ -82,7 +82,7 @@ def test_getters_round_trip_for_basic_move() -> None:
 
 def test_get_promotion() -> None:
     m: str = moves.make_move(
-        piece="P",
+        piece_name="P",
         initial_position=(6, 6),  # g7
         final_position=(7, 7),  # h8
         capture=None,
@@ -99,7 +99,7 @@ def test_get_promotion() -> None:
 def test_make_move_rejects_invalid_piece(bad_piece: Any) -> None:
     with pytest.raises(AssertionError):
         moves.make_move(
-            piece=bad_piece,
+            piece_name=bad_piece,
             initial_position=(1, 2),
             final_position=(1, 3),
             capture=None,
@@ -123,7 +123,7 @@ def test_make_move_rejects_invalid_piece(bad_piece: Any) -> None:
 def test_make_move_rejects_invalid_positions(bad_position: Any) -> None:
     with pytest.raises(AssertionError):
         moves.make_move(
-            piece="P",
+            piece_name="P",
             initial_position=bad_position,
             final_position=(1, 3),
             capture=None,
@@ -133,7 +133,7 @@ def test_make_move_rejects_invalid_positions(bad_position: Any) -> None:
 
     with pytest.raises(AssertionError):
         moves.make_move(
-            piece="P",
+            piece_name="P",
             initial_position=(1, 2),
             final_position=bad_position,
             capture=None,
@@ -146,7 +146,7 @@ def test_make_move_rejects_invalid_positions(bad_position: Any) -> None:
 def test_make_move_rejects_invalid_promotion(bad_promotion: str) -> None:
     with pytest.raises(AssertionError):
         moves.make_move(
-            piece="P",
+            piece_name="P",
             initial_position=(0, 6),
             final_position=(0, 7),
             capture=None,
