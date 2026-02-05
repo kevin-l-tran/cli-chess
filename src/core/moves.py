@@ -23,7 +23,7 @@ def _verify_position(position: tuple[int, int]) -> bool:
 
 
 def make_move(
-    piece: str,
+    piece_name: str,
     initial_position: tuple[int, int],
     final_position: tuple[int, int],
     en_passant: bool,
@@ -34,14 +34,14 @@ def make_move(
     Constructs a Move string.
 
     Parameters:
-        piece (str): The character representing the moved piece.
+        piece_name (str): The character representing the moved piece.
         initial_position (tuple[int, int]): The initial position (file,rank) of the moved piece.
         final_position (tuple[int, int]): The final position (file,rank) of the moved piece.
         capture (str): The name of the captured piece, if any.
         en_passant (bool): Whether the move was an en passant.
         promotion (str | None): The character representing the promotion piece, if a promotion occurred.
     """
-    assert piece in ["P", "R", "N", "B", "Q", "K"]
+    assert piece_name in ["P", "R", "N", "B", "Q", "K"]
     assert capture is None or capture in ["P", "R", "N", "B", "Q", "K"]
     assert promotion is None or promotion in ["P", "R", "N", "B", "Q", "K"]
     assert _verify_position(initial_position)
@@ -49,7 +49,7 @@ def make_move(
 
     move: Move = ""
 
-    move += piece
+    move += piece_name
     move += chr(initial_position[0] + ord("a"))
     move += str(initial_position[1] + 1)
     move += capture if capture else "-"
