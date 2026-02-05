@@ -74,8 +74,8 @@ class Board:
         ]
         self.white_king: tuple[int, int]
         self.black_king: tuple[int, int]
-        self.white_pieces: dict[tuple[int, int], Piece]
-        self.black_pieces: dict[tuple[int, int], Piece]
+        self.white_pieces: dict[tuple[int, int], Piece] = {}
+        self.black_pieces: dict[tuple[int, int], Piece] = {}
 
         # add white pawns
         pawn = make_piece("P", True, False, False)
