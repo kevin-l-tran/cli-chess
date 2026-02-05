@@ -61,7 +61,7 @@ class Board:
     Represents a chess board.
 
     Attributes:
-        board (list[list[Piece | None]]): An 8x8 array representing a board.
+        board (list[list[Piece | None]]): An 8x8 array representing a board. The board is indexed by [rank][file].
         white_king (tuple[int, int]): Position of the white king.
         black_king (tuple[int, int]): Position of the black king.
         white_pieces (dict[tuple[int, int], Piece]): Map of positions to white pieces.
@@ -154,45 +154,45 @@ class Board:
     ) -> tuple[Callable[[Self], None], Callable[[Self], None]]:
         if move == "0-0T" or move == "0-0F":
             white = move[3] == "T"
-            file = 0 if white else 7
+            rank = 0 if white else 7
 
-            king = self.board[file][4]
-            rook = self.board[file][7]
+            king = self.board[rank][4]
+            rook = self.board[rank][7]
 
             def apply(self: Self) -> None:
-                self.board[file][6] = make_piece("K", white, True, False)
-                self.board[file][5] = make_piece("R", white, True, False)
+                self.board[rank][6] = make_piece("K", white, True, False)
+                self.board[rank][5] = make_piece("R", white, True, False)
 
-                self.board[file][4] = None
-                self.board[file][7] = None
+                self.board[rank][4] = None
+                self.board[rank][7] = None
 
             def undo(self: Self) -> None:
-                self.board[file][4] = king
-                self.board[file][7] = rook
+                self.board[rank][4] = king
+                self.board[rank][7] = rook
 
-                self.board[file][6] = None
-                self.board[file][5] = None
+                self.board[rank][6] = None
+                self.board[rank][5] = None
 
         elif move == "0-0-0T" or move == "0-0-0F":
             white = move[3] == "T"
-            file = 0 if white else 7
+            rank = 0 if white else 7
 
-            king = self.board[file][4]
-            rook = self.board[file][0]
+            king = self.board[rank][4]
+            rook = self.board[rank][0]
 
             def apply(self: Self) -> None:
-                self.board[file][1] = make_piece("K", white, True, False)
-                self.board[file][2] = make_piece("R", white, True, False)
+                self.board[rank][1] = make_piece("K", white, True, False)
+                self.board[rank][2] = make_piece("R", white, True, False)
 
-                self.board[file][4] = None
-                self.board[file][0] = None
+                self.board[rank][4] = None
+                self.board[rank][0] = None
 
             def undo(self: Self) -> None:
-                self.board[file][4] = king
-                self.board[file][0] = rook
+                self.board[rank][4] = king
+                self.board[rank][0] = rook
 
-                self.board[file][1] = None
-                self.board[file][2] = None
+                self.board[rank][1] = None
+                self.board[rank][2] = None
 
         else:
             initial_position = get_initial_position(move)
@@ -348,21 +348,21 @@ class Board:
 
     def _get_pawn_moves(self, pawn: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
-        file = position[0]
-        rank = position[1]
+        rank = position[0]
+        file = position[1]
         white_multiplier = 1 if is_white(pawn) else -1
 
         # foward move
-        if _is_in_bounds((file + 1 * white_multiplier, rank)):
-            square = self.board[file + 1 * white_multiplier][rank]
+        if _is_in_bounds((rank + 1 * white_multiplier, file)):
+            square = self.board[rank + 1 * white_multiplier][file]
             if square is None:
                 # if pawn reaches edge, get promotion moves
-                if file + 1 * white_multiplier == 7 or file + 1 * white_multiplier == 0:
+                if rank + 1 * white_multiplier == 7 or rank + 1 * white_multiplier == 0:
                     for promotion in ["Q", "B", "N", "R"]:
                         move = make_move(
                             get_name(pawn),
                             position,
-                            (file + 1 * white_multiplier, rank),
+                            (rank + 1 * white_multiplier, file),
                             False,
                             promotion=promotion,
                         )
@@ -370,39 +370,39 @@ class Board:
                 # else get regular move
                 else:
                     move = make_move(
-                        get_name(pawn), position, (file + 1 * white_multiplier, rank), False
+                        get_name(pawn), position, (rank + 1 * white_multiplier, file), False
                     )
                     moves.add(move)
 
         # second forward move
-        if _is_in_bounds((file + 2 * white_multiplier, rank)) and not has_moved(pawn):
-            square = self.board[file + 2 * white_multiplier][rank]
+        if _is_in_bounds((rank + 2 * white_multiplier, file)) and not has_moved(pawn):
+            square = self.board[rank + 2 * white_multiplier][file]
             if square is None:
                 move = make_move(
-                    get_name(pawn), position, (file + 2 * white_multiplier, rank), False
+                    get_name(pawn), position, (rank + 2 * white_multiplier, file), False
                 )
                 moves.add(move)
 
         # diagonal attacks
-        if _is_in_bounds((file + 1 * white_multiplier, rank - 1)):
-            square = self.board[file + 1 * white_multiplier][rank - 1]
+        if _is_in_bounds((rank + 1 * white_multiplier, file - 1)):
+            square = self.board[rank + 1 * white_multiplier][file - 1]
             if square is not None:
                 move = make_move(
                     get_name(pawn),
                     position,
-                    (file + 1 * white_multiplier, rank - 1),
+                    (rank + 1 * white_multiplier, file - 1),
                     False,
                     get_name(square),
                 )
                 moves.add(move)
 
-        if _is_in_bounds((file + 1 * white_multiplier, rank + 1)):
-            square = self.board[file + 1 * white_multiplier][rank + 1]
+        if _is_in_bounds((rank + 1 * white_multiplier, file + 1)):
+            square = self.board[rank + 1 * white_multiplier][file + 1]
             if square is not None:
                 move = make_move(
                     get_name(pawn),
                     position,
-                    (file + 1 * white_multiplier, rank + 1),
+                    (rank + 1 * white_multiplier, file + 1),
                     False,
                     get_name(square),
                 )
@@ -476,12 +476,12 @@ class Board:
         self, piece: Piece, position: tuple[int, int]
     ) -> set[Move]:
         moves: set[Move] = set()
-        rank = position[1]
+        file = position[1]
 
         up_index = position[0] + 1
-        while _is_in_bounds((up_index, rank)):
-            square = self.board[up_index][rank]
-            move = _move_or_capture_or_halt(piece, square, position, (up_index, rank))
+        while _is_in_bounds((up_index, file)):
+            square = self.board[up_index][file]
+            move = _move_or_capture_or_halt(piece, square, position, (up_index, file))
             if move is None:
                 break
             else:
@@ -489,9 +489,9 @@ class Board:
             up_index += 1
 
         down_index = position[0] - 1
-        while _is_in_bounds((down_index, rank)):
-            square = self.board[down_index][rank]
-            move = _move_or_capture_or_halt(piece, square, position, (down_index, rank))
+        while _is_in_bounds((down_index, file)):
+            square = self.board[down_index][file]
+            move = _move_or_capture_or_halt(piece, square, position, (down_index, file))
             if move is None:
                 break
             else:
@@ -504,13 +504,13 @@ class Board:
         self, piece: Piece, position: tuple[int, int]
     ) -> set[Move]:
         moves: set[Move] = set()
-        file = position[0]
+        rank = position[0]
 
         right_index = position[1] + 1
-        while _is_in_bounds((file, right_index)):
-            square = self.board[file][right_index]
+        while _is_in_bounds((rank, right_index)):
+            square = self.board[rank][right_index]
             move = _move_or_capture_or_halt(
-                piece, square, position, (file, right_index)
+                piece, square, position, (rank, right_index)
             )
             if move is None:
                 break
@@ -519,9 +519,9 @@ class Board:
             right_index += 1
 
         left_index = position[1] - 1
-        while _is_in_bounds((file, left_index)):
-            square = self.board[file][left_index]
-            move = _move_or_capture_or_halt(piece, square, position, (file, left_index))
+        while _is_in_bounds((rank, left_index)):
+            square = self.board[rank][left_index]
+            move = _move_or_capture_or_halt(piece, square, position, (rank, left_index))
             if move is None:
                 break
             else:
@@ -534,11 +534,11 @@ class Board:
         self, piece: Piece, position: tuple[int, int]
     ) -> set[Move]:
         moves: set[Move] = set()
-        rank = position[1]
-        file = position[0]
+        file = position[1]
+        rank = position[0]
 
-        up_index = file + 1
-        left_index = rank - 1
+        up_index = rank + 1
+        left_index = file - 1
         while _is_in_bounds((up_index, left_index)):
             square = self.board[up_index][left_index]
             move = _move_or_capture_or_halt(
@@ -551,8 +551,8 @@ class Board:
             up_index += 1
             left_index -= 1
 
-        up_index = file + 1
-        right_index = rank + 1
+        up_index = rank + 1
+        right_index = file + 1
         while _is_in_bounds((up_index, right_index)):
             square = self.board[up_index][right_index]
             move = _move_or_capture_or_halt(
@@ -565,8 +565,8 @@ class Board:
             up_index += 1
             right_index += 1
 
-        down_index = file - 1
-        right_index = rank + 1
+        down_index = rank - 1
+        right_index = file + 1
         while _is_in_bounds((down_index, right_index)):
             square = self.board[down_index][right_index]
             move = _move_or_capture_or_halt(
@@ -579,8 +579,8 @@ class Board:
             down_index -= 1
             right_index += 1
 
-        down_index = file - 1
-        left_index = rank - 1
+        down_index = rank - 1
+        left_index = file - 1
         while _is_in_bounds((down_index, left_index)):
             square = self.board[down_index][left_index]
             move = _move_or_capture_or_halt(
