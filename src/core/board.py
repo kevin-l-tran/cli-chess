@@ -182,8 +182,8 @@ class Board:
             rook = self.board[rank][0]
 
             def apply(self: Self) -> None:
-                self.board[rank][1] = make_piece("K", white, True, False)
-                self.board[rank][2] = make_piece("R", white, True, False)
+                self.board[rank][2] = make_piece("K", white, True, False)
+                self.board[rank][3] = make_piece("R", white, True, False)
 
                 self.board[rank][4] = None
                 self.board[rank][0] = None
@@ -192,8 +192,8 @@ class Board:
                 self.board[rank][4] = king
                 self.board[rank][0] = rook
 
-                self.board[rank][1] = None
                 self.board[rank][2] = None
+                self.board[rank][3] = None
 
         elif is_en_passant(move):
             initial_position = get_initial_position(move)
