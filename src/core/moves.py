@@ -1,12 +1,12 @@
 Move = str
 """
 Represents a chess move. The complete representation of a move has the form:
-    [N, fr(1), c, fr(2), E, C, F, P, A]
+    [N, rf(1), c, rf(2), E, C, F, P, A]
 where 
     N     = name of the piece,
-    fr(1) = initial file (str), rank (int),
+    rf(1) = initial rank, file,
     c     = name of the captured piece, '-' otherwise,
-    fr(2) = final file (str), rank (int),
+    rf(2) = final rank, file,
     E     = T if en-passant, F otherwise,
     P     = name of promotion piece, _ otherwise.
 
@@ -27,7 +27,7 @@ def make_move(
     initial_position: tuple[int, int],
     final_position: tuple[int, int],
     en_passant: bool,
-    capture: str | None = None,
+    capture_name: str | None = None,
     promotion: str | None = None,
 ) -> Move:
     """
@@ -35,14 +35,14 @@ def make_move(
 
     Parameters:
         piece_name (str): The character representing the moved piece.
-        initial_position (tuple[int, int]): The initial position (file,rank) of the moved piece.
-        final_position (tuple[int, int]): The final position (file,rank) of the moved piece.
-        capture (str): The name of the captured piece, if any.
+        initial_position (tuple[int, int]): The initial position (rank, file) of the moved piece.
+        final_position (tuple[int, int]): The final position (rank, file) of the moved piece.
+        capture_name (str): The name of the captured piece, if any.
         en_passant (bool): Whether the move was an en passant.
         promotion (str | None): The character representing the promotion piece, if a promotion occurred.
     """
     assert piece_name in ["P", "R", "N", "B", "Q", "K"]
-    assert capture is None or capture in ["P", "R", "N", "B", "Q", "K"]
+    assert capture_name is None or capture_name in ["P", "R", "N", "B", "Q", "K"]
     assert promotion is None or promotion in ["P", "R", "N", "B", "Q", "K"]
     assert _verify_position(initial_position)
     assert _verify_position(final_position)
@@ -50,11 +50,11 @@ def make_move(
     move: Move = ""
 
     move += piece_name
-    move += chr(initial_position[0] + ord("a"))
-    move += str(initial_position[1] + 1)
-    move += capture if capture else "-"
-    move += chr(final_position[0] + ord("a"))
-    move += str(final_position[1] + 1)
+    move += str(initial_position[0])
+    move += str(initial_position[1])
+    move += capture_name if capture_name else "-"
+    move += str(final_position[0])
+    move += str(final_position[1])
     move += "T" if en_passant else "F"
     move += promotion if promotion else "_"
 
@@ -66,7 +66,7 @@ def get_piece(move: Move) -> str:
 
 
 def get_initial_position(move: Move) -> tuple[int, int]:
-    return (int(ord(move[1]) - ord("a")), int(move[2]) - 1)
+    return (int(move[1]), int(move[2]))
 
 
 def get_captured_piece(move: Move) -> str | None:
@@ -74,7 +74,7 @@ def get_captured_piece(move: Move) -> str | None:
 
 
 def get_final_position(move: Move) -> tuple[int, int]:
-    return (int(ord(move[4]) - ord("a")), int(move[5]) - 1)
+    return (int(move[4]), int(move[5]))
 
 
 def is_en_passant(move: Move) -> bool:

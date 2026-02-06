@@ -1,9 +1,9 @@
 from typing import Callable, Self
 from core.moves import (
     Move,
-    get_captured_piece,
     get_final_position,
     get_initial_position,
+    get_promotion,
     is_en_passant,
     make_move,
 )
@@ -21,7 +21,7 @@ where
 """
 
 
-def make_piece(name: str, is_white: bool, has_moved: bool, can_ep: bool):
+def make_piece(name: str, is_white: bool, has_moved: bool, can_ep: bool) -> Piece:
     """
     Constructs a Piece string.
 
@@ -135,8 +135,42 @@ class Board:
         self._add_piece(king, (7, 4))
 
     def get_moves(self, get_white: bool) -> set[Move]:
+        # clear ep status
+        if get_white:
+            pawn_positions = [
+                pos for pos, pwn in self.white_pieces.items() if get_name(pwn) == "P"
+            ]
+        else:
+            pawn_positions = [
+                pos for pos, pwn in self.black_pieces.items() if get_name(pwn) == "P"
+            ]
+
+        for pos in pawn_positions:
+            pawn = self.board[pos[0]][pos[1]]
+            assert pawn is not None, "Pieces and board are not aligned."
+
+            new_pawn = make_piece("P", is_white(pawn), has_moved(pawn), False)
+            self.board[pos[0]][pos[1]] = new_pawn
+            if get_white:
+                self.white_pieces[pos] = new_pawn
+            else:
+                self.black_pieces[pos] = new_pawn
+
+        # generate psuedo moves
         moves = self._get_psuedo_moves(get_white)
 
+        # remove invalid castle moves
+        rank = 0 if get_white else 7
+        k_castle_squares = [(rank, 4), (rank, 5), (rank, 6)]
+        q_castle_squares = [(rank, 4), (rank, 3), (rank, 2)]
+        if self._is_attacked(k_castle_squares, get_white):
+            castle_move = "0-0" + ("T" if get_white else "F")
+            moves.discard(castle_move)
+        if self._is_attacked(q_castle_squares, get_white):
+            castle_move = "0-0-0" + ("T" if get_white else "F")
+            moves.discard(castle_move)
+
+        # remove moves that result in king capture
         invalid_moves: set[Move] = set()
         for move in moves:
             command = self.get_move_command(move)
@@ -159,99 +193,123 @@ class Board:
 
             king = self.board[rank][4]
             rook = self.board[rank][7]
+            updated_king = make_piece("K", white, True, False)
+            updated_rook = make_piece("R", white, True, False)
+
+            assert king is not None, "Castle targets nonexistent king."
+            assert rook is not None, "Castle targets nonexistent rook."
 
             def apply(self: Self) -> None:
-                self.board[rank][6] = make_piece("K", white, True, False)
-                self.board[rank][5] = make_piece("R", white, True, False)
-
-                self.board[rank][4] = None
-                self.board[rank][7] = None
+                self._make_move(updated_king, (rank, 4), (rank, 6))
+                self._make_move(updated_rook, (rank, 7), (rank, 5))
 
             def undo(self: Self) -> None:
-                self.board[rank][4] = king
-                self.board[rank][7] = rook
-
-                self.board[rank][6] = None
-                self.board[rank][5] = None
+                self._undo_move(king, (rank, 4), (rank, 6))
+                self._undo_move(rook, (rank, 7), (rank, 5))
 
         elif move == "0-0-0T" or move == "0-0-0F":
-            white = move[3] == "T"
+            white = move[5] == "T"
             rank = 0 if white else 7
 
             king = self.board[rank][4]
             rook = self.board[rank][0]
+            updated_king = make_piece("K", white, True, False)
+            updated_rook = make_piece("R", white, True, False)
+
+            assert king is not None, "Castle targets nonexistent king."
+            assert rook is not None, "Castle targets nonexistent rook."
 
             def apply(self: Self) -> None:
-                self.board[rank][2] = make_piece("K", white, True, False)
-                self.board[rank][3] = make_piece("R", white, True, False)
-
-                self.board[rank][4] = None
-                self.board[rank][0] = None
+                self._make_move(updated_king, (rank, 4), (rank, 2))
+                self._make_move(updated_rook, (rank, 0), (rank, 3))
 
             def undo(self: Self) -> None:
-                self.board[rank][4] = king
-                self.board[rank][0] = rook
-
-                self.board[rank][2] = None
-                self.board[rank][3] = None
+                self._undo_move(king, (rank, 4), (rank, 2))
+                self._undo_move(rook, (rank, 0), (rank, 3))
 
         elif is_en_passant(move):
             initial_position = get_initial_position(move)
             final_position = get_final_position(move)
-            initial_piece = self.board[initial_position[0]][initial_position[1]]
-            final_piece = self.board[final_position[0]][final_position[1]]
-            captured_piece = self.board[initial_position[0]][final_position[1]]
+            initial_pawn = self.board[initial_position[0]][initial_position[1]]
+            captured_pawn = self.board[initial_position[0]][final_position[1]]
 
-            assert initial_piece is not None, "Move targets a nonexistent piece."
+            assert initial_pawn is not None, "En passant targets a nonexistent pawn."
+            assert captured_pawn is not None, "En passant captures a nonexistent pawn."
+
+            updated_pawn = make_piece(
+                get_name(initial_pawn), is_white(initial_pawn), True, False
+            )
 
             def apply(self: Self) -> None:
-                updated_piece = make_piece(
-                    get_name(initial_piece), is_white(initial_piece), True, False
-                )
-                self.board[initial_position[0]][initial_position[1]] = None
-                self.board[final_position[0]][final_position[1]] = updated_piece
+                # move capturing pawn
+                self._make_move(updated_pawn, initial_position, final_position)
+
+                # remove captured pawn
                 self.board[initial_position[0]][final_position[1]] = None
+                if is_white(initial_pawn):
+                    self.black_pieces.pop((initial_position[0], final_position[1]))
+                else:
+                    self.white_pieces.pop((initial_position[0], final_position[1]))
 
             def undo(self: Self) -> None:
-                self.board[initial_position[0]][initial_position[1]] = initial_piece
-                self.board[final_position[0]][final_position[1]] = None
-                self.board[initial_position[0]][final_position[1]] = captured_piece
+                # move capturing pawn
+                self._undo_move(initial_pawn, initial_position, final_position)
+
+                # add captured pawn
+                self.board[initial_position[0]][final_position[1]] = captured_pawn
+                if is_white(initial_pawn):
+                    self.black_pieces[(initial_position[0], final_position[1])] = (
+                        captured_pawn
+                    )
+                else:
+                    self.white_pieces[(initial_position[0], final_position[1])] = (
+                        captured_pawn
+                    )
 
         else:
             initial_position = get_initial_position(move)
             final_position = get_final_position(move)
             initial_piece = self.board[initial_position[0]][initial_position[1]]
-            final_piece = self.board[final_position[0]][final_position[1]]
+            captured_piece = self.board[final_position[0]][final_position[1]]
 
             assert initial_piece is not None, "Move targets a nonexistent piece."
 
-            def apply(self: Self) -> None:
-                name = get_name(initial_piece)
-                white = is_white(initial_piece)
-                moved = has_moved(initial_piece)
-                ep = (
-                    name == "P"
-                    and not moved
-                    and (final_position[0] == 3 or final_position[0] == 4)
-                )
-                updated_piece = make_piece(name, white, True, ep)
+            name = get_promotion(move) or get_name(initial_piece)
+            white = is_white(initial_piece)
+            moved = has_moved(initial_piece)
+            ep = (
+                name == "P"
+                and not moved
+                and (final_position[0] == 3 or final_position[0] == 4)
+            )
+            updated_piece = make_piece(name, white, True, ep)
 
-                self.board[initial_position[0]][initial_position[1]] = None
-                self.board[final_position[0]][final_position[1]] = updated_piece
+            def apply(self: Self) -> None:
+                self._make_move(updated_piece, initial_position, final_position)
 
             def undo(self: Self) -> None:
-                self.board[initial_position[0]][initial_position[1]] = initial_piece
-                self.board[final_position[0]][final_position[1]] = final_piece
+                self._undo_move(
+                    initial_piece, initial_position, final_position, captured_piece
+                )
 
         return apply, undo
 
     def is_checked(self, check_white: bool) -> bool:
         if check_white:
+            king_pos = self.white_king
+        else:
+            king_pos = self.black_king
+
+        return self._is_attacked([king_pos], check_white)
+
+    def _is_attacked(self, positions: list[tuple[int, int]], check_white: bool) -> bool:
+        if check_white:
             moves = self._get_psuedo_moves(False)
         else:
             moves = self._get_psuedo_moves(True)
 
-        return "K" in map(get_captured_piece, moves)
+        attacked = set(map(get_final_position, moves))
+        return bool(attacked.intersection(positions))
 
     def _add_piece(self, piece: Piece, position: tuple[int, int]) -> None:
         self.board[position[0]][position[1]] = piece
@@ -266,6 +324,60 @@ class Board:
                 self.white_king = position
             else:
                 self.black_king = position
+
+    def _make_move(
+        self,
+        updated_piece: Piece,
+        initial: tuple[int, int],
+        final: tuple[int, int],
+    ) -> None:
+        # move updated piece
+        self.board[initial[0]][initial[1]] = None
+        self.board[final[0]][final[1]] = updated_piece
+
+        # update dicts:
+        if is_white(updated_piece):
+            self.white_pieces.pop(initial, None)
+            self.black_pieces.pop(final, None)
+            self.white_pieces[final] = updated_piece
+            if get_name(updated_piece) == "K":
+                self.white_king = final
+        else:
+            self.black_pieces.pop(initial, None)
+            self.white_pieces.pop(final, None)
+            self.black_pieces[final] = updated_piece
+            if get_name(updated_piece) == "K":
+                self.black_king = final
+
+    def _undo_move(
+        self,
+        original_piece: Piece,
+        initial: tuple[int, int],
+        final: tuple[int, int],
+        captured_piece: Piece | None = None,
+    ) -> None:
+        # revert moved piece
+        self.board[initial[0]][initial[1]] = original_piece
+        self.board[final[0]][final[1]] = None
+
+        # add back captured piece
+        self.board[final[0]][final[1]] = captured_piece
+
+        # update dicts:
+        if is_white(original_piece):
+            self.white_pieces.pop((final[0], final[1]), None)
+            self.white_pieces[(initial[0], initial[1])] = original_piece
+            if captured_piece:
+                self.black_pieces[(final[0], final[1])] = captured_piece
+            if get_name(original_piece) == "K":
+                self.white_king = (initial[0], initial[1])
+        else:
+            self.black_pieces.pop((final[0], final[1]), None)
+            self.black_pieces[(initial[0], initial[1])] = original_piece
+            if captured_piece:
+                self.white_pieces[(final[0], final[1])] = captured_piece
+            if get_name(original_piece) == "K":
+                self.black_king = (initial[0], initial[1])
 
     def _get_psuedo_moves(self, get_white: bool) -> set[Move]:
         moves: set[Move] = set()
@@ -386,31 +498,13 @@ class Board:
         rank = position[0]
         file = position[1]
         white_multiplier = 1 if is_white(pawn) else -1
+        final_positions: list[tuple[int, int]] = []
 
         # foward move
         if _is_in_bounds((rank + 1 * white_multiplier, file)):
             square = self.board[rank + 1 * white_multiplier][file]
             if square is None:
-                # if pawn reaches edge, get promotion moves
-                if rank + 1 * white_multiplier == 7 or rank + 1 * white_multiplier == 0:
-                    for promotion in ["Q", "B", "N", "R"]:
-                        move = make_move(
-                            get_name(pawn),
-                            position,
-                            (rank + 1 * white_multiplier, file),
-                            False,
-                            promotion=promotion,
-                        )
-                        moves.add(move)
-                # else get regular move
-                else:
-                    move = make_move(
-                        get_name(pawn),
-                        position,
-                        (rank + 1 * white_multiplier, file),
-                        False,
-                    )
-                    moves.add(move)
+                final_positions.append((rank + 1 * white_multiplier, file))
 
         # second forward move
         if (
@@ -420,34 +514,31 @@ class Board:
         ):
             square = self.board[rank + 2 * white_multiplier][file]
             if square is None:
-                move = make_move(
-                    get_name(pawn), position, (rank + 2 * white_multiplier, file), False
-                )
-                moves.add(move)
+                final_positions.append((rank + 2 * white_multiplier, file))
 
         # diagonal attacks
         if _is_in_bounds((rank + 1 * white_multiplier, file - 1)):
             square = self.board[rank + 1 * white_multiplier][file - 1]
             if square is not None and is_white(square) != is_white(pawn):
-                move = make_move(
-                    get_name(pawn),
-                    position,
-                    (rank + 1 * white_multiplier, file - 1),
-                    False,
-                    get_name(square),
-                )
-                moves.add(move)
+                final_positions.append((rank + 1 * white_multiplier, file - 1))
 
         if _is_in_bounds((rank + 1 * white_multiplier, file + 1)):
             square = self.board[rank + 1 * white_multiplier][file + 1]
             if square is not None and is_white(square) != is_white(pawn):
-                move = make_move(
-                    get_name(pawn),
-                    position,
-                    (rank + 1 * white_multiplier, file + 1),
-                    False,
-                    get_name(square),
-                )
+                final_positions.append((rank + 1 * white_multiplier, file + 1))
+
+        # check for promotion and add moves
+        for final_pos in final_positions:
+            square = self.board[final_pos[0]][final_pos[1]]
+            captured = get_name(square) if square is not None else None
+            if final_pos[0] == 7 or final_pos[0] == 0:
+                for promotion in ["Q", "B", "N", "R"]:
+                    move = make_move(
+                        get_name(pawn), position, final_pos, False, captured, promotion
+                    )
+                    moves.add(move)
+            else:
+                move = make_move(get_name(pawn), position, final_pos, False, square)
                 moves.add(move)
 
         return moves
