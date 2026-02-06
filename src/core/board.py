@@ -419,11 +419,17 @@ class Board:
             k_rook = self.board[7][7]
             q_squares = [self.board[7][1], self.board[7][2], self.board[7][3]]
             k_squares = [self.board[7][5], self.board[7][6]]
-        if king is not None and get_name(king) == "K" and not has_moved(king):
+        if (
+            king is not None
+            and get_name(king) == "K"
+            and not has_moved(king)
+            and is_white(king) == get_white
+        ):
             if (
                 q_rook is not None
                 and get_name(q_rook) == "R"
                 and not has_moved(q_rook)
+                and is_white(q_rook) == get_white
                 and all(s is None for s in q_squares)
             ):
                 move = "0-0-0"
@@ -433,6 +439,7 @@ class Board:
                 k_rook is not None
                 and get_name(k_rook) == "R"
                 and not has_moved(k_rook)
+                and is_white(k_rook) == get_white
                 and all(s is None for s in k_squares)
             ):
                 move = "0-0"
