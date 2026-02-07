@@ -18,7 +18,17 @@ START = [
     "RNBQKBNR",
 ]
 
-THEMES = ["theme-green", "theme-gray", "theme-amber"]
+THEMES = [
+    "theme-green",
+    "theme-gray",
+    "theme-amber",
+    "theme-cyan",
+    "theme-blue",
+    "theme-purple",
+    "theme-red",
+    "theme-solarized",
+    "theme-paper",
+]
 
 
 class BoxedBoardApp(App[None]):
@@ -164,6 +174,150 @@ class BoxedBoardApp(App[None]):
 
     Screen.theme-amber .square.white_piece { color: #ffe2a8; text-style: bold; }
     Screen.theme-amber .square.black_piece { color: #f5c46a; text-style: bold; }
+
+    /* ---------------- THEME: CYAN ---------------- */
+    Screen.theme-cyan {
+        background: #071012;
+    }
+    Screen.theme-cyan .rank,
+    Screen.theme-cyan .file {
+        color: #93a9ad;
+    }
+    Screen.theme-cyan .square {
+        border-right: ascii #2ee6d6;
+        border-bottom: ascii #2ee6d6;
+    }
+    Screen.theme-cyan .square.first { border-left: ascii #2ee6d6; }
+    Screen.theme-cyan .square.top   { border-top: ascii #2ee6d6; }
+
+    Screen.theme-cyan .square.light { background: #0d1c1f; }
+    Screen.theme-cyan .square.dark  { background: #071417; }
+
+    Screen.theme-cyan .square.light.empty { color: #3e666b; }
+    Screen.theme-cyan .square.dark.empty  { color: #2f5256; }
+
+    Screen.theme-cyan .square.white_piece { color: #e6fffd; text-style: bold; }
+    Screen.theme-cyan .square.black_piece { color: #bfe9e6; text-style: bold; }
+
+    /* ---------------- THEME: BLUE ---------------- */
+    Screen.theme-blue {
+        background: #070b12;
+    }
+    Screen.theme-blue .rank,
+    Screen.theme-blue .file {
+        color: #98a6bf;
+    }
+    Screen.theme-blue .square {
+        border-right: ascii #4aa3ff;
+        border-bottom: ascii #4aa3ff;
+    }
+    Screen.theme-blue .square.first { border-left: ascii #4aa3ff; }
+    Screen.theme-blue .square.top   { border-top: ascii #4aa3ff; }
+
+    Screen.theme-blue .square.light { background: #101a2a; }
+    Screen.theme-blue .square.dark  { background: #0a1220; }
+
+    Screen.theme-blue .square.light.empty { color: #3b4f73; }
+    Screen.theme-blue .square.dark.empty  { color: #2f405f; }
+
+    Screen.theme-blue .square.white_piece { color: #eef4ff; text-style: bold; }
+    Screen.theme-blue .square.black_piece { color: #cbd7f2; text-style: bold; }
+
+    /* ---------------- THEME: PURPLE ---------------- */
+    Screen.theme-purple {
+        background: #0e0712;
+    }
+    Screen.theme-purple .rank,
+    Screen.theme-purple .file {
+        color: #b5a1c4;
+    }
+    Screen.theme-purple .square {
+        border-right: ascii #c86bff;
+        border-bottom: ascii #c86bff;
+    }
+    Screen.theme-purple .square.first { border-left: ascii #c86bff; }
+    Screen.theme-purple .square.top   { border-top: ascii #c86bff; }
+
+    Screen.theme-purple .square.light { background: #1b0f24; }
+    Screen.theme-purple .square.dark  { background: #120a1a; }
+
+    Screen.theme-purple .square.light.empty { color: #6c4a86; }
+    Screen.theme-purple .square.dark.empty  { color: #573a70; }
+
+    Screen.theme-purple .square.white_piece { color: #f6eaff; text-style: bold; }
+    Screen.theme-purple .square.black_piece { color: #dcc3ee; text-style: bold; }
+
+    /* ---------------- THEME: RED ---------------- */
+    Screen.theme-red {
+        background: #120707;
+    }
+    Screen.theme-red .rank,
+    Screen.theme-red .file {
+        color: #c2a0a0;
+    }
+    Screen.theme-red .square {
+        border-right: ascii #ff4d4d;
+        border-bottom: ascii #ff4d4d;
+    }
+    Screen.theme-red .square.first { border-left: ascii #ff4d4d; }
+    Screen.theme-red .square.top   { border-top: ascii #ff4d4d; }
+
+    Screen.theme-red .square.light { background: #241010; }
+    Screen.theme-red .square.dark  { background: #180a0a; }
+
+    Screen.theme-red .square.light.empty { color: #7a3c3c; }
+    Screen.theme-red .square.dark.empty  { color: #673131; }
+
+    Screen.theme-red .square.white_piece { color: #fff0f0; text-style: bold; }
+    Screen.theme-red .square.black_piece { color: #f0c6c6; text-style: bold; }
+
+    /* ---------------- THEME: SOLARIZED (DARK-ISH) ---------------- */
+    Screen.theme-solarized {
+        background: #002b36;
+    }
+    Screen.theme-solarized .rank,
+    Screen.theme-solarized .file {
+        color: #93a1a1;
+    }
+    Screen.theme-solarized .square {
+        border-right: ascii #2aa198;
+        border-bottom: ascii #2aa198;
+    }
+    Screen.theme-solarized .square.first { border-left: ascii #2aa198; }
+    Screen.theme-solarized .square.top   { border-top: ascii #2aa198; }
+
+    Screen.theme-solarized .square.light { background: #073642; }
+    Screen.theme-solarized .square.dark  { background: #002b36; }
+
+    Screen.theme-solarized .square.light.empty { color: #586e75; }
+    Screen.theme-solarized .square.dark.empty  { color: #465a61; }
+
+    Screen.theme-solarized .square.white_piece { color: #eee8d5; text-style: bold; }
+    Screen.theme-solarized .square.black_piece { color: #b7c3b0; text-style: bold; }
+
+    /* ---------------- THEME: PAPER (LIGHT BACKGROUND) ---------------- */
+    Screen.theme-paper {
+        background: #f3f1e6;
+    }
+    Screen.theme-paper .rank,
+    Screen.theme-paper .file {
+        color: #3b3b3b;
+    }
+    Screen.theme-paper .square {
+        border-right: ascii #2b2b2b;
+        border-bottom: ascii #2b2b2b;
+    }
+    Screen.theme-paper .square.first { border-left: ascii #2b2b2b; }
+    Screen.theme-paper .square.top   { border-top: ascii #2b2b2b; }
+
+    Screen.theme-paper .square.light { background: #ffffff; }
+    Screen.theme-paper .square.dark  { background: #e7e2d2; }
+
+    Screen.theme-paper .square.light.empty { color: #b3ada0; }
+    Screen.theme-paper .square.dark.empty  { color: #9f988a; }
+
+    Screen.theme-paper .square.white_piece { color: #111111; text-style: bold; }
+    Screen.theme-paper .square.black_piece { color: #333333; text-style: bold; }
     """
 
     BINDINGS = [
@@ -208,7 +362,8 @@ class BoxedBoardApp(App[None]):
                         text = ch
                         piece_class = "white_piece" if ch.isupper() else "black_piece"
 
-                    classes = ["square", "light" if is_light else "dark", piece_class]
+                    classes = [
+                        "square", "light" if is_light else "dark", piece_class]
                     if is_top:
                         classes.append("top")
                     if col_index == 0:
