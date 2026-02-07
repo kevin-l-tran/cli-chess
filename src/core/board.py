@@ -57,6 +57,37 @@ def can_ep(p: Piece) -> bool:
     return p[3] == "T"
 
 
+QUEEN_DELTAS = [
+    (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)
+]
+BISHOP_DELTAS = [
+    (1, 1), (-1, -1), (-1, 1), (1, -1)
+]
+ROOK_DELTAS = [
+    (0, 1), (1, 0), (-1, 0), (0, -1)
+]
+KING_DELTAS = [
+    (1, 1),
+    (1, 0),
+    (1, -1),
+    (0, 1),
+    (0, -1),
+    (-1, 1),
+    (-1, 0),
+    (-1, -1),
+]
+KNIGHT_DELTAS = [
+    (2, 1),
+    (2, -1),
+    (-2, 1),
+    (-2, -1),
+    (1, 2),
+    (-1, 2),
+    (1, -2),
+    (-1, -2),
+]
+
+
 class Board:
     """
     Represents a chess board.
@@ -247,16 +278,19 @@ class Board:
                 # remove captured pawn
                 self.board[initial_position[0]][final_position[1]] = None
                 if is_white(initial_pawn):
-                    self.black_pieces.pop((initial_position[0], final_position[1]))
+                    self.black_pieces.pop(
+                        (initial_position[0], final_position[1]))
                 else:
-                    self.white_pieces.pop((initial_position[0], final_position[1]))
+                    self.white_pieces.pop(
+                        (initial_position[0], final_position[1]))
 
             def undo(self: Self) -> None:
                 # move capturing pawn
                 self._undo_move(initial_pawn, initial_position, final_position)
 
                 # add captured pawn
-                self.board[initial_position[0]][final_position[1]] = captured_pawn
+                self.board[initial_position[0]
+                           ][final_position[1]] = captured_pawn
                 if is_white(initial_pawn):
                     self.black_pieces[(initial_position[0], final_position[1])] = (
                         captured_pawn
@@ -269,7 +303,8 @@ class Board:
         else:
             initial_position = get_initial_position(move)
             final_position = get_final_position(move)
-            initial_piece = self.board[initial_position[0]][initial_position[1]]
+            initial_piece = self.board[initial_position[0]
+                                       ][initial_position[1]]
             captured_piece = self.board[final_position[0]][final_position[1]]
 
             assert initial_piece is not None, "Move targets a nonexistent piece."
@@ -285,7 +320,8 @@ class Board:
             updated_piece = make_piece(name, white, True, ep)
 
             def apply(self: Self) -> None:
-                self._make_move(updated_piece, initial_position, final_position)
+                self._make_move(
+                    updated_piece, initial_position, final_position)
 
             def undo(self: Self) -> None:
                 self._undo_move(
@@ -541,39 +577,31 @@ class Board:
             if final_pos[0] == 7 or final_pos[0] == 0:
                 for promotion in ["Q", "B", "N", "R"]:
                     move = make_move(
-                        get_name(pawn), position, final_pos, False, captured, promotion
+                        get_name(
+                            pawn), position, final_pos, False, captured, promotion
                     )
                     moves.add(move)
             else:
-                move = make_move(get_name(pawn), position, final_pos, False, square)
+                move = make_move(get_name(pawn), position,
+                                 final_pos, False, square)
                 moves.add(move)
 
         return moves
 
     def _get_rook_moves(self, rook: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
-        moves.update(self._get_horizontal_slide_moves(rook, position))
-        moves.update(self._get_vertical_slide_moves(rook, position))
+        for d in ROOK_DELTAS:
+            moves.update(self._get_slide_moves(rook, position, d))
         return moves
 
     def _get_knight_moves(self, knight: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
-        relative_moves: list[tuple[int, int]] = [
-            (2, 1),
-            (2, -1),
-            (-2, 1),
-            (-2, -1),
-            (1, 2),
-            (-1, 2),
-            (1, -2),
-            (-1, -2),
-        ]
-
-        for rel in relative_moves:
-            final = (position[0] + rel[0], position[1] + rel[1])
+        for d in KNIGHT_DELTAS:
+            final = (position[0] + d[0], position[1] + d[1])
             if _is_in_bounds(final):
                 square = self.board[final[0]][final[1]]
-                move = _move_or_capture_or_halt(knight, square, position, final)
+                move = _move_or_capture_or_halt(
+                    knight, square, position, final)
                 if move is not None:
                     moves.add(move)
 
@@ -581,31 +609,20 @@ class Board:
 
     def _get_bishop_moves(self, bishop: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
-        moves.update(self._get_diagonal_slide_moves(bishop, position))
+        for d in BISHOP_DELTAS:
+            moves.update(self._get_slide_moves(bishop, position, d))
         return moves
 
     def _get_queen_moves(self, queen: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
-        moves.update(self._get_horizontal_slide_moves(queen, position))
-        moves.update(self._get_vertical_slide_moves(queen, position))
-        moves.update(self._get_diagonal_slide_moves(queen, position))
+        for d in QUEEN_DELTAS:
+            moves.update(self._get_slide_moves(queen, position, d))
         return moves
 
     def _get_king_moves(self, king: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
-        relative_moves: list[tuple[int, int]] = [
-            (1, 1),
-            (1, 0),
-            (1, -1),
-            (0, 1),
-            (0, -1),
-            (-1, 1),
-            (-1, 0),
-            (-1, -1),
-        ]
-
-        for rel in relative_moves:
-            final = (position[0] + rel[0], position[1] + rel[1])
+        for d in KING_DELTAS:
+            final = (position[0] + d[0], position[1] + d[1])
             if _is_in_bounds(final):
                 square = self.board[final[0]][final[1]]
                 move = _move_or_capture_or_halt(king, square, position, final)
@@ -614,126 +631,22 @@ class Board:
 
         return moves
 
-    def _get_vertical_slide_moves(
-        self, piece: Piece, position: tuple[int, int]
-    ) -> set[Move]:
+    def _get_slide_moves(self, piece: Piece, initial: tuple[int, int], delta: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
-        file = position[1]
+        position = (initial[0] + delta[0], initial[1] + delta[1])
 
-        up_index = position[0] + 1
-        while _is_in_bounds((up_index, file)):
-            square = self.board[up_index][file]
-            move = _move_or_capture_or_halt(piece, square, position, (up_index, file))
-            if move is None:
-                break
-            else:
+        while _is_in_bounds(position):
+            square = self.board[position[0]][position[1]]
+            move = _move_or_capture_or_halt(piece, square, initial, position)
+            if move is not None and square is not None:
                 moves.add(move)
-            up_index += 1
-
-        down_index = position[0] - 1
-        while _is_in_bounds((down_index, file)):
-            square = self.board[down_index][file]
-            move = _move_or_capture_or_halt(piece, square, position, (down_index, file))
-            if move is None:
                 break
-            else:
+            elif move is not None:
                 moves.add(move)
-            down_index -= 1
-
-        return moves
-
-    def _get_horizontal_slide_moves(
-        self, piece: Piece, position: tuple[int, int]
-    ) -> set[Move]:
-        moves: set[Move] = set()
-        rank = position[0]
-
-        right_index = position[1] + 1
-        while _is_in_bounds((rank, right_index)):
-            square = self.board[rank][right_index]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (rank, right_index)
-            )
-            if move is None:
+            else:
                 break
-            else:
-                moves.add(move)
-            right_index += 1
 
-        left_index = position[1] - 1
-        while _is_in_bounds((rank, left_index)):
-            square = self.board[rank][left_index]
-            move = _move_or_capture_or_halt(piece, square, position, (rank, left_index))
-            if move is None:
-                break
-            else:
-                moves.add(move)
-            left_index -= 1
-
-        return moves
-
-    def _get_diagonal_slide_moves(
-        self, piece: Piece, position: tuple[int, int]
-    ) -> set[Move]:
-        moves: set[Move] = set()
-        file = position[1]
-        rank = position[0]
-
-        up_index = rank + 1
-        left_index = file - 1
-        while _is_in_bounds((up_index, left_index)):
-            square = self.board[up_index][left_index]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (up_index, left_index)
-            )
-            if move is None:
-                break
-            else:
-                moves.add(move)
-            up_index += 1
-            left_index -= 1
-
-        up_index = rank + 1
-        right_index = file + 1
-        while _is_in_bounds((up_index, right_index)):
-            square = self.board[up_index][right_index]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (up_index, right_index)
-            )
-            if move is None:
-                break
-            else:
-                moves.add(move)
-            up_index += 1
-            right_index += 1
-
-        down_index = rank - 1
-        right_index = file + 1
-        while _is_in_bounds((down_index, right_index)):
-            square = self.board[down_index][right_index]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (down_index, right_index)
-            )
-            if move is None:
-                break
-            else:
-                moves.add(move)
-            down_index -= 1
-            right_index += 1
-
-        down_index = rank - 1
-        left_index = file - 1
-        while _is_in_bounds((down_index, left_index)):
-            square = self.board[down_index][left_index]
-            move = _move_or_capture_or_halt(
-                piece, square, position, (down_index, left_index)
-            )
-            if move is None:
-                break
-            else:
-                moves.add(move)
-            down_index -= 1
-            left_index -= 1
+            position = (position[0] + delta[0], position[1] + delta[1])
 
         return moves
 
