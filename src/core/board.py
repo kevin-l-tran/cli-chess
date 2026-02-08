@@ -194,10 +194,12 @@ class Board:
         rank = 0 if get_white else 7
         k_castle_squares = [(rank, 4), (rank, 5), (rank, 6)]
         q_castle_squares = [(rank, 4), (rank, 3), (rank, 2)]
-        if self._is_attacked(k_castle_squares, get_white):
+
+        attacked_squares = self._get_squares_attacked_by(not get_white)
+        if attacked_squares.intersection(k_castle_squares):
             castle_move = "0-0" + ("T" if get_white else "F")
             moves.discard(castle_move)
-        if self._is_attacked(q_castle_squares, get_white):
+        if attacked_squares.intersection(q_castle_squares):
             castle_move = "0-0-0" + ("T" if get_white else "F")
             moves.discard(castle_move)
 
@@ -315,7 +317,7 @@ class Board:
             ep = (
                 name == "P"
                 and not moved
-                and (final_position[0] == 3 or final_position[0] == 4)
+                and abs(final_position[0] - initial_position[0]) == 2
             )
             updated_piece = make_piece(name, white, True, ep)
 
@@ -336,16 +338,47 @@ class Board:
         else:
             king_pos = self.black_king
 
-        return self._is_attacked([king_pos], check_white)
+        attacked = self._get_squares_attacked_by(not check_white)
+        return king_pos in attacked
 
-    def _is_attacked(self, positions: list[tuple[int, int]], check_white: bool) -> bool:
-        if check_white:
-            moves = self._get_psuedo_moves(False)
+    def _get_squares_attacked_by(self, white: bool) -> set[tuple[int, int]]:
+        if white:
+            pieces = self.white_pieces
         else:
-            moves = self._get_psuedo_moves(True)
+            pieces = self.black_pieces
 
-        attacked = set(map(get_final_position, moves))
-        return bool(attacked.intersection(positions))
+        positions: set[tuple[int, int]] = set()
+        for pos, pce in pieces.items():
+            name = get_name(pce)
+            if name == "K":
+                king_positions = map(get_final_position,
+                                     self._get_king_moves(pce, pos))
+                positions.update(king_positions)
+            elif name == "Q":
+                queen_positions = map(get_final_position,
+                                      self._get_queen_moves(pce, pos))
+                positions.update(queen_positions)
+            elif name == "B":
+                bishop_positions = map(
+                    get_final_position, self._get_bishop_moves(pce, pos))
+                positions.update(bishop_positions)
+            elif name == "N":
+                knight_positions = map(
+                    get_final_position, self._get_knight_moves(pce, pos))
+                positions.update(knight_positions)
+            elif name == "R":
+                rook_positions = map(get_final_position,
+                                     self._get_rook_moves(pce, pos))
+                positions.update(rook_positions)
+            else:  # pawns attack diagonally
+                white_multiplier = 1 if white else -1
+                pawn_positions = [(pos[0] + 1 * white_multiplier, pos[1] + 1),
+                          (pos[0] + 1 * white_multiplier, pos[1] - 1)]
+                for p in pawn_positions:
+                    if _is_in_bounds(p):
+                        positions.add(p)
+
+        return positions
 
     def _add_piece(self, piece: Piece, position: tuple[int, int]) -> None:
         self.board[position[0]][position[1]] = piece
@@ -394,7 +427,6 @@ class Board:
     ) -> None:
         # revert moved piece
         self.board[initial[0]][initial[1]] = original_piece
-        self.board[final[0]][final[1]] = None
 
         # add back captured piece
         self.board[final[0]][final[1]] = captured_piece
@@ -583,7 +615,7 @@ class Board:
                     moves.add(move)
             else:
                 move = make_move(get_name(pawn), position,
-                                 final_pos, False, square)
+                                 final_pos, False, captured)
                 moves.add(move)
 
         return moves

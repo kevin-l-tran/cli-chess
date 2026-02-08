@@ -43,7 +43,7 @@ def make_move(
     """
     assert piece_name in ["P", "R", "N", "B", "Q", "K"]
     assert capture_name is None or capture_name in ["P", "R", "N", "B", "Q", "K"]
-    assert promotion is None or promotion in ["P", "R", "N", "B", "Q", "K"]
+    assert promotion is None or promotion in ["R", "N", "B", "Q"]
     assert _verify_position(initial_position)
     assert _verify_position(final_position)
 
