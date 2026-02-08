@@ -351,29 +351,24 @@ class Board:
         for pos, pce in pieces.items():
             name = get_name(pce)
             if name == "K":
-                king_positions = map(get_final_position,
-                                     self._get_king_moves(pce, pos))
+                king_positions = self._get_king_squares(pos)
                 positions.update(king_positions)
             elif name == "Q":
-                queen_positions = map(get_final_position,
-                                      self._get_queen_moves(pce, pos))
+                queen_positions = self._get_queen_squares(pos)
                 positions.update(queen_positions)
             elif name == "B":
-                bishop_positions = map(
-                    get_final_position, self._get_bishop_moves(pce, pos))
+                bishop_positions = self._get_bishop_squares(pos)
                 positions.update(bishop_positions)
             elif name == "N":
-                knight_positions = map(
-                    get_final_position, self._get_knight_moves(pce, pos))
+                knight_positions = self._get_knight_squares(pos)
                 positions.update(knight_positions)
             elif name == "R":
-                rook_positions = map(get_final_position,
-                                     self._get_rook_moves(pce, pos))
+                rook_positions = self._get_rook_squares(pos)
                 positions.update(rook_positions)
             else:  # pawns attack diagonally
                 white_multiplier = 1 if white else -1
                 pawn_positions = [(pos[0] + 1 * white_multiplier, pos[1] + 1),
-                          (pos[0] + 1 * white_multiplier, pos[1] - 1)]
+                                  (pos[0] + 1 * white_multiplier, pos[1] - 1)]
                 for p in pawn_positions:
                     if _is_in_bounds(p):
                         positions.add(p)
@@ -620,67 +615,121 @@ class Board:
 
         return moves
 
-    def _get_rook_moves(self, rook: Piece, position: tuple[int, int]) -> set[Move]:
-        moves: set[Move] = set()
-        for d in ROOK_DELTAS:
-            moves.update(self._get_slide_moves(rook, position, d))
-        return moves
-
     def _get_knight_moves(self, knight: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
+        
+        knight_squares = self._get_knight_squares(position)
+        for p in knight_squares:
+            square = self.board[p[0]][p[1]]
+            move = _move_or_capture_or_halt(knight, square, position, p)
+            if move is not None:
+                moves.add(move)
+
+        return moves
+
+    def _get_knight_squares(self, initial: tuple[int, int]) -> set[tuple[int, int]]:
+        positions: set[tuple[int, int]] = set()
+
         for d in KNIGHT_DELTAS:
-            final = (position[0] + d[0], position[1] + d[1])
-            if _is_in_bounds(final):
-                square = self.board[final[0]][final[1]]
-                move = _move_or_capture_or_halt(
-                    knight, square, position, final)
-                if move is not None:
-                    moves.add(move)
+            position = (initial[0] + d[0], initial[1] + d[1])
+            if _is_in_bounds(position):
+                positions.add(position)
 
-        return moves
-
-    def _get_bishop_moves(self, bishop: Piece, position: tuple[int, int]) -> set[Move]:
-        moves: set[Move] = set()
-        for d in BISHOP_DELTAS:
-            moves.update(self._get_slide_moves(bishop, position, d))
-        return moves
-
-    def _get_queen_moves(self, queen: Piece, position: tuple[int, int]) -> set[Move]:
-        moves: set[Move] = set()
-        for d in QUEEN_DELTAS:
-            moves.update(self._get_slide_moves(queen, position, d))
-        return moves
+        return positions
 
     def _get_king_moves(self, king: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
-        for d in KING_DELTAS:
-            final = (position[0] + d[0], position[1] + d[1])
-            if _is_in_bounds(final):
-                square = self.board[final[0]][final[1]]
-                move = _move_or_capture_or_halt(king, square, position, final)
-                if move is not None:
-                    moves.add(move)
+
+        king_squares = self._get_king_squares(position)
+        for p in king_squares:
+            square = self.board[p[0]][p[1]]
+            move = _move_or_capture_or_halt(king, square, position, p)
+            if move is not None:
+                moves.add(move)
 
         return moves
 
-    def _get_slide_moves(self, piece: Piece, initial: tuple[int, int], delta: tuple[int, int]) -> set[Move]:
+    def _get_king_squares(self, initial: tuple[int, int]) -> set[tuple[int, int]]:
+        positions: set[tuple[int, int]] = set()
+
+        for d in KING_DELTAS:
+            position = (initial[0] + d[0], initial[1] + d[1])
+            if _is_in_bounds(position):
+                positions.add(position)
+
+        return positions
+    
+    def _get_rook_moves(self, rook: Piece, position: tuple[int, int]) -> set[Move]:
         moves: set[Move] = set()
+        
+        rook_squares = self._get_rook_squares(position)
+        for p in rook_squares:
+            square = self.board[p[0]][p[1]]
+            move = _move_or_capture_or_halt(rook, square, position, p)
+            if move is not None:
+                moves.add(move)
+
+        return moves
+
+    def _get_rook_squares(self, position: tuple[int, int]) -> set[tuple[int, int]]:
+        positions: set[tuple[int, int]] = set()
+        
+        for d in ROOK_DELTAS:
+            positions.update(self._get_slide_squares(position, d))
+
+        return positions
+
+    def _get_bishop_moves(self, bishop: Piece, position: tuple[int, int]) -> set[Move]:
+        moves: set[Move] = set()
+        
+        bishop_squares = self._get_bishop_squares(position)
+        for p in bishop_squares:
+            square = self.board[p[0]][p[1]]
+            move = _move_or_capture_or_halt(bishop, square, position, p)
+            if move is not None:
+                moves.add(move)
+                
+        return moves
+
+    def _get_bishop_squares(self, position: tuple[int, int]) -> set[tuple[int, int]]:
+        positions: set[tuple[int, int]] = set()
+        
+        for d in BISHOP_DELTAS:
+            positions.update(self._get_slide_squares(position, d))
+
+        return positions
+    
+    def _get_queen_moves(self, queen: Piece, position: tuple[int, int]) -> set[Move]:
+        moves: set[Move] = set()
+        
+        queen_squares = self._get_queen_squares(position)
+        for p in queen_squares:
+            square = self.board[p[0]][p[1]]
+            move = _move_or_capture_or_halt(queen, square, position, p)
+            if move is not None:
+                moves.add(move)
+
+        return moves
+    
+    def _get_queen_squares(self, position: tuple[int, int]) -> set[tuple[int, int]]:
+        positions: set[tuple[int, int]] = set()
+        
+        for d in QUEEN_DELTAS:
+            positions.update(self._get_slide_squares(position, d))
+
+        return positions
+
+    def _get_slide_squares(self, initial: tuple[int, int], delta: tuple[int, int]) -> set[tuple[int, int]]:
+        positions: set[tuple[int, int]] = set()
         position = (initial[0] + delta[0], initial[1] + delta[1])
 
         while _is_in_bounds(position):
-            square = self.board[position[0]][position[1]]
-            move = _move_or_capture_or_halt(piece, square, initial, position)
-            if move is not None and square is not None:
-                moves.add(move)
+            positions.add(position)
+            if self.board[position[0]][position[1]] is not None:
                 break
-            elif move is not None:
-                moves.add(move)
-            else:
-                break
-
             position = (position[0] + delta[0], position[1] + delta[1])
 
-        return moves
+        return positions
 
 
 def _is_in_bounds(position: tuple[int, int]):
