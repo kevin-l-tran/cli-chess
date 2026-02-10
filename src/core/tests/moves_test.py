@@ -16,7 +16,7 @@ def test_make_move_encodes_correctly_all_fields() -> None:
         en_passant=False,
         promotion=None,
     )
-    assert m == "Nb1Pc3F_"
+    assert m == "N10P22F_"
 
 
 @pytest.mark.parametrize(
@@ -24,36 +24,36 @@ def test_make_move_encodes_correctly_all_fields() -> None:
     [
         (
             dict(
-                piece="P",
+                piece_name="P",
                 initial_position=(0, 1),  # a2
                 final_position=(0, 3),  # a4
-                capture=None,
+                capture_name=None,
                 en_passant=False,
                 promotion=None,
             ),
-            "Pa2-a4F_",
+            "P01-03F_",
         ),
         (
             dict(
-                piece="P",
+                piece_name="P",
                 initial_position=(4, 6),  # e7
                 final_position=(4, 7),  # e8
-                capture="R",
+                capture_name="R",
                 en_passant=False,
                 promotion="Q",
             ),
-            "Pe7Re8FQ",
+            "P46R47FQ",
         ),
         (
             dict(
-                piece="P",
+                piece_name="P",
                 initial_position=(3, 4),  # d5
                 final_position=(4, 5),  # e6
-                capture="B",
+                capture_name="B",
                 en_passant=True,
                 promotion=None,
             ),
-            "Pd5Be6T_",
+            "P34B45T_",
         ),
     ],
 )
