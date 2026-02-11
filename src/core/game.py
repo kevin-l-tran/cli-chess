@@ -62,6 +62,19 @@ class Game:
         elif not self.board.get_moves(self.is_white_turn):
             self.outcome = "1-0" if not self.is_white_turn else "0-1"
 
+    def undo_halfmove(self) -> None:
+        self.moves_list.pop()
+        self.encountered_positions[self._get_position_hash()] -= 1
+        self.is_white_turn = not self.is_white_turn
+        self.outcome = ""
+        commands = self.commands_list.pop()
+
+        commands[1](self.board) # undo move
+
+    def undo_fullmove(self) -> None:
+        self.undo_halfmove()
+        self.undo_halfmove()
+
     def _get_num_stale_moves(self) -> int:
         stale_moves = 0
 
