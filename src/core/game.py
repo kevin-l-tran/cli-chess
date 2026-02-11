@@ -52,7 +52,7 @@ class Game:
         self.is_white_turn = not self.is_white_turn
 
         # verify win/draw conditions
-        if self._get_num_stale_moves() >= 50:
+        if self._get_num_stale_moves() >= 100:
             self.outcome = "1/2-1/2"
         elif self.encountered_positions[position] >= 3:
             self.outcome = "1/2-1/2"
