@@ -1,5 +1,5 @@
 from typing import Callable, Self
-from core.moves import (
+from .moves import (
     Move,
     get_final_position,
     get_initial_position,
