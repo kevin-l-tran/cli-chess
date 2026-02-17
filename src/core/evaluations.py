@@ -11,10 +11,7 @@ where:
 
 
 def make_evaluation(
-    check: bool,
-    checkmate: bool,
-    draw_offer: bool,
-    annotation: str | None = None
+    check: bool, checkmate: bool, draw_offer: bool, annotation: str | None = None
 ) -> Evaluation:
     evaluation: Evaluation = ""
 
@@ -25,3 +22,22 @@ def make_evaluation(
         evaluation += annotation
 
     return NotImplemented
+
+
+def is_check(e: Evaluation) -> bool:
+    return e[0] == "T"
+
+
+def is_checkmate(e: Evaluation) -> bool:
+    return e[1] == "T"
+
+
+def is_draw_offer(e: Evaluation) -> bool:
+    return e[2] == "T"
+
+
+def get_annotation(e: Evaluation) -> str | None:
+    if len(e) > 3:
+        return e[3:]
+    else:
+        return None
