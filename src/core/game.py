@@ -7,10 +7,16 @@ from .moves import Move, get_captured_piece, get_piece
 
 class GameError(Exception):
     pass
+
+
 class IllegalMoveError(GameError):
     pass
+
+
 class GameConcludedError(GameError):
     pass
+
+
 class NoDrawOfferError(GameError):
     pass
 
