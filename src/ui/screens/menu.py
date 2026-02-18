@@ -35,14 +35,6 @@ TIPS = cycle(
 )
 
 
-def styled_title(title: str) -> Text:
-    t = Text(title)
-    for i, ch in enumerate(t.plain):
-        if ch in "/\\":
-            t.stylize("rgb(0,255,215)", i, i + 1)
-    return t
-
-
 class Tips(Static):
     def on_mount(self) -> None:
         self.update(next(TIPS))
@@ -51,6 +43,16 @@ class Tips(Static):
     def action_next_word(self) -> None:
         tip = next(TIPS)
         self.update(tip)
+
+
+class TitleArt(Static):
+    def render(self) -> Text:
+        accent = self.app.theme_variables.get("accent", "cyan")  # type: ignore
+        t = Text(TITLE)
+        for i, ch in enumerate(t.plain):
+            if ch in "/\\":
+                t.stylize(accent, i, i + 1)
+        return t
 
 
 class MenuScreen(Screen[None]):
@@ -63,7 +65,7 @@ class MenuScreen(Screen[None]):
         width: 120;
         height: auto;
         padding: 1 2;
-        border: rgb(0,255,215);
+        border: $accent;
     }
 
     #title {
@@ -85,22 +87,20 @@ class MenuScreen(Screen[None]):
         width: 28;
         height: 3;
         padding: 0 1;
-
         background: transparent;
-        color: rgb(0,255,215);
-
-        border: ascii rgb(0,255,215);
+        color: $accent;
+        border: solid $accent;
         content-align: center middle;
         text-style: bold;
     }
 
     #menu Button:hover {
-        border: ascii white;
+        border: solid $foreground;
     }
 
     #menu Button:focus {
-        color: white;
-        border: ascii white;
+        color: $foreground;
+        border: solid $foreground;
     }
     """
 
@@ -113,7 +113,7 @@ class MenuScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         yield Container(
-            Static(styled_title(TITLE), id="title"),
+            TitleArt(id="title"),
             Tips(id="tagline"),
             Vertical(
                 Button("Start Game", id="start"),
