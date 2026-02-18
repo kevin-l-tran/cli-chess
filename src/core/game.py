@@ -1,4 +1,6 @@
 from typing import Callable
+
+from src.core.evaluations import Evaluation, make_evaluation
 from .board import Board
 from .moves import Move, get_captured_piece, get_piece
 
@@ -9,7 +11,7 @@ class Game:
 
     Attributes:
         board (Board): The game board object.
-        moves_list (list[Move]): List of moves played.
+        moves_list (list[tuple[Move, Evaluation]]): List of moves played and their evaluations.
         commands_list (list[tuple[Callable[[Board], None], Callable[[Board], None]]]): List of apply/undo move commands.
         encountered_positions (dict[str, int]): A hashmap of encountered board positions to number of encounters.
         is_white_turn (bool): Whether it is the white player's turn.
@@ -18,9 +20,10 @@ class Game:
 
     def __init__(self) -> None:
         self.board = Board()
-        self.moves_list: list[Move] = []
-        self.commands_list: list[tuple[Callable[[
-            Board], None], Callable[[Board], None]]] = []
+        self.moves_list: list[tuple[Move, Evaluation]] = []
+        self.commands_list: list[
+            tuple[Callable[[Board], None], Callable[[Board], None]]
+        ] = []
         self.encountered_positions: dict[str, int] = {}
         self.is_white_turn = True
         self.outcome = ""
@@ -32,34 +35,46 @@ class Game:
 
     def make_move(self, move: Move) -> None:
         if self.outcome != "":
-            raise Exception(
-                f"The game has already been concluded: {self.outcome}")
+            raise Exception(f"The game has already been concluded: {self.outcome}")
         if move not in self.get_moves():
             raise Exception(f"This is not a legal move: {move}")
 
         commands = self.board.get_move_command(move)
-        self.commands_list.append(commands)
-        self.moves_list.append(move)
+        self.commands_list.append(commands)  # append commands
 
         self.commands_list[-1][0](self.board)  # apply move
 
         position = self._get_position_hash()
+        # append encountered position
         if self.encountered_positions.get(position) is not None:
             self.encountered_positions[position] += 1
         else:
             self.encountered_positions[position] = 1
 
-        self.is_white_turn = not self.is_white_turn
+        self.is_white_turn = not self.is_white_turn  # change player turn
 
-        # verify win/draw conditions
+        # get evaluation
+        check = self.board.is_checked(self.is_white_turn)
+
+        checkmate = check and not self.board.get_moves(self.is_white_turn)
+
+        draw = False
         if self._get_num_stale_moves() >= 100:
-            self.outcome = "1/2-1/2"
+            draw = True
         elif self.encountered_positions[position] >= 3:
+            draw = True
+        elif not self.board.get_moves(self.is_white_turn) and not self.board.is_checked(
+            self.is_white_turn
+        ):
+            draw = True
+
+        evaluation = make_evaluation(check, checkmate, draw, False)
+        self.moves_list.append((move, evaluation))  # append moves
+
+        # set outcomes
+        if draw:
             self.outcome = "1/2-1/2"
-        # stalemate
-        elif not self.board.get_moves(self.is_white_turn) and not self.board.is_checked(self.is_white_turn):
-            self.outcome = "1/2-1/2"
-        elif not self.board.get_moves(self.is_white_turn):
+        if checkmate:
             self.outcome = "1-0" if not self.is_white_turn else "0-1"
 
     def undo_halfmove(self) -> None:
@@ -69,7 +84,7 @@ class Game:
         self.outcome = ""
         commands = self.commands_list.pop()
 
-        commands[1](self.board) # undo move
+        commands[1](self.board)  # undo move
 
     def undo_fullmove(self) -> None:
         self.undo_halfmove()
@@ -78,7 +93,7 @@ class Game:
     def _get_num_stale_moves(self) -> int:
         stale_moves = 0
 
-        for move in self.moves_list:
+        for move, _ in self.moves_list:
             if get_piece(move) == "P":
                 stale_moves = 0
             elif get_captured_piece(move) is not None:
