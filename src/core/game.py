@@ -5,6 +5,16 @@ from .board import Board
 from .moves import Move, get_captured_piece, get_piece
 
 
+class GameError(Exception):
+    pass
+class IllegalMoveError(GameError):
+    pass
+class GameConcludedError(GameError):
+    pass
+class NoDrawOfferError(GameError):
+    pass
+
+
 class Game:
     """
     Represents a chess game.
@@ -35,9 +45,9 @@ class Game:
 
     def make_move(self, move: Move, draw_offered: bool) -> None:
         if self.outcome != "":
-            raise Exception("GAME_CONCLUDED")
+            raise GameConcludedError(self.outcome)
         if move not in self.get_moves():
-            raise Exception("ILLEGAL_MOVE")
+            raise IllegalMoveError(move)
 
         commands = self.board.get_move_command(move)
         self.commands_list.append(commands)  # append commands
@@ -80,7 +90,7 @@ class Game:
     def accept_draw(self) -> None:
         _, evaluation = self.moves_list[-1]
         if not is_draw_offer(evaluation):
-            raise Exception("NO_DRAW_OFFER")
+            raise NoDrawOfferError(evaluation)
         else:
             self.outcome = "1/2-1/2"
 
