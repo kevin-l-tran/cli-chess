@@ -85,6 +85,9 @@ class Game:
             self.outcome = "1/2-1/2"
 
     def undo_halfmove(self) -> None:
+        if not self.moves_list:
+            return
+        
         self.moves_list.pop()
         self.encountered_positions[self._get_position_hash()] -= 1
         self.is_white_turn = not self.is_white_turn
