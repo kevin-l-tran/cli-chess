@@ -87,7 +87,7 @@ class Game:
     def undo_halfmove(self) -> None:
         if not self.moves_list:
             return
-        
+
         self.moves_list.pop()
         self.encountered_positions[self._get_position_hash()] -= 1
         self.is_white_turn = not self.is_white_turn
@@ -121,6 +121,10 @@ class Game:
                 if p is None:
                     hash += "."
                 else:
-                    hash += get_piece(p)
+                    hash += p
+
+        hash += "T" if self.is_white_turn else "F"
+        if self.board.en_passant_pawn:
+            hash += str(self.board.en_passant_pawn)
 
         return hash
