@@ -27,7 +27,7 @@ def make_evaluation(
     if annotation:
         evaluation += annotation
 
-    return NotImplemented
+    return evaluation
 
 
 def is_check(e: Evaluation) -> bool:
