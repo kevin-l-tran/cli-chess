@@ -1,6 +1,6 @@
 from typing import Callable
 
-from src.core.evaluations import Evaluation, make_evaluation
+from src.core.evaluations import Evaluation, is_draw_offer, make_evaluation
 from .board import Board
 from .moves import Move, get_captured_piece, get_piece
 
@@ -33,11 +33,11 @@ class Game:
     def get_moves(self) -> set[Move]:
         return self.board.get_moves(self.is_white_turn)
 
-    def make_move(self, move: Move) -> None:
+    def make_move(self, move: Move, draw_offered: bool) -> None:
         if self.outcome != "":
-            raise Exception(f"The game has already been concluded: {self.outcome}")
+            raise Exception("GAME_CONCLUDED")
         if move not in self.get_moves():
-            raise Exception(f"This is not a legal move: {move}")
+            raise Exception("ILLEGAL_MOVE")
 
         commands = self.board.get_move_command(move)
         self.commands_list.append(commands)  # append commands
@@ -68,7 +68,7 @@ class Game:
         ):
             draw = True
 
-        evaluation = make_evaluation(check, checkmate, draw, False)
+        evaluation = make_evaluation(check, checkmate, draw, draw_offered)
         self.moves_list.append((move, evaluation))  # append moves
 
         # set outcomes
@@ -76,6 +76,13 @@ class Game:
             self.outcome = "1/2-1/2"
         if checkmate:
             self.outcome = "1-0" if not self.is_white_turn else "0-1"
+
+    def accept_draw(self) -> None:
+        _, evaluation = self.moves_list[-1]
+        if not is_draw_offer(evaluation):
+            raise Exception("NO_DRAW_OFFER")
+        else:
+            self.outcome = "1/2-1/2"
 
     def undo_halfmove(self) -> None:
         self.moves_list.pop()
