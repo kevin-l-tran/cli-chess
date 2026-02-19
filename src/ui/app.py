@@ -1,6 +1,7 @@
 from textual.app import App
 
 from ui.screens.menu import MenuScreen
+from ui.screens.setup import SetupScreen
 from ui.themes import CHESS_VARIABLE_DEFAULTS, DEFAULT_THEME, register_chess_themes
 
 
@@ -8,7 +9,7 @@ class ChessApp(App[None]):
     """A Textual app to play chess."""
 
     BINDINGS = []
-    SCREENS = {"menu": MenuScreen}
+    SCREENS = {"menu": MenuScreen, "setup": SetupScreen}
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
         return CHESS_VARIABLE_DEFAULTS
