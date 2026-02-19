@@ -47,11 +47,11 @@ class Tips(Static):
 
 class TitleArt(Static):
     def render(self) -> Text:
-        accent = self.app.theme_variables.get("accent", "cyan")  # type: ignore
+        accent = self.app.theme_variables.get("accent", "cyan")
         t = Text(TITLE)
         for i, ch in enumerate(t.plain):
             if ch in "/\\":
-                t.stylize(accent, i, i + 1)
+                t.stylize(f"bold {accent}", i, i + 1)
         return t
 
 
@@ -105,9 +105,9 @@ class MenuScreen(Screen[None]):
     """
 
     BINDINGS = [
-        Binding("enter", "start", "Start"),
-        Binding("s", "settings", "Settings"),
-        Binding("q", "quit", "Quit"),
+        Binding("s", "start", "Start"),
+        Binding("ctrl+s", "settings", "Settings"),
+        Binding("ctrl+q", "quit", "Quit"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -128,3 +128,27 @@ class MenuScreen(Screen[None]):
     def on_mount(self) -> None:
         self.title = "Terminal Chess"
         self.query_one("#start", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id
+        if button_id == "start":
+            self.action_start()
+        elif button_id == "settings":
+            self.action_settings()
+        elif button_id == "quit":
+            self.action_quit()
+
+    def action_start(self) -> None:
+        if "setup" in getattr(self.app, "SCREENS", {}):
+            self.app.push_screen("setup")
+        else:
+            self.app.notify("Start Game not wired yet.", severity="warning")
+
+    def action_settings(self) -> None:
+        if "settings" in getattr(self.app, "SCREENS", {}):
+            self.app.switch_mode("settings")
+        else:
+            self.app.notify("Settings not implemented yet.", severity="information")
+
+    def action_quit(self) -> None:
+        self.app.exit()
