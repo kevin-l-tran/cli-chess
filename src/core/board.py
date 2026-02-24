@@ -1,6 +1,7 @@
 from typing import Callable, Self
 from .moves import (
     Move,
+    get_castle,
     get_final_position,
     get_initial_position,
     get_promotion,
@@ -91,7 +92,7 @@ class Board:
         black_king (tuple[int, int]): Position of the black king.
         en_passant_pawn (tuple[int, int] | None): Position of the pawn whom en passant can be applied to.
         white_pieces (dict[tuple[int, int], Piece]): Map of positions to white pieces.
-        black_pieces (dict[tuple[int, int], Piece]): Map of positions to white pieces.
+        black_pieces (dict[tuple[int, int], Piece]): Map of positions to black pieces.
     """
 
     def __init__(self) -> None:
@@ -171,10 +172,10 @@ class Board:
 
         attacked_squares = self._get_squares_attacked_by(not get_white)
         if attacked_squares.intersection(k_castle_squares):
-            castle_move = "0-0" + ("T" if get_white else "F")
+            castle_move = make_move("K", (rank, 4), (rank, 6), False)
             moves.discard(castle_move)
         if attacked_squares.intersection(q_castle_squares):
-            castle_move = "0-0-0" + ("T" if get_white else "F")
+            castle_move = make_move("K", (rank, 4), (rank, 2), False)
             moves.discard(castle_move)
 
         # remove moves that result in king capture
@@ -196,45 +197,43 @@ class Board:
     ) -> tuple[Callable[[Self], None], Callable[[Self], None]]:
         prev_ep_pawn = self.en_passant_pawn
 
-        if move == "0-0T" or move == "0-0F":
-            white = move[3] == "T"
-            rank = 0 if white else 7
+        if get_castle(move) is not None:
+            initial_king_position = get_initial_position(move)
+            final_king_position = get_final_position(move)
 
-            king = self.board[rank][4]
-            rook = self.board[rank][7]
+            initial_king = self.board[initial_king_position[0]
+                                      ][initial_king_position[1]]
+            assert initial_king is not None, "Castle targets a nonexistent king."
+
+            white = is_white(initial_king)
             updated_king = make_piece("K", white, True)
-            updated_rook = make_piece("R", white, True)
 
-            assert king is not None, "Castle targets nonexistent king."
-            assert rook is not None, "Castle targets nonexistent rook."
+            if get_castle(move) == "0-0":
+                initial_rook_position = (initial_king_position[0], 7)
+                final_rook_position = (initial_king_position[0], 5)
+
+                initial_rook = self.board[initial_rook_position[0]
+                                          ][initial_rook_position[1]]
+                assert initial_rook is not None, "Castle targets a nonexistent rook."
+
+                updated_rook = make_piece("R", white, True)
+            else:
+                initial_rook_position = (initial_king_position[0], 0)
+                final_rook_position = (initial_king_position[0], 3)
+
+                initial_rook = self.board[initial_rook_position[0]
+                                          ][initial_rook_position[1]]
+                assert initial_rook is not None, "Castle targets a nonexistent rook."
+
+                updated_rook = make_piece("R", white, True)
 
             def apply(self: Self) -> None:
-                self._make_move(updated_king, (rank, 4), (rank, 6))
-                self._make_move(updated_rook, (rank, 7), (rank, 5))
+                self._make_move(updated_king, initial_king_position, final_king_position)
+                self._make_move(updated_rook, initial_rook_position, final_rook_position)
 
             def undo(self: Self) -> None:
-                self._undo_move(king, (rank, 4), (rank, 6), prev_ep_pawn)
-                self._undo_move(rook, (rank, 7), (rank, 5), prev_ep_pawn)
-
-        elif move == "0-0-0T" or move == "0-0-0F":
-            white = move[5] == "T"
-            rank = 0 if white else 7
-
-            king = self.board[rank][4]
-            rook = self.board[rank][0]
-            updated_king = make_piece("K", white, True)
-            updated_rook = make_piece("R", white, True)
-
-            assert king is not None, "Castle targets nonexistent king."
-            assert rook is not None, "Castle targets nonexistent rook."
-
-            def apply(self: Self) -> None:
-                self._make_move(updated_king, (rank, 4), (rank, 2))
-                self._make_move(updated_rook, (rank, 0), (rank, 3))
-
-            def undo(self: Self) -> None:
-                self._undo_move(king, (rank, 4), (rank, 2), prev_ep_pawn)
-                self._undo_move(rook, (rank, 0), (rank, 3), prev_ep_pawn)
+                self._undo_move(initial_king, initial_king_position, final_king_position, prev_ep_pawn)
+                self._undo_move(initial_rook, initial_rook_position, final_rook_position, prev_ep_pawn)
 
         elif is_en_passant(move):
             initial_position = get_initial_position(move)
@@ -475,8 +474,8 @@ class Board:
                 and is_white(q_rook) == get_white
                 and all(s is None for s in q_squares)
             ):
-                move = "0-0-0"
-                move += "T" if get_white else "F"
+                king_pos = self.white_king if get_white else self.black_king
+                move = make_move("K", king_pos, (king_pos[0], 2), False)
                 moves.add(move)
             if (
                 k_rook is not None
@@ -485,8 +484,8 @@ class Board:
                 and is_white(k_rook) == get_white
                 and all(s is None for s in k_squares)
             ):
-                move = "0-0"
-                move += "T" if get_white else "F"
+                king_pos = self.white_king if get_white else self.black_king
+                move = make_move("K", king_pos, (king_pos[0], 6), False)
                 moves.add(move)
 
         # get en passant moves

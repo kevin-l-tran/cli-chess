@@ -1,7 +1,7 @@
 Move = str
 """
 Represents a chess move. The complete representation of a move has the form:
-    [N, rf(1), c, rf(2), E, C, F, P, A]
+    [N, rf(1), c, rf(2), E, P]
 where 
     N     = name of the piece,
     rf(1) = initial rank, file,
@@ -10,7 +10,7 @@ where
     E     = T if en-passant, F otherwise,
     P     = name of promotion piece, _ otherwise.
 
-Castling is a special move represented by 0-0C and 0-0-0C for kingside and queenside castling respectively, where C is T if white castled and F otherwise.
+Castling is represented by a move from the king.
 """
 
 
@@ -20,18 +20,6 @@ def _verify_position(position: tuple[int, int]) -> bool:
         and position[0] in [0, 1, 2, 3, 4, 5, 6, 7]
         and position[1] in [0, 1, 2, 3, 4, 5, 6, 7]
     )
-
-
-def _is_castle(move: Move) -> bool:
-    return move[0:3] == "0-0" or move[0:5] == "0-0-0"
-
-
-def _is_k_castle(move: Move) -> bool:
-    return len(move) == 4
-
-
-def _is_white_castle(move: Move) -> bool:
-    return move[3] == "T" or move[5] == "T"
 
 
 def make_move(
@@ -75,48 +63,45 @@ def make_move(
 
 
 def get_piece(move: Move) -> str:
-    if _is_castle(move):
-        return "K"
-    else:
-        return move[0]
+    return move[0]
 
 
 def get_initial_position(move: Move) -> tuple[int, int]:
-    if _is_castle(move):
-        rank = 0 if _is_white_castle(move) else 7
-        return (rank, 4)
-    else:
-        return (int(move[1]), int(move[2]))
+    return (int(move[1]), int(move[2]))
 
 
 def get_captured_piece(move: Move) -> str | None:
-    if _is_castle(move):
-        return None
-    else:
-        return move[3] if move[3] != "-" else None
+    return move[3] if move[3] != "-" else None
 
 
 def get_final_position(move: Move) -> tuple[int, int]:
-    if _is_castle(move):
-        rank = 0 if _is_white_castle(move) else 7
-        file = 6 if _is_k_castle(move) else 2
-        return (rank, file)
-    else:
-        return (int(move[4]), int(move[5]))
+    return (int(move[4]), int(move[5]))
 
 
 def is_en_passant(move: Move) -> bool:
-    if _is_castle(move):
-        return False
-    else:
-        return move[6] == "T"
+    return move[6] == "T"
 
 
 def get_promotion(move: Move) -> str | None:
-    if _is_castle(move):
+    return move[7] if move[7] != "_" else None
+
+
+def get_castle(move: Move) -> str | None:
+    if get_piece(move) != "K":
         return None
-    else:
-        return move[7] if move[7] != "_" else None
+
+    r0, f0 = get_initial_position(move)
+    r1, f1 = get_final_position(move)
+
+    if r0 != r1:
+        return None
+
+    df = f1 - f0
+    if df == 2:
+        return "0-0"
+    if df == -2:
+        return "0-0-0"
+    return None
 
 
 def get_standard_representation(move: Move) -> str:
