@@ -1,6 +1,6 @@
 from typing import Callable
 
-from src.core.evaluations import Evaluation, is_draw_offer, make_evaluation
+from src.engine.evaluations import Evaluation, is_draw_offer, make_evaluation
 from .board import Board
 from .moves import Move, get_captured_piece, get_piece
 

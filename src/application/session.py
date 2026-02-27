@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Callable
 
-from core.game import Game
-from game.state import UiState
+from engine.game import Game
+from application.state import UiState
 
 
 class GameUpdate:

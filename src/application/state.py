@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from core.moves import Move
+from engine.moves import Move
 
 
 @dataclass

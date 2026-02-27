@@ -4,7 +4,7 @@ from typing import Any, Mapping
 
 import pytest
 
-from src.core import moves
+from src.engine import moves
 
 
 def test_make_move_encodes_correctly_all_fields() -> None:

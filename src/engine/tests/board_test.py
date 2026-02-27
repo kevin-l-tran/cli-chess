@@ -1,6 +1,6 @@
 import pytest
 
-from src.core.board import Board
+from src.engine.board import Board
 
 
 def perft(depth: int, board: Board, is_white_turn: bool) -> int:
