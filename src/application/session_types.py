@@ -4,7 +4,7 @@ from src.engine.moves import Move
 
 
 @dataclass(frozen=True)
-class GameView:
+class Snapshot:
     board_glyphs: list[list[str]]
     turn_white: bool
     outcome: str
