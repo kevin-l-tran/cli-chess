@@ -2,15 +2,17 @@ from dataclasses import dataclass
 from typing import Callable
 
 from engine.game import Game
-from application.intents import CursorMove, GameUpdate
+from application.state import UiState
 
 
-@dataclass
-class UiState:
-    selected: list[tuple[int, int]] = []
-    cursor: tuple[int, int] = (0, 0)
-    flipped: bool = False
-    show_legal_targets: bool = True
+class GameUpdate:
+    pass
+
+
+@dataclass(frozen=True)
+class CursorMove(GameUpdate):
+    dx: int
+    dy: int
 
 
 class GameSession:
