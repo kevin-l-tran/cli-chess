@@ -1,66 +1,68 @@
 # Move Language Specification
 
-This document defines the official move language accepted by the application.
+This document defines the official move-entry language accepted by the application.
 
-These strings are **application-layer input forms**. They are not the engine's internal move encoding. The parser interprets them against the **current legal move set** and uses them for both:
+These strings are application-layer input forms. They are not the engine’s internal move encoding. The parser interprets them against the current legal move set and uses them for both:
 
-- live draft/highlight updates while the user is typing
+- live draft and highlight updates while the user is typing
 - final move resolution when the user submits the move
 
 The move language is designed so that:
 
-- **draft input and submitted input use the same grammar**
-- draft input is simply a **partial form** of accepted move notation
-- notation that resembles **standard algebraic notation** keeps its standard meaning
+- draft input and submitted input use the same matching rules
+- a draft is simply a partial form of an accepted complete move spelling
+- notation that resembles standard algebraic notation keeps its normal meaning
 - explicit long forms are also supported for clarity and click-to-input synchronization
 
-A move is considered **resolved** only when the current input identifies exactly one legal move.
+A move is considered resolved only when the current input identifies exactly one legal move.
 
 ---
 
 ## 1. Core model
 
-The parser does not treat draft input as a separate fuzzy filter language.
+The parser does not use a separate fuzzy search language for draft input.
 
 Instead:
 
-- the application defines a set of **accepted complete move strings**
+- the application defines a set of accepted complete move strings for each legal move in the current position
 - a draft is valid if it is either:
-    - a complete accepted move string, or
-    - a prefix of at least one accepted complete move string for at least one legal move in the current position
+  - a complete accepted move string for at least one legal move, or
+  - a prefix of at least one accepted complete move string for at least one legal move
 
-This makes the language **prefix-closed** over accepted move notations.
+This makes the move language prefix-closed over the accepted complete spellings.
 
 Examples:
 
-- `N` is valid if at least one legal move has an accepted notation beginning with `N`
-- `Nb1-` is valid if at least one legal move has an accepted notation beginning with `Nb1-`
-- `e` is valid if at least one legal pawn move has an accepted notation beginning with `e`
-- `e4` is valid if it is a complete accepted notation or a valid prefix of one
+- `N` is valid if at least one legal move has an accepted spelling beginning with `N`
+- `Nb1-` is valid if at least one legal move has an accepted spelling beginning with `Nb1-`
+- `e` is valid if at least one legal pawn move has an accepted spelling beginning with `e`
+- `e4` is valid if it is a complete accepted spelling or a valid prefix of one
 
-The parser always evaluates input against the **current legal move set**.
+The parser always evaluates input against the current legal move set.
+
+### Empty input
+
+The empty string is treated specially.
+
+If the normalized input is empty:
+
+- status is `empty`
+- there are no matching moves
+- there are no highlights
+- no move resolves
+
+The empty string does not act as a prefix of all legal moves.
 
 ---
 
-## 2. Accepted complete move notations
-
-The application accepts two families of complete move notations:
-
-1. **Standard algebraic notation (SAN) + SAN-compatible extensions**
-2. **Explicit long notation**
-
-Both families are part of the same official move language.
-
----
-
-## 3. Normalization and case rules
+## 2. Normalization and case rules
 
 Before parsing:
 
 - trim surrounding whitespace
 - remove internal spaces
 
-Accepted examples after normalization:
+Examples of equivalent normalized input:
 
 - `Nc3`
 - `N c3`
@@ -70,12 +72,13 @@ Accepted examples after normalization:
 - `o-o`
 - `0-0`
 
-Case rules:
+The parser does not normalize case.
+
+Rules:
 
 - piece letters must be uppercase
 - file letters must be lowercase
 - ranks must be numeric
-- the parser does **not** normalize case
 
 Accepted:
 
@@ -91,14 +94,14 @@ Rejected:
 
 ### Castling alias exception
 
-Castling forms are a special token family and are exempt from the ordinary piece-letter case rules.
+Castling forms are a special token family and are exempt from the ordinary piece-letter case rule.
 
 Accepted castling spellings are:
 
 - `O-O`
 - `O-O-O`
 
-Optional aliases:
+Additional accepted aliases are:
 
 - `0-0`
 - `0-0-0`
@@ -107,9 +110,9 @@ Optional aliases:
 
 ---
 
-## 4. Tokens
+## 3. Tokens
 
-### 4.1 Piece letters
+### 3.1 Piece letters
 
 Accepted piece letters:
 
@@ -123,15 +126,15 @@ Accepted piece letters:
 Rules:
 
 - piece letters must be uppercase
-- in SAN, pawn moves omit `P`
+- in SAN-style notation, pawn moves omit `P`
 - in explicit long notation, pawns must use `P`
 
-### 4.2 Files and ranks
+### 3.2 Files and ranks
 
 - files: `a` through `h`
 - ranks: `1` through `8`
 
-### 4.3 Dividers
+### 3.3 Dividers
 
 Accepted dividers:
 
@@ -140,19 +143,20 @@ Accepted dividers:
 
 Rules:
 
-- in explicit long notation, the divider is optional when a destination is present
-- `x` is part of the accepted spelling for captures
-- `-` is part of the accepted spelling for non-captures
-- a spelling that uses the wrong divider for the move kind is **not** an accepted move spelling
+- in SAN-style notation, `x` is used for captures and quiet moves have no divider
+- in explicit long notation, `-` is used for non-captures
+- in explicit long notation, `x` is used for captures
+- in explicit long notation, the divider may be omitted when a destination is present
 
 Examples:
 
-- `Qd1xh5` is a valid capture spelling
-- `Qd1-h5` is a valid non-capture spelling
-- `Qd1xh5` is not a valid spelling for a non-capturing move
-- `Qd1-h5` is not a valid spelling for a capturing move
+- `Qxh5` is a valid SAN capture spelling
+- `Qh5` is a valid SAN quiet spelling
+- `Qd1xh5` is a valid explicit long capture spelling
+- `Qd1-h5` is a valid explicit long quiet spelling
+- `Qd1h5` is also accepted as an explicit long spelling
 
-### 4.4 Promotion pieces
+### 3.4 Promotion pieces
 
 Accepted promotion pieces:
 
@@ -168,38 +172,30 @@ Rejected:
 
 ---
 
-## 5. SAN Compatible Policy
+## 4. Accepted complete move notations
 
-The application accepts both strict SAN and SAN-compatible overspecified forms.
+The application accepts three groups of complete move spellings:
 
-In particular:
+1. SAN
+2. explicit long notation
+3. castling aliases
 
-- absence of a piece letter indicates a **pawn move**
-- SAN disambiguation fields keep their standard meaning
-- SAN capture, promotion, and castling forms are supported
-- piece moves may include optional source disambiguation even when strict SAN would not require it
-- pawn SAN-style forms do **not** include an explicit `P`
-- pawn SAN-style forms do **not** include any source disambiguation without capture
-- pawn SAN-style forms **only** include the file during capture
-
-Therefore, all of the following may be accepted for the same legal move when applicable:
-
-- `Nc3`
-- `Nbc3`
-- `N1c3`
-- `Nb1c3`
-
-This permissiveness applies to piece moves and piece captures only.
-
-Examples that are **not** SAN-compatible pawn forms:
-
-- `Pe2e4`
-- `e2e4`
-- `a7a8=Q`
-
-Those forms are either explicit long notation (`Pe2e4`) or rejected (`e2e4`, `a7a8=Q`).
+These groups are all part of the same move-entry language.
 
 ---
+
+## 5. SAN
+
+The parser accepts one SAN spelling per legal move, derived from the current legal move set.
+
+For piece moves, SAN uses the minimal required disambiguation:
+
+- no disambiguation if the move is already unique
+- file disambiguation if needed and sufficient
+- rank disambiguation if needed and sufficient
+- full source-square disambiguation if file and rank are both insufficient
+
+The parser does not generate extra SAN-compatible overspecified spellings beyond the required SAN form.
 
 ### 5.1 Pawn quiet move
 
@@ -216,8 +212,6 @@ Meaning:
 
 - a pawn moves to the destination square
 
----
-
 ### 5.2 Pawn capture
 
 Format:
@@ -232,8 +226,6 @@ Examples:
 Meaning:
 
 - a pawn from the given file captures on the destination square
-
----
 
 ### 5.3 Pawn promotion
 
@@ -251,110 +243,52 @@ Meaning:
 
 - a pawn move or capture that promotes to the requested piece
 
----
-
 ### 5.4 Piece quiet move
 
 Format:
 
-`<Piece><ToSquare>`
+`<Piece><Disambiguator><ToSquare>`
+
+Where `<Disambiguator>` may be empty, a file, a rank, or a full source square.
 
 Examples:
 
 - `Nc3`
-- `Qh5`
-- `Bb5`
+- `Nbd2`
+- `R1e2`
+- `Nb1c3`
 
 Meaning:
 
-- a move by that piece type to the destination square
-
----
+- a move by that piece type to the destination square, with the minimum required disambiguation
 
 ### 5.5 Piece capture
 
 Format:
 
-`<Piece>x<ToSquare>`
+`<Piece><Disambiguator>x<ToSquare>`
+
+Where `<Disambiguator>` may be empty, a file, a rank, or a full source square.
 
 Examples:
 
 - `Qxh5`
-- `Bxe6`
-
-Meaning:
-
-- a capture by that piece type on the destination square
-
----
-
-### 5.6 Piece disambiguation by file
-
-Format:
-
-- `<Piece><FromFile><ToSquare>`
-- `<Piece><FromFile>x<ToSquare>`
-
-Examples:
-
-- `Nbd2`
 - `Raxd1`
-
-Meaning:
-
-- the move is restricted to pieces of that type on the specified file
-
----
-
-### 5.7 Piece disambiguation by rank
-
-Format:
-
-- `<Piece><FromRank><ToSquare>`
-- `<Piece><FromRank>x<ToSquare>`
-
-Examples:
-
-- `R1e2`
 - `N5xd7`
-
-Meaning:
-
-- the move is restricted to pieces of that type on the specified rank
-
----
-
-### 5.8 Piece disambiguation by full source square
-
-Format:
-
-- `<Piece><FromSquare><ToSquare>`
-- `<Piece><FromSquare>x<ToSquare>`
-
-Examples:
-
-- `Nb1c3`
 - `Qd1xh5`
 
 Meaning:
 
-- the move is restricted to the exact source square
+- a capture by that piece type on the destination square, with the minimum required disambiguation
 
-Notes:
+### 5.6 Castling
 
-- this is accepted as an extension-compatible SAN-style explicit form
-- this form overlaps with explicit long notation and is accepted by design
-
----
-
-### 5.9 Castling
-
-Accepted complete forms:
+Accepted SAN castling forms:
 
 - `O-O`
 - `O-O-O`
 
-Optional complete aliases:
+Accepted aliases:
 
 - `0-0`
 - `0-0-0`
@@ -365,42 +299,32 @@ Meaning:
 
 - castling according to standard chess notation
 
-Notes:
-
-- if a castling move resolves, its canonical text is the corresponding explicit king move
-
 ---
 
 ## 6. Explicit long notation
 
-Explicit long notation is supported alongside SAN-compatible notation.
+Explicit long notation is supported alongside SAN.
 
 Its purpose is to provide:
 
-- a precise, stable application-facing move spelling
-- an intuitive click-to-input form
-- explicit source-to-destination notation for users who prefer it
+- an exact source-to-destination spelling
+- a stable click-to-input form
+- a notation family that users can type without relying on SAN ambiguity rules
 
 In explicit long notation:
 
 - the piece letter is always present
+- the source square is always present
+- the destination square is always present
 - pawns must use `P`
-- the source is always explicit
-- the destination is always explicit
-- the divider is optional when a destination is present
-
-Notes:
-
-- some explicit long spellings, such as `Nb1c3` and `Qd1xh5`, also fit the SAN-compatible extension rules
-- the move language is defined by accepted spellings, not by requiring each spelling to belong to exactly one notation family
-
----
+- the divider may be present or omitted
 
 ### 6.1 Explicit long move
 
 Format:
 
-- `<Piece><FromSquare><Divider><ToSquare>`
+- `<Piece><FromSquare>-<ToSquare>`
+- `<Piece><FromSquare>x<ToSquare>`
 - `<Piece><FromSquare><ToSquare>`
 
 Examples:
@@ -409,26 +333,28 @@ Examples:
 - `Nb1c3`
 - `Pe2-e4`
 - `Pe2e4`
-- `Ke1-g1`
+- `Qd1-h5`
 - `Qd1xh5`
+- `Qd1h5`
+- `Ke1-g1`
 
 Meaning:
 
 - exact piece, exact source, exact destination
 
-Notes:
+Rules:
 
-- omission of the divider is allowed when the destination is present
-- if a divider is used, `x` is allowed only and always when the move is a capture
-- castling is represented as a king move
-
----
+- `-` is used for non-captures when a divider is present
+- `x` is used for captures when a divider is present
+- dividerless forms are also accepted
+- castling may also be represented as a king move
 
 ### 6.2 Explicit long promotion
 
 Format:
 
-- `<Piece><FromSquare><Divider><ToSquare>=<PromoPiece>`
+- `<Piece><FromSquare>-<ToSquare>=<PromoPiece>`
+- `<Piece><FromSquare>x<ToSquare>=<PromoPiece>`
 - `<Piece><FromSquare><ToSquare>=<PromoPiece>`
 
 Examples:
@@ -449,53 +375,47 @@ Rules:
 
 ---
 
-## 7. Draft validity
-
-An input string is a **valid draft** if and only if at least one of the following is true:
-
-1. it is a complete accepted move notation for at least one legal move
-2. it is a prefix of at least one accepted complete move notation for at least one legal move
-
-Examples:
-
-- `N` is a valid draft if at least one legal move begins with `N`
-- `Nb` is a valid draft if at least one legal move has a valid accepted spelling beginning with `Nb`
-- `e` is a valid draft if at least one legal pawn move has a valid SAN spelling beginning with `e`
-- `Pe` is a valid draft if at least one legal pawn move has an explicit long spelling beginning with `Pe`
-- `Nb1-` is a valid draft if at least one legal move has an explicit long spelling beginning with `Nb1-`
-
----
-
-## 8. Matching semantics
+## 7. Matching semantics
 
 For a given normalized input:
 
-1. generate the set of legal moves in the current position
-2. generate all accepted complete spellings for each legal move
+1. generate the legal moves in the current position
+2. generate the accepted complete spellings for each legal move
 3. keep only those legal moves for which at least one accepted spelling begins with the input text
 
-This resulting move set is the draft's match set.
+This resulting move set is the draft’s match set.
 
-The parser should expose:
+The parser exposes:
 
 - `matching_moves`
-- `source_highlights`
-- `target_highlights`
+- `source_to_target_highlights`
 - `resolved_move`
 - `canonical_text`
 - `status`
 
 Where:
 
-- `matching_moves` = legal moves whose accepted notation set has at least one spelling with the given prefix
-- `source_highlights` = all distinct source squares among matching moves
-- `target_highlights` = all distinct destination squares among matching moves
+- `matching_moves` = legal moves whose accepted spelling set has at least one spelling with the given prefix
+- `source_to_target_highlights` = one `(source_square, target_square)` pair for each matching move
+
+Unlike a source-only and target-only highlight model, this representation keeps the source/target pairing for each match.
 
 ---
 
-## 9. Resolution outcomes
+## 8. Resolution outcomes
 
-### 9.1 No legal match
+### 8.1 Empty input
+
+The normalized text is empty.
+
+Effect:
+
+- status is `empty`
+- no move resolves
+- no matching moves
+- no highlights
+
+### 8.2 No legal match
 
 The text does not identify any legal move.
 
@@ -512,31 +432,30 @@ Examples:
 
 Effect:
 
+- status is `no_match`
 - no move resolves
 - no matching moves
 
----
-
-### 9.2 Ambiguous draft
+### 8.3 Ambiguous draft
 
 The text identifies more than one legal move.
 
 Examples:
 
 - `N`
-- `Nb`
 - `e`
 - `Nb1-`
+- `Pe2`
 - `Nc3` in a position where two knights can legally move to `c3`
 
 Effect:
 
-- highlight all matching source and destination squares
+- status is `ambiguous`
+- expose all matching moves
+- expose all matching source/target pairs
 - do not submit
 
----
-
-### 9.3 Unambiguous draft
+### 8.4 Resolved draft
 
 The text identifies exactly one legal move.
 
@@ -549,67 +468,55 @@ Examples:
 
 Effect:
 
+- status is `resolved`
 - expose `resolved_move`
-- expose canonical text
+- expose `canonical_text`
 - allow submission
 
 ---
 
-## 10. Canonical text
+## 9. Canonical text
 
-If exactly one legal move resolves, the parser should expose `canonical_text`.
+If exactly one legal move resolves, the parser exposes `canonical_text`.
 
 Every resolved move has exactly one canonical text, regardless of which accepted spelling resolved it.
 
-The canonical application-facing form is explicit long notation:
+For ordinary moves, the canonical form is explicit long notation:
 
 `<Piece><FromSquare><Divider><ToSquare>`
+
+Where:
+
+- `-` is used for non-captures
+- `x` is used for captures
+
+Promotion canonical form:
+
+`<Piece><FromSquare><Divider><ToSquare>=<PromoPiece>`
 
 Examples:
 
 - `Nb1-c3`
 - `Pe2-e4`
-- `Ke1-g1`
-
-Promotion canonical form:
-
-`<Piece><FromSquare>-<ToSquare>=<PromoPiece>`
-
-Examples:
-
+- `Qd1xh5`
 - `Pe7-e8=Q`
 
-Rules:
+### Castling canonical text
 
-- canonical text is derived from the resolved legal move, not from the raw user spelling
-- SAN input will canonicalize to explicit long notation
-- castling will canonicalize to the corresponding king move
+Castling canonical text remains the castling token itself:
+
+- kingside castling canonicalizes to `O-O`
+- queenside castling canonicalizes to `O-O-O`
 
 Examples:
 
-- `e4` canonicalizes to `Pe2-e4`
-- `Nc3` canonicalizes to `Nb1-c3` if that is the resolved move
-- `O-O` canonicalizes to `Ke1-g1`
-- `e8=Q` canonicalizes to `Pe7-e8=Q`
+- `O-O` canonicalizes to `O-O`
+- `0-0` canonicalizes to `O-O`
+- `o-o` canonicalizes to `O-O`
 
 ---
 
-## 11. Highlight semantics
-
-For every draft with matching legal moves:
-
-- `source_highlights` = all distinct sources among `matching_moves`
-- `target_highlights` = all distinct destinations among `matching_moves`
-
-If the draft resolves uniquely:
-
-- `resolved_move` is the unique move
-- `canonical_text` is exposed
-- the UI may emphasize the resolved source and destination specially
-
----
-
-## 12. Click-to-input synchronization
+## 10. Click-to-input synchronization
 
 Board clicks should produce explicit long notation drafts.
 
@@ -622,7 +529,7 @@ Typing and clicking both use the same move language and the same matching rules.
 
 ---
 
-## 13. Examples from the initial position
+## 11. Examples from the initial position
 
 ### Input: `N`
 
@@ -633,17 +540,11 @@ Matches:
 - `Ng1-f3`
 - `Ng1-h3`
 
-Accepted spellings beginning with `N` include SAN and explicit long forms such as:
+Accepted spellings beginning with `N` include:
 
 - `Na3`, `Nc3`, `Nf3`, `Nh3`
 - `Nb1-a3`, `Nb1-c3`, `Ng1-f3`, `Ng1-h3`
-
-Highlights:
-
-- sources: `b1`, `g1`
-- targets: `a3`, `c3`, `f3`, `h3`
-
----
+- `Nb1a3`, `Nb1c3`, `Ng1f3`, `Ng1h3`
 
 ### Input: `Nb1-`
 
@@ -652,29 +553,15 @@ Matches:
 - `Nb1-a3`
 - `Nb1-c3`
 
-Highlights:
-
-- source: `b1`
-- targets: `a3`, `c3`
-
----
-
 ### Input: `Nc3`
 
 Matches:
 
 - `Nb1-c3`
 
-Highlights:
-
-- source: `b1`
-- target: `c3`
-
 Resolved move:
 
 - `Nb1-c3`
-
----
 
 ### Input: `e`
 
@@ -688,25 +575,6 @@ SAN spellings beginning with `e` include:
 - `e3`
 - `e4`
 
-Highlights:
-
-- source: `e2`
-- targets: `e3`, `e4`
-
----
-
-### Input: `e4`
-
-Matches:
-
-- `Pe2-e4`
-
-Resolved move:
-
-- `Pe2-e4`
-
----
-
 ### Input: `Pe2`
 
 Matches:
@@ -714,32 +582,27 @@ Matches:
 - `Pe2-e3`
 - `Pe2-e4`
 
-Highlights:
+### Input: `O-`
 
-- source: `e2`
-- targets: `e3`, `e4`
+Matches:
 
----
+- `O-O`
+- `O-O-O` if both castling moves are legal
+- otherwise whichever legal castling move exists
 
-## 14. Out of scope
+### Input: `0-`
 
-This document specifies move-entry strings only.
+Matches:
 
-It does not specify notation or commands for:
-
-- resignation
-- draw offers or draw acceptance
-- comments or annotations
-- en passant annotations
-- check/checkmate annotations
-- PGN result tokens
-- engine-internal move encoding
+- `0-0`
+- `0-0-0` if both castling moves are legal
+- otherwise whichever legal castling move exists
 
 ---
 
-## 15. Summary of accepted complete forms
+## 12. Summary of accepted complete forms
 
-Accepted complete SAN examples:
+Accepted SAN examples:
 
 - `e4`
 - `c3`
@@ -756,7 +619,7 @@ Accepted complete SAN examples:
 - `O-O`
 - `O-O-O`
 
-Accepted complete explicit long examples:
+Accepted explicit long examples:
 
 - `Nb1-c3`
 - `Nb1c3`
@@ -764,9 +627,17 @@ Accepted complete explicit long examples:
 - `Pe2e4`
 - `Qd1-h5`
 - `Qd1xh5`
+- `Qd1h5`
 - `Ke1-g1`
 - `Pe7-e8=Q`
 - `Pe7e8=Q`
+
+Accepted castling aliases:
+
+- `0-0`
+- `0-0-0`
+- `o-o`
+- `o-o-o`
 
 Accepted incomplete draft examples:
 
@@ -776,6 +647,7 @@ Accepted incomplete draft examples:
 - `e`
 - `ex`
 - `O-`
+- `0-`
 - `Pe2`
 
 Rejected examples:
