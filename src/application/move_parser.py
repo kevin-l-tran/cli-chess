@@ -25,8 +25,7 @@ class ParseResult:
     normalized_text: str
     status: ParseStatus
     matching_moves: list[Move]
-    source_highlights: list[Square]
-    target_highlights: list[Square]
+    source_to_target_highlights: list[tuple[Square, Square]]
     resolved_move: Move | None
     canonical_text: str | None
 
@@ -91,7 +90,30 @@ def _san_disambiguator(
     return "full"
 
 
-def _get_san_compatible(
+def _get_canonical(
+    move: Move,
+) -> str:
+    """Returns the canonical move text of a move."""
+    castle = get_castle(move)
+    if castle == "0-0":
+        return "O-O"
+    if castle == "0-0-0":
+        return "O-O-O"
+
+    piece = get_piece(move)
+    from_sq = _get_square_name(get_initial_position(move))
+    to_sq = _get_square_name(get_final_position(move))
+    divider = "x" if get_captured_piece(move) is not None else "-"
+    text = f"{piece}{from_sq}{divider}{to_sq}"
+
+    promotion = get_promotion(move)
+    if promotion is not None:
+        text += f"={promotion}"
+
+    return text
+
+
+def _get_spellings(
     move: Move,
     legal_moves: set[Move]
 ) -> list[str]:
@@ -137,3 +159,53 @@ def _get_san_compatible(
     sans.append(f"{piece}{from_sq}{divider}{to_sq}{promotion}")
 
     return sans
+
+
+def parse(self, text: str, legal_moves: set[Move]) -> ParseResult:
+    normalized = _normalize_move_text(text)
+
+    # Deliberate special case: keep empty input inert.
+    if normalized == "":
+        return ParseResult(
+            raw_text=text,
+            normalized_text=normalized,
+            status="empty",
+            matching_moves=[],
+            source_to_target_highlights=[],
+            resolved_move=None,
+            canonical_text=None,
+        )
+
+    matching_moves: list[Move] = []
+
+    for move in legal_moves:
+        spellings = _get_spellings(move, self.square_name)
+        if any(spelling.startswith(normalized) for spelling in spellings):
+            matching_moves.append(move)
+
+    source_to_target_highlights = [
+        (get_initial_position(move), get_final_position(move)) for move in matching_moves
+    ]
+
+    if not matching_moves:
+        status: ParseStatus = "no_match"
+        resolved_move = None
+        canonical_text = None
+    elif len(matching_moves) == 1:
+        status = "resolved"
+        resolved_move = matching_moves[0]
+        canonical_text = _get_canonical(resolved_move)
+    else:
+        status = "ambiguous"
+        resolved_move = None
+        canonical_text = None
+
+    return ParseResult(
+        raw_text=text,
+        normalized_text=normalized,
+        status=status,
+        matching_moves=matching_moves,
+        source_to_target_highlights=source_to_target_highlights,
+        resolved_move=resolved_move,
+        canonical_text=canonical_text,
+    )
