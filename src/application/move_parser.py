@@ -74,3 +74,34 @@ def _canonical_text_for_move(
         text += f"={promotion}"
 
     return text
+
+
+def _san_disambiguator(
+    move: Move,
+    legal_moves: set[Move],
+) -> str:
+    siblings = _ambiguous_siblings(move, legal_moves)
+    if not siblings:
+        return ""
+
+    from_sq = _get_square_name(get_initial_position(move))
+    from_file = from_sq[0]
+    from_rank = from_sq[1]
+
+    file_conflict = any(
+        _get_square_name(get_initial_position(other))[0] == from_file
+        for other in siblings
+    )
+    rank_conflict = any(
+        _get_square_name(get_initial_position(other))[1] == from_rank
+        for other in siblings
+    )
+
+    # if file alone distinguishes, use file
+    # else if rank alone distinguishes, use rank
+    # else use full square
+    if not file_conflict:
+        return from_file
+    if not rank_conflict:
+        return from_rank
+    return from_sq
