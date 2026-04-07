@@ -61,22 +61,22 @@ def _ambiguous_siblings(move: Move, legal_moves: set[Move]) -> list[Move]:
 def _san_disambiguator(
     move: Move,
     legal_moves: set[Move],
-) -> Literal["none", "file", "rank", "full"]:
+) -> str:
     """Returns the minimal square representation needed to distinguish a move from its siblings."""
     siblings = _ambiguous_siblings(move, legal_moves)
     if not siblings:
-        return "none"
+        return ""
 
-    from_sq = get_initial_position(move)
+    from_sq = _get_square_name(get_initial_position(move))
     from_file = from_sq[0]
     from_rank = from_sq[1]
 
     file_conflict = any(
-        get_initial_position(other)[0] == from_file
+        _get_square_name(get_initial_position(other))[0] == from_file
         for other in siblings
     )
     rank_conflict = any(
-        get_initial_position(other)[1] == from_rank
+        _get_square_name(get_initial_position(other))[1] == from_rank
         for other in siblings
     )
 
@@ -84,10 +84,62 @@ def _san_disambiguator(
     # else if rank alone distinguishes, use rank
     # else use full square
     if not file_conflict:
-        return "file"
+        return from_file
     if not rank_conflict:
-        return "rank"
-    return "full"
+        return from_rank
+    return from_sq
+
+
+def _get_sans(
+    move: Move,
+    legal_moves: set[Move],
+) -> str:
+    """Returns the SAN representation of a move."""
+    castle = get_castle(move)
+    if castle == "0-0":
+        return "O-O"
+    if castle == "0-0-0":
+        return "O-O-O"
+
+    piece = get_piece(move)
+    to_sq = _get_square_name(get_final_position(move))
+    promotion = get_promotion(move)
+
+    if piece == "P":
+        if get_captured_piece(move) is not None:
+            text = f"{_get_square_name(get_initial_position(move))[0]}x{to_sq}"
+        else:
+            text = to_sq
+    else:
+        divider = "x" if get_captured_piece(move) is not None else ""
+        disambiguator = _san_disambiguator(move, legal_moves)
+        text = f"{piece}{disambiguator}{divider}{to_sq}"
+
+    if promotion is not None:
+        text += f"={promotion}"
+
+    return text
+
+
+def _get_full(
+    move: Move,
+    legal_moves: set[Move],
+) -> list[str]:
+    """Returns the full representations of a move."""
+    piece = get_piece(move)
+    from_sq = _get_square_name(get_initial_position(move))
+    to_sq = _get_square_name(get_final_position(move))
+    divider = "x" if get_captured_piece(move) is not None else "-"
+
+    divtext = f"{piece}{from_sq}{divider}{to_sq}"
+    nodivtext = f"{piece}{from_sq}{to_sq}"
+
+    promotion = get_promotion(move)
+    if promotion is not None:
+        divtext += f"={promotion}"
+        nodivtext += f"={promotion}"
+
+    return [divtext, nodivtext]
 
 
 def _get_canonical(
@@ -116,49 +168,24 @@ def _get_canonical(
 def _get_spellings(
     move: Move,
     legal_moves: set[Move]
-) -> list[str]:
+) -> set[str]:
     """Returns the SAN/SAN-compatible representations of a move."""
-    sans = []
+    spellings = []
 
     castle = get_castle(move)
     if castle == "0-0":
-        sans.append("O-O")
+        spellings.append(castle)
+        spellings.append("O-O")
+        spellings.append("o-o")
     if castle == "0-0-0":
-        sans.append("O-O-O")
+        spellings.append(castle)
+        spellings.append("O-O-O")
+        spellings.append("o-o-o")
 
-    piece = get_piece(move)
-    from_sq = _get_square_name(get_initial_position(move))
-    to_sq = _get_square_name(get_final_position(move))
-    is_capture = get_captured_piece(move) is not None
-    promotion = get_promotion(move)
+    spellings.append(_get_sans(move, legal_moves))
+    spellings.extend(_get_full(move, legal_moves))
 
-    if piece == "P":
-        if is_capture:
-            san = f"{from_sq[0]}x{to_sq}"
-        else:
-            san = to_sq
-        if promotion is not None:
-            san += f"={promotion}"
-        sans.append(san)
-
-    from_file = from_sq[0]
-    from_rank = from_sq[1]
-
-    disambiguator = _san_disambiguator(move, legal_moves)
-    divider = "x" if is_capture is not None else "-"
-    promotion = f"={promotion}" if promotion is not None else ""
-
-    if disambiguator is "none":
-        sans.append(f"{piece}{divider}{to_sq}{promotion}")
-        sans.append(f"{piece}{from_file}{divider}{to_sq}{promotion}")
-        sans.append(f"{piece}{from_rank}{divider}{to_sq}{promotion}")
-    elif disambiguator is "file":
-        sans.append(f"{piece}{from_file}{divider}{to_sq}{promotion}")
-    elif disambiguator is "rank":
-        sans.append(f"{piece}{from_rank}{divider}{to_sq}{promotion}")
-    sans.append(f"{piece}{from_sq}{divider}{to_sq}{promotion}")
-
-    return sans
+    return set(spellings)
 
 
 def parse(text: str, legal_moves: set[Move]) -> ParseResult:
