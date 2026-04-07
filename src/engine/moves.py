@@ -102,15 +102,3 @@ def get_castle(move: Move) -> str | None:
     if df == -2:
         return "0-0-0"
     return None
-
-
-def get_standard_representation(move: Move) -> str:
-    return "not implemented"
-
-
-def get_extended_representation(move: Move) -> str:
-    return "not implemented"
-
-
-def get_full_representation(move: Move) -> str:
-    return "not implemented"
