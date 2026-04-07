@@ -179,7 +179,8 @@ In particular:
 - SAN capture, promotion, and castling forms are supported
 - piece moves may include optional source disambiguation even when strict SAN would not require it
 - pawn SAN-style forms do **not** include an explicit `P`
-- pawn SAN-style forms do **not** include a full source square
+- pawn SAN-style forms do **not** include any source disambiguation without capture
+- pawn SAN-style forms **only** include the file during capture
 
 Therefore, all of the following may be accepted for the same legal move when applicable:
 
