@@ -42,7 +42,7 @@ def _get_square_name(s: Square) -> str:
 
 
 def _ambiguous_siblings(move: Move, legal_moves: set[Move]) -> list[Move]:
-    """Takes a move and a set of legal moves and returns legal moves with the same piece type and destination square."""
+    """Takes a move and a set of legal moves and returns other legal moves with the same piece type and destination square."""
     piece = get_piece(move)
     to_sq = get_final_position(move)
 
@@ -68,16 +68,16 @@ def _san_disambiguator(
     if not siblings:
         return "none"
 
-    from_sq = _get_square_name(get_initial_position(move))
+    from_sq = get_initial_position(move)
     from_file = from_sq[0]
     from_rank = from_sq[1]
 
     file_conflict = any(
-        _get_square_name(get_initial_position(other))[0] == from_file
+        get_initial_position(other)[0] == from_file
         for other in siblings
     )
     rank_conflict = any(
-        _get_square_name(get_initial_position(other))[1] == from_rank
+        get_initial_position(other)[1] == from_rank
         for other in siblings
     )
 
@@ -118,40 +118,22 @@ def _get_san_compatible(
         if promotion is not None:
             san += f"={promotion}"
         sans.append(san)
-    
+
     from_file = from_sq[0]
     from_rank = from_sq[1]
 
     disambiguator = _san_disambiguator(move, legal_moves)
     divider = "x" if is_capture is not None else "-"
+    promotion = f"={promotion}" if promotion is not None else ""
+
     if disambiguator is "none":
-        sans.append(f"{piece}{from_file}{divider}{to_sq}")
-        sans.append(f"{piece}{from_rank}{divider}{to_sq}")
+        sans.append(f"{piece}{divider}{to_sq}{promotion}")
+        sans.append(f"{piece}{from_file}{divider}{to_sq}{promotion}")
+        sans.append(f"{piece}{from_rank}{divider}{to_sq}{promotion}")
     elif disambiguator is "file":
-        sans.append(f"{piece}{from_file}{divider}{to_sq}")
+        sans.append(f"{piece}{from_file}{divider}{to_sq}{promotion}")
     elif disambiguator is "rank":
-        sans.append(f"{piece}{from_rank}{divider}{to_sq}")
-    sans.append(f"{piece}{from_sq}{divider}{to_sq}")
+        sans.append(f"{piece}{from_rank}{divider}{to_sq}{promotion}")
+    sans.append(f"{piece}{from_sq}{divider}{to_sq}{promotion}")
 
     return sans
-
-
-def _get_canonical(
-    move: Move,
-) -> str:
-    """
-    Returns the canonical representation of a move.
-    """
-    piece = get_piece(move)
-    from_sq = _get_square_name(get_initial_position(move))
-    to_sq = _get_square_name(get_final_position(move))
-    divider = "x" if get_captured_piece(move) is not None else "-"
-    text = f"{piece}{from_sq}{divider}{to_sq}"
-
-    promotion = get_promotion(move)
-    if promotion is not None:
-        text += f"={promotion}"
-
-    return text
-
-
