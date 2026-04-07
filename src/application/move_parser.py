@@ -161,7 +161,7 @@ def _get_spellings(
     return sans
 
 
-def parse(self, text: str, legal_moves: set[Move]) -> ParseResult:
+def parse(text: str, legal_moves: set[Move]) -> ParseResult:
     normalized = _normalize_move_text(text)
 
     # Deliberate special case: keep empty input inert.
@@ -179,7 +179,7 @@ def parse(self, text: str, legal_moves: set[Move]) -> ParseResult:
     matching_moves: list[Move] = []
 
     for move in legal_moves:
-        spellings = _get_spellings(move, self.square_name)
+        spellings = _get_spellings(move, legal_moves)
         if any(spelling.startswith(normalized) for spelling in spellings):
             matching_moves.append(move)
 
