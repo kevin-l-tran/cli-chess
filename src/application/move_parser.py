@@ -21,6 +21,31 @@ PROMOTION_PIECES = set({"Q", "R", "B", "N"})
 
 @dataclass(frozen=True)
 class ParseResult:
+    """
+    Represents the parse results of an arbitrary move string.
+
+    Attributes:
+        raw_text (str):
+            The raw text being parsed.
+        
+        normalized_text (str):
+            The raw text after being normalized according to the move string specifications.
+
+        status (ParseStatus):
+            The status of the parse. Parsing can resolve to `empty`, `no_match`, `ambiguous`, or `resolved`.
+
+        matching_moves (list[Move]):
+            A list of moves that match the normalized text according to the move string specifications.
+
+        source_to_target_highlights (list[tuple[Square, Square]]):
+            A list of `(Square, Square)` tuples representing the `(source square, destination square)` of each matched move.
+
+        resolved_move (Move | None):
+            The unique move that the normalized text resolves to, if any.
+
+        canonical_text (str | None):
+            The canonical text representation, according to the move string specifications, of the resolved move, if it exists.
+    """
     raw_text: str
     normalized_text: str
     status: ParseStatus
@@ -189,6 +214,7 @@ def _get_spellings(
 
 
 def parse(text: str, legal_moves: set[Move]) -> ParseResult:
+    """Takes a text string and converts it into a ParseResult"""
     normalized = _normalize_move_text(text)
 
     # Deliberate special case: keep empty input inert.
