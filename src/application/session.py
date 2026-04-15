@@ -4,7 +4,7 @@ from typing import Callable, Literal
 from engine.game import Game, GameConcludedError, IllegalMoveError
 from engine.moves import Move, get_final_position, get_initial_position
 from application.intents import CursorMove, GameUpdate
-from application.session_types import Square
+from application.session_types import SessionConfig, Square
 from application.move_parser import ParseResult, parse
 
 MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
@@ -33,10 +33,6 @@ class _SessionState:
             The square currently focused by keyboard/controller navigation.
             `None` means there is no active cursor.
 
-        flipped (bool):
-            Whether the board should be presented from Black's perspective
-            instead of White's.
-
         move_text (str):
             The current raw move text being edited by the user, such as
             `"Nf3"` or `"Pe2-e4"` depending on the accepted input format.
@@ -60,9 +56,7 @@ class _SessionState:
             session, such as an illegal-move or game-concluded message.
             `None` means there is no active error to display.
     """
-
     cursor: Square | None = (0, 0)
-    flipped: bool = False
 
     move_text: str = ""
     parse_result: ParseResult | None = None
@@ -73,10 +67,11 @@ class _SessionState:
 
 
 class GameSession:
-    def __init__(self, game: Game | None = None):
-        self.game = Game() if game is None else game
+    def __init__(self, config: SessionConfig, game: Game | None = None):
+        self._game = Game() if game is None else game
+        self._config = config
         self._state: _SessionState = _SessionState()
-        self._legal_moves: set[Move] = set(self.game.get_moves())
+        self._legal_moves: set[Move] = set(self._game.get_moves())
         self._listeners: list[Callable] = []
 
     def subscribe(self, fn: Callable):
@@ -88,7 +83,7 @@ class GameSession:
 
     def try_make_move(self, move: Move, offer_draw: bool = False) -> MoveAttemptResult:
         try:
-            self.game.make_move(move, draw_offered=offer_draw)
+            self._game.make_move(move, draw_offered=offer_draw)
         except IllegalMoveError as e:
             self._state.last_error_message = str(e)
             return MoveAttemptResult(ok=False, status="illegal", message=str(e))
@@ -104,7 +99,7 @@ class GameSession:
             self._state.last_error_message = None
             self._state.move_text = ""
             self._state.parse_result = parse("", self._legal_moves)
-            self._legal_moves = self.game.get_moves()
+            self._legal_moves = self._game.get_moves()
             return MoveAttemptResult(ok=True, status="applied", message=None)
 
     def _update_cursor(self, update: CursorMove):
