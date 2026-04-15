@@ -45,6 +45,26 @@ class GameSession:
         if isinstance(intent, CursorMove):
             self._update_cursor(intent)
 
+    def try_make_move(self, move: Move) -> MoveAttemptResult:
+        try:
+            self.game.make_move(move, draw_offered=False)
+        except IllegalMoveError as e:
+            self._state.last_error_message = str(e)
+            return MoveAttemptResult(ok=False, status="illegal", message=str(e))
+        except GameConcludedError as e:
+            self._state.last_error_message = str(e)
+            return MoveAttemptResult(ok=False, status="game_over", message=str(e))
+        except Exception as e:
+            self._state.last_error_message = f"Unexpected error: {str(e)}"
+            return MoveAttemptResult(ok=False, status="error", message=str(e))
+        else:
+            self._state.last_move_from = get_initial_position(move)
+            self._state.last_move_to = get_final_position(move)
+            self._state.last_error_message = None
+            self._state.selected = None
+            self._state.legal_targets.clear()
+            return MoveAttemptResult(ok=True, status="applied", message=None)
+
     def _update_cursor(self, update: CursorMove):
         r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
         self._state.cursor = (
