@@ -23,10 +23,7 @@ class _SessionState:
     Private mutable working state for a `GameSession`.
 
     This object stores UI-adjacent and controller-owned session data that is
-    useful while processing intents, parsing move input, and applying moves.
-    It is not intended to be exposed directly to the presentation layer.
-    Instead, the session should use this state to build an immutable
-    render-ready snapshot.
+    used to build an immutable render-ready snapshot.
 
     Attributes:
         cursor (Square | None):
@@ -42,6 +39,12 @@ class _SessionState:
             been parsed. This allows the session to keep track of whether the
             current input is empty, invalid, ambiguous, or resolved to a
             unique legal move.
+
+        orientation_override (bool):
+            An optional override for board orientation. `True` means the board
+            should be rendered opposite of the default orientation for the 
+            current player, while `False` means it should be rendered in the 
+            default orientation.
 
         last_move_from (Square | None):
             The origin square of the most recently applied move, if any. Used
@@ -60,6 +63,8 @@ class _SessionState:
 
     move_text: str = ""
     parse_result: ParseResult | None = None
+    
+    orientation_override: bool | None = None
 
     last_move_from: Square | None = None
     last_move_to: Square | None = None
