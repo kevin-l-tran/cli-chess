@@ -33,8 +33,8 @@ class _SessionState:
 
 
 class GameSession:
-    def __init__(self):
-        self.game = Game()
+    def __init__(self, game: Game | None = None):
+        self.game = Game() if game is None else game
         self._state: _SessionState = _SessionState()
         self._listeners: list[Callable] = []
 
