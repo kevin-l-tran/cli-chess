@@ -45,9 +45,9 @@ class GameSession:
         if isinstance(intent, CursorMove):
             self._update_cursor(intent)
 
-    def try_make_move(self, move: Move) -> MoveAttemptResult:
+    def try_make_move(self, move: Move, offer_draw: bool) -> MoveAttemptResult:
         try:
-            self.game.make_move(move, draw_offered=False)
+            self.game.make_move(move, draw_offered=offer_draw)
         except IllegalMoveError as e:
             self._state.last_error_message = str(e)
             return MoveAttemptResult(ok=False, status="illegal", message=str(e))
