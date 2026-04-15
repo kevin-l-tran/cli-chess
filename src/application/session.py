@@ -99,12 +99,14 @@ class GameSession:
             self._state.last_error_message = f"Unexpected error: {str(e)}"
             return MoveAttemptResult(ok=False, status="error", message="Could not apply move.")
         else:
+            self._legal_moves = self._game.get_moves()
+
             self._state.last_move_from = get_initial_position(move)
             self._state.last_move_to = get_final_position(move)
             self._state.last_error_message = None
             self._state.move_text = ""
             self._state.parse_result = parse("", self._legal_moves)
-            self._legal_moves = self._game.get_moves()
+            
             return MoveAttemptResult(ok=True, status="applied", message=None)
 
     def _update_cursor(self, update: CursorMove):
