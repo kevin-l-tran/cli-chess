@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from src.engine.moves import (
+from engine.moves import (
     Move,
     get_captured_piece,
     get_castle,
