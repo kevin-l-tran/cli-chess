@@ -42,8 +42,8 @@ class _SessionState:
 
         orientation_override (bool):
             An optional override for board orientation. `True` means the board
-            should be rendered opposite of the default orientation for the 
-            current player, while `False` means it should be rendered in the 
+            should be rendered opposite of the default orientation for the
+            current player, while `False` means it should be rendered in the
             default orientation.
 
         last_move_from (Square | None):
@@ -59,11 +59,12 @@ class _SessionState:
             session, such as an illegal-move or game-concluded message.
             `None` means there is no active error to display.
     """
+
     cursor: Square | None = (0, 0)
 
     move_text: str = ""
     parse_result: ParseResult | None = None
-    
+
     orientation_override: bool = False
 
     last_move_from: Square | None = None
@@ -72,6 +73,17 @@ class _SessionState:
 
 
 class GameSession:
+    """
+    Application-layer controller for a single chess session.
+
+    A `GameSession` owns:
+    - the active engine `Game`
+    - session configuration
+    - mutable UI-adjacent working state
+    - a cached legal-move set for the current position
+    - optional listeners for future publication of session updates
+    """
+
     def __init__(self, config: SessionConfig, game: Game | None = None):
         self._game = Game() if game is None else game
         self._config = config
@@ -80,24 +92,87 @@ class GameSession:
         self._listeners: list[Callable] = []
 
     def subscribe(self, fn: Callable):
+        """
+        Register a listener for future session updates.
+
+        Parameters:
+            fn (Callable):
+                Callback to store for later notification.
+
+        Notes:
+            Listeners are currently only stored and not yet invoked. This
+            method exists to support a future publication path when the
+            session begins producing snapshots or explicit update events.
+        """
         self._listeners.append(fn)
 
     def dispatch(self, intent: GameUpdate):
+        """
+        Handle a UI-originated session intent.
+
+        Parameters:
+            intent (GameUpdate):
+                The application intent to process.
+
+        Notes:
+            This method currently handles cursor movement only. As the session
+            grows, this method can route additional intent types such as move
+            text changes, square selection, board flipping, and move
+            confirmation.
+        """
         if isinstance(intent, CursorMove):
             self._update_cursor(intent)
 
     def try_make_move(self, move: Move, offer_draw: bool = False) -> MoveAttemptResult:
+        """
+        Attempt to apply a resolved move through the engine.
+
+        This is the main application-layer move entrypoint for callers that
+        already have a resolved engine move. It translates engine failures into
+        stable session-level results and updates session-owned feedback state.
+
+        Parameters:
+            move (Move):
+                The fully resolved engine move to attempt.
+
+            offer_draw (bool):
+                Whether the move should also carry a draw offer.
+
+        Returns:
+            MoveAttemptResult:
+                Stable success/failure information suitable for the UI layer.
+
+        Success behavior:
+            - applies the move through the engine
+            - refreshes the cached legal-move set
+            - records last-move highlight squares
+            - clears any prior error message
+            - clears the move-text draft
+            - resets the draft parse result to the empty-input parse state
+
+        Failure behavior:
+            - preserves existing draft input state
+            - records a user-facing error message
+            - returns a stable failure result without leaking engine details
+              to the caller
+        """
         try:
             self._game.make_move(move, draw_offered=offer_draw)
         except IllegalMoveError:
             self._state.last_error_message = "Could not apply illegal move."
-            return MoveAttemptResult(ok=False, status="illegal", message="Could not apply illegal move.")
+            return MoveAttemptResult(
+                ok=False, status="illegal", message="Could not apply illegal move."
+            )
         except GameConcludedError:
             self._state.last_error_message = "Game has concluded."
-            return MoveAttemptResult(ok=False, status="game_over", message="Game has concluded.")
+            return MoveAttemptResult(
+                ok=False, status="game_over", message="Game has concluded."
+            )
         except Exception:
             self._state.last_error_message = "Could not apply move."
-            return MoveAttemptResult(ok=False, status="error", message="Could not apply move.")
+            return MoveAttemptResult(
+                ok=False, status="error", message="Could not apply move."
+            )
         else:
             self._legal_moves = self._game.get_moves()
 
@@ -106,7 +181,7 @@ class GameSession:
             self._state.last_error_message = None
             self._state.move_text = ""
             self._state.parse_result = parse("", self._legal_moves)
-            
+
             return MoveAttemptResult(ok=True, status="applied", message=None)
 
     def _update_cursor(self, update: CursorMove):
