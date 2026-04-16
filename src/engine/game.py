@@ -108,15 +108,21 @@ class Game:
         if not self.moves_list:
             raise NoMoveToUndoError()
 
-        self.moves_list.pop()
-        self.encountered_positions[self._get_position_hash()] -= 1
-        self.is_white_turn = not self.is_white_turn
-        self.outcome = ""
-        commands = self.commands_list.pop()
+        current_position = self._get_position_hash()
+        commands = self.commands_list[-1]
 
         commands[1](self.board)  # undo move
 
+        self.commands_list.pop()
+        self.moves_list.pop()
+        self.encountered_positions[current_position] -= 1
+        self.is_white_turn = not self.is_white_turn
+        self.outcome = ""
+
     def undo_fullmove(self) -> None:
+        if len(self.moves_list) < 2:
+            raise NoMoveToUndoError()
+
         self.undo_halfmove()
         self.undo_halfmove()
 
