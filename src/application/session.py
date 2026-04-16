@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Callable, Literal
 
-from engine.game import Game, GameConcludedError, IllegalMoveError
-from engine.moves import Move, get_final_position, get_initial_position
-from application.intents import CursorMove, GameUpdate
-from application.session_types import SessionConfig, Square
-from application.move_parser import ParseResult, parse
+from src.engine.game import Game, GameConcludedError, IllegalMoveError
+from src.engine.moves import Move, get_final_position, get_initial_position
+from .intents import CursorMove, GameUpdate
+from .session_types import SessionConfig, Square
+from .move_parser import ParseResult, parse
 
 MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
 
