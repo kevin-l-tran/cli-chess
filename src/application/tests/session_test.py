@@ -1,35 +1,10 @@
+from helpers import make, sq
+
 from src.application import move_parser
 from src.application import session as session_module
 from src.engine import moves, game
 
 Move = moves.Move
-
-
-def sq(name: str) -> tuple[int, int]:
-    """Convert algebraic square like 'e4' to engine coordinates (file, rank)."""
-    assert len(name) == 2
-    file = ord(name[0]) - ord("a")
-    rank = int(name[1]) - 1
-    return (file, rank)
-
-
-def make(
-    piece: str,
-    start: str,
-    end: str,
-    *,
-    capture: str | None = None,
-    en_passant: bool = False,
-    promotion: str | None = None,
-) -> Move:
-    return moves.make_move(
-        piece_name=piece,
-        initial_position=sq(start),
-        final_position=sq(end),
-        capture_name=capture,
-        en_passant=en_passant,
-        promotion=promotion,
-    )
 
 
 class FakeGame(game.Game):
@@ -101,7 +76,9 @@ def test_try_make_move_applies_move_clears_draft_and_refreshes_legal_moves() -> 
     assert session._legal_moves == {reply}
 
 
-def test_try_make_move_illegal_failure_sets_feedback_and_preserves_existing_draft() -> None:
+def test_try_make_move_illegal_failure_sets_feedback_and_preserves_existing_draft() -> (
+    None
+):
     move = make("P", "e2", "e4")
     parse_result = move_parser.parse("Pe2-e4", {move})
     fake_game = FakeGame(
