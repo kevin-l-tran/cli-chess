@@ -1,14 +1,20 @@
 from dataclasses import dataclass
 from typing import Callable, Literal
 
-from src.engine.game import Game, GameConcludedError, IllegalMoveError
+from src.engine.game import (
+    Game,
+    GameConcludedError,
+    IllegalMoveError,
+    NoMoveToUndoError,
+)
 from src.engine.moves import Move, get_final_position, get_initial_position
 from .intents import CursorMove, GameUpdate
 from .session_types import SessionConfig, Square
 from .move_parser import ParseResult, parse
 
 MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
-UndoStatus = Literal["applied", "unavailable", "error"]
+UndoStatus = Literal["undone", "unavailable", "error"]
+UndoScope = Literal["halfmove", "fullmove"]
 
 
 @dataclass(frozen=True)
@@ -42,11 +48,8 @@ class _SessionState:
             The current raw move text being edited by the user, such as
             `"Nf3"` or `"Pe2-e4"` depending on the accepted input format.
 
-        parse_result (ParseResult | None):
-            The most recent parse result for `move_text`, if move text has
-            been parsed. This allows the session to keep track of whether the
-            current input is empty, invalid, ambiguous, or resolved to a
-            unique legal move.
+        parse_result (ParseResult):
+            The most recent parse result for `move_text`.
 
         orientation_override (bool):
             An optional override for board orientation. `True` means the board
@@ -71,7 +74,7 @@ class _SessionState:
     cursor: Square | None = (0, 0)
 
     move_text: str = ""
-    parse_result: ParseResult | None = None
+    parse_result: ParseResult = parse("", set())
 
     orientation_override: bool = False
 
@@ -96,7 +99,7 @@ class GameSession:
         self._game = Game() if game is None else game
         self._config = config
         self._state: _SessionState = _SessionState()
-        self._legal_moves: set[Move] = set(self._game.get_moves())
+        self._legal_moves: set[Move] = self._game.get_moves()
         self._listeners: list[Callable] = []
 
     def subscribe(self, fn: Callable):
@@ -161,8 +164,7 @@ class GameSession:
         Failure behavior:
             - preserves existing draft input state
             - records a user-facing error message
-            - returns a stable failure result without leaking engine details
-              to the caller
+            - returns a stable failure result
         """
         try:
             self._game.make_move(move, draw_offered=offer_draw)
@@ -182,19 +184,79 @@ class GameSession:
                 ok=False, status="error", message="Could not apply move."
             )
         else:
-            self._legal_moves = self._game.get_moves()
-
-            self._state.last_move_from = get_initial_position(move)
-            self._state.last_move_to = get_final_position(move)
+            self._refresh_position_state(clear_move_text=True)
             self._state.last_error_message = None
-            self._state.move_text = ""
-            self._state.parse_result = None
-
             return MoveAttemptResult(ok=True, status="applied", message=None)
-        
+
+    def undo(self, scope: UndoScope | None = None) -> UndoResult:
+        """
+        Attempt to undo the most recent move through the session controller.
+
+        Parameters:
+            scope (UndoScope | None):
+                Which undo policy to apply. `"halfmove"` undoes one ply and
+                `"fullmove"` undoes two plies as a turn pair. If `None`, the
+                session chooses a default based on the configured opponent:
+                `"halfmove"` for local play and `"fullmove"` for bot play.
+
+        Returns:
+            UndoResult:
+                Stable success/failure information for the UI layer.
+
+        Success behavior:
+            - calls the engine undo operation for the resolved scope
+            - refreshes cached legal moves and last-move highlight state
+            - clears the current move-text draft and parse state
+            - clears any active error message
+
+        Failure behavior:
+            - leaves the current move-text draft intact
+            - refreshes session-owned position state
+            - stores a user-facing failure message
+            - returns a stable failure result
+        """
+        if scope is None:
+            scope = "fullmove" if self._config.opponent == "bot" else "halfmove"
+
+        try:
+            if scope == "fullmove":
+                self._game.undo_fullmove()
+                success_message = "Turn undone."
+            else:
+                self._game.undo_halfmove()
+                success_message = "Move undone."
+        except NoMoveToUndoError:
+            self._refresh_position_state(clear_move_text=False)
+            self._state.last_error_message = "No move to undo."
+            return UndoResult(False, "unavailable", "No move to undo.")
+        except Exception:
+            self._refresh_position_state(clear_move_text=False)
+            self._state.last_error_message = "Could not undo move."
+            return UndoResult(False, "error", "Could not undo move.")
+        else:
+            self._refresh_position_state(clear_move_text=True)
+            self._state.last_error_message = None
+            return UndoResult(True, "undone", success_message)
+
     def _update_cursor(self, update: CursorMove):
         r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
         self._state.cursor = (
             max(0, min(7, r + update.dy)),
             max(0, min(7, f + update.dx)),
         )
+
+    def _refresh_position_state(self, *, clear_move_text: bool) -> None:
+        self._legal_moves = self._game.get_moves()
+
+        if self._game.moves_list:
+            last_move, _ = self._game.moves_list[-1]
+            self._state.last_move_from = get_initial_position(last_move)
+            self._state.last_move_to = get_final_position(last_move)
+        else:
+            self._state.last_move_from = None
+            self._state.last_move_to = None
+
+        if clear_move_text:
+            self._state.move_text = ""
+            
+        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
