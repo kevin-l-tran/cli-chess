@@ -11,9 +11,14 @@ class FakeGame(game.Game):
     """
     Minimal game double for application-layer session tests.
 
-    It exposes the two methods GameSession currently depends on:
+    It exposes the engine methods GameSession currently depends on:
     - get_moves()
     - make_move(move, draw_offered=...)
+    - undo_halfmove()
+    - undo_fullmove()
+
+    It also maintains a lightweight moves_list history so session refresh logic
+    can derive last-move highlight state.
     """
 
     def __init__(
@@ -22,11 +27,29 @@ class FakeGame(game.Game):
         initial_moves: set[Move],
         next_moves: set[Move] | None = None,
         error: Exception | None = None,
+        history: list[tuple[Move, object | None]] | None = None,
+        undo_halfmove_moves: set[Move] | None = None,
+        undo_fullmove_moves: set[Move] | None = None,
+        undo_halfmove_error: Exception | None = None,
+        undo_fullmove_error: Exception | None = None,
     ) -> None:
         self._moves = set(initial_moves)
         self._next_moves = set(initial_moves if next_moves is None else next_moves)
         self._error = error
+        self._undo_halfmove_moves = set(
+            self._moves if undo_halfmove_moves is None else undo_halfmove_moves
+        )
+        self._undo_fullmove_moves = set(
+            self._moves if undo_fullmove_moves is None else undo_fullmove_moves
+        )
+        self._undo_halfmove_error = undo_halfmove_error
+        self._undo_fullmove_error = undo_fullmove_error
+
+        self.moves_list: list[tuple[Move, object | None]] = list(history or [])  # type: ignore
+
         self.make_move_calls: list[tuple[Move, bool]] = []
+        self.undo_halfmove_calls = 0
+        self.undo_fullmove_calls = 0
 
     def get_moves(self) -> set[Move]:
         return set(self._moves)
@@ -38,10 +61,38 @@ class FakeGame(game.Game):
             raise self._error
 
         self._moves = set(self._next_moves)
+        self.moves_list.append((move, None))
+
+    def undo_halfmove(self) -> None:
+        self.undo_halfmove_calls += 1
+
+        if self._undo_halfmove_error is not None:
+            raise self._undo_halfmove_error
+
+        if not self.moves_list:
+            raise game.NoMoveToUndoError()
+
+        self.moves_list.pop()
+        self._moves = set(self._undo_halfmove_moves)
+
+    def undo_fullmove(self) -> None:
+        self.undo_fullmove_calls += 1
+
+        if self._undo_fullmove_error is not None:
+            raise self._undo_fullmove_error
+
+        if len(self.moves_list) < 2:
+            raise game.NoMoveToUndoError()
+
+        self.moves_list.pop()
+        self.moves_list.pop()
+        self._moves = set(self._undo_fullmove_moves)
 
 
-def make_session(game: FakeGame) -> session.GameSession:
-    config = session_types.SessionConfig(player_side="white")
+def make_session(
+    game: FakeGame, *, opponent: session_types.OpponentType = "local"
+) -> session.GameSession:
+    config = session_types.SessionConfig(player_side="white", opponent=opponent)
     return session.GameSession(config=config, game=game)
 
 
@@ -155,10 +206,132 @@ def test_try_make_move_unexpected_error_returns_generic_result_message() -> None
         message="Could not apply move.",
     )
 
-    # This pins the current implementation:
-    # returned message is generic, but session feedback stores the exception text.
     assert game_session._state.last_error_message == "Could not apply move."
 
     # Unexpected failure also preserves the user's draft.
     assert game_session._state.move_text == "Pe2-e4"
     assert game_session._state.parse_result == parse_result
+
+
+def test_undo_halfmove_success_clears_draft_refreshes_legal_moves_and_rewinds_highlight() -> (
+    None
+):
+    first = make("P", "e2", "e4")
+    second = make("P", "e7", "e5")
+    after_first = make("N", "g8", "f6")
+    current = make("N", "g1", "f3")
+    fake_game = FakeGame(
+        initial_moves={current},
+        history=[(first, None), (second, None)],
+        undo_halfmove_moves={after_first},
+    )
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Ng1-f3"
+    game_session._state.parse_result = move_parser.parse("Ng1-f3", {current})
+    game_session._state.last_error_message = "old error"
+
+    result = game_session.undo(scope="halfmove")
+
+    assert fake_game.undo_halfmove_calls == 1
+    assert fake_game.undo_fullmove_calls == 0
+    assert result == session.UndoResult(
+        ok=True,
+        status="undone",
+        message="Move undone.",
+    )
+
+    assert game_session._state.last_error_message is None
+    assert game_session._state.move_text == ""
+    assert game_session._state.parse_result is not None
+    assert game_session._state.parse_result.status == "empty"
+    assert game_session._legal_moves == {after_first}
+
+    # Highlight should now point at the remaining last move in history.
+    assert game_session._state.last_move_from == sq("e2")
+    assert game_session._state.last_move_to == sq("e4")
+
+
+def test_undo_unavailable_returns_failure_preserves_draft_and_clears_stale_highlight() -> (
+    None
+):
+    current = make("P", "e2", "e4")
+    fake_game = FakeGame(initial_moves={current}, history=[])
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe2-e4"
+    game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
+    game_session._state.last_move_from = sq("a2")
+    game_session._state.last_move_to = sq("a4")
+
+    result = game_session.undo(scope="halfmove")
+
+    assert fake_game.undo_halfmove_calls == 1
+    assert result == session.UndoResult(
+        ok=False,
+        status="unavailable",
+        message="No move to undo.",
+    )
+
+    assert game_session._state.last_error_message == "No move to undo."
+    assert game_session._state.move_text == "Pe2-e4"
+    assert game_session._state.parse_result == move_parser.parse("Pe2-e4", {current})
+    assert game_session._state.last_move_from is None
+    assert game_session._state.last_move_to is None
+    assert game_session._legal_moves == {current}
+
+
+def test_undo_unexpected_error_returns_generic_failure_and_preserves_draft() -> None:
+    last_move = make("P", "e2", "e4")
+    current = make("P", "e7", "e5")
+    fake_game = FakeGame(
+        initial_moves={current},
+        history=[(last_move, None)],
+        undo_halfmove_error=RuntimeError("boom"),
+    )
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe7-e5"
+    game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
+
+    result = game_session.undo(scope="halfmove")
+
+    assert fake_game.undo_halfmove_calls == 1
+    assert result == session.UndoResult(
+        ok=False,
+        status="error",
+        message="Could not undo move.",
+    )
+    assert game_session._state.last_error_message == "Could not undo move."
+
+    # Failure preserves the draft and leaves highlight derived from current history.
+    assert game_session._state.move_text == "Pe7-e5"
+    assert game_session._state.parse_result == move_parser.parse("Pe7-e5", {current})
+    assert game_session._state.last_move_from == sq("e2")
+    assert game_session._state.last_move_to == sq("e4")
+    assert game_session._legal_moves == {current}
+
+
+def test_undo_defaults_to_fullmove_for_bot_sessions() -> None:
+    white_move = make("P", "e2", "e4")
+    black_move = make("P", "e7", "e5")
+    restored = make("P", "d2", "d4")
+    fake_game = FakeGame(
+        initial_moves={make("N", "g1", "f3")},
+        history=[(white_move, None), (black_move, None)],
+        undo_fullmove_moves={restored},
+    )
+    game_session = make_session(fake_game, opponent="bot")
+
+    result = game_session.undo()
+
+    assert fake_game.undo_halfmove_calls == 0
+    assert fake_game.undo_fullmove_calls == 1
+    assert result == session.UndoResult(
+        ok=True,
+        status="undone",
+        message="Turn undone.",
+    )
+    assert game_session._legal_moves == {restored}
+    assert game_session._state.last_move_from is None
+    assert game_session._state.last_move_to is None
