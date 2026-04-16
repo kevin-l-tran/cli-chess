@@ -21,6 +21,10 @@ class NoDrawOfferError(GameError):
     pass
 
 
+class NoMoveToUndoError(GameError):
+    pass
+
+
 class Game:
     """
     Represents a chess game.
@@ -102,7 +106,7 @@ class Game:
 
     def undo_halfmove(self) -> None:
         if not self.moves_list:
-            return
+            raise NoMoveToUndoError()
 
         self.moves_list.pop()
         self.encountered_positions[self._get_position_hash()] -= 1
