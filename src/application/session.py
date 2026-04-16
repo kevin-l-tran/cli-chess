@@ -89,14 +89,14 @@ class GameSession:
     def try_make_move(self, move: Move, offer_draw: bool = False) -> MoveAttemptResult:
         try:
             self._game.make_move(move, draw_offered=offer_draw)
-        except IllegalMoveError as e:
-            self._state.last_error_message = str(e)
+        except IllegalMoveError:
+            self._state.last_error_message = "Could not apply illegal move."
             return MoveAttemptResult(ok=False, status="illegal", message="Could not apply illegal move.")
-        except GameConcludedError as e:
-            self._state.last_error_message = str(e)
+        except GameConcludedError:
+            self._state.last_error_message = "Game has concluded."
             return MoveAttemptResult(ok=False, status="game_over", message="Game has concluded.")
-        except Exception as e:
-            self._state.last_error_message = f"Unexpected error: {str(e)}"
+        except Exception:
+            self._state.last_error_message = "Could not apply move."
             return MoveAttemptResult(ok=False, status="error", message="Could not apply move.")
         else:
             self._legal_moves = self._game.get_moves()
