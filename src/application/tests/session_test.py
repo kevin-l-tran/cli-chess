@@ -98,10 +98,10 @@ def test_try_make_move_illegal_failure_sets_feedback_and_preserves_existing_draf
     assert result == session_module.MoveAttemptResult(
         ok=False,
         status="illegal",
-        message="illegal move",
+        message="Could not apply illegal move.",
     )
 
-    assert session._state.last_error_message == "illegal move"
+    assert session._state.last_error_message == "Could not apply illegal move."
 
     # Failure should not clear the user's in-progress draft.
     assert session._state.move_text == "Pe2-e4"
@@ -129,9 +129,9 @@ def test_try_make_move_game_over_failure_returns_game_over_status() -> None:
     assert result == session_module.MoveAttemptResult(
         ok=False,
         status="game_over",
-        message="1-0",
+        message="Game has concluded.",
     )
-    assert session._state.last_error_message == "1-0"
+    assert session._state.last_error_message == "Game has concluded."
 
 
 def test_try_make_move_unexpected_error_returns_generic_result_message() -> None:
@@ -157,7 +157,7 @@ def test_try_make_move_unexpected_error_returns_generic_result_message() -> None
 
     # This pins the current implementation:
     # returned message is generic, but session feedback stores the exception text.
-    assert session._state.last_error_message == "Unexpected error: boom"
+    assert session._state.last_error_message == "Could not apply move."
 
     # Unexpected failure also preserves the user's draft.
     assert session._state.move_text == "Pe2-e4"
