@@ -8,12 +8,20 @@ from .session_types import SessionConfig, Square
 from .move_parser import ParseResult, parse
 
 MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
+UndoStatus = Literal["applied", "unavailable", "error"]
 
 
 @dataclass(frozen=True)
 class MoveAttemptResult:
     ok: bool
     status: MoveAttemptStatus
+    message: str | None
+
+
+@dataclass(frozen=True)
+class UndoResult:
+    ok: bool
+    status: UndoStatus
     message: str | None
 
 
