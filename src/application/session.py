@@ -64,7 +64,7 @@ class _SessionState:
     move_text: str = ""
     parse_result: ParseResult | None = None
     
-    orientation_override: bool | None = None
+    orientation_override: bool = False
 
     last_move_from: Square | None = None
     last_move_to: Square | None = None
