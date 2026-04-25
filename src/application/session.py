@@ -15,6 +15,7 @@ from .move_parser import ParseResult, parse
 MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
 UndoStatus = Literal["undone", "unavailable", "error"]
 UndoScope = Literal["halfmove", "fullmove"]
+ResignStatus = Literal["resigned", "game_over", "error"]
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,13 @@ class MoveAttemptResult:
 class UndoResult:
     ok: bool
     status: UndoStatus
+    message: str | None
+
+
+@dataclass(frozen=True)
+class ResignResult:
+    ok: bool
+    status: ResignStatus
     message: str | None
 
 
@@ -81,6 +89,7 @@ class _SessionState:
     last_move_from: Square | None = None
     last_move_to: Square | None = None
     last_error_message: str | None = None
+    outcome_banner: str | None = None
 
 
 class GameSession:
@@ -238,6 +247,29 @@ class GameSession:
             self._state.last_error_message = None
             return UndoResult(True, "undone", success_message)
 
+    def resign(self) -> ResignResult:
+        try:
+            self._game.resign()
+        except GameConcludedError:
+            self._refresh_position_state(clear_move_text=False)
+            self._state.last_error_message = "Game has concluded."
+            return ResignResult(False, "game_over", "Game has concluded.")
+        except Exception:
+            self._refresh_position_state(clear_move_text=False)
+            self._state.last_error_message = "Could not resign game."
+            return ResignResult(False, "error", "Could not resign game.")
+        else:
+            self._refresh_position_state(clear_move_text=True)
+
+            banner = (
+                "Black wins by resignation."
+                if self._game.outcome == "0-1"
+                else "White wins by resignation."
+            )
+            self._state.outcome_banner = banner
+            self._state.last_error_message = None
+            return ResignResult(True, "resigned", banner)
+
     def _update_cursor(self, update: CursorMove):
         r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
         self._state.cursor = (
@@ -258,5 +290,5 @@ class GameSession:
 
         if clear_move_text:
             self._state.move_text = ""
-            
+
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
