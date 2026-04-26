@@ -77,6 +77,10 @@ class _SessionState:
             The most recent user-facing failure message produced by the
             session, such as an illegal-move or game-concluded message.
             `None` means there is no active error to display.
+
+        banner_message (str | None):
+            A prominent message used to display game conclusion messages. 
+            `None` means there is no active banner message to display.
     """
 
     cursor: Square | None = (0, 0)
