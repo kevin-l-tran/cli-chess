@@ -83,8 +83,12 @@ class Snapshot:
             Render-friendly move history entries for the sidebar or move panel.
 
         move_draft (MoveDraftView):
-            Render-friendly object containing the user's move string, it's parse result,
+            Render-friendly object containing the player's move string, it's parse result,
             and a legal matching canonical move string, if it resolves to one.
+
+        move_autocompletions (list[str]):
+            A list of autocomplete-ready move strings that share the same prefix as
+            the player's inputted move string.
 
         is_checked (bool):
             Whether the current side is checked by the opponent.
@@ -114,6 +118,7 @@ class Snapshot:
 
     move_list: list[MoveListItem]
     move_draft: MoveDraftView
+    move_autocompletions: list[str]
 
     check_square: Square | None
     is_checked: bool
