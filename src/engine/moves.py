@@ -1,12 +1,12 @@
 Move = str
 """
 Represents a chess move. The complete representation of a move has the form:
-    [N, fr(1), c, fr(2), E, P]
-where
+    [N, rf(1), c, rf(2), E, P]
+where 
     N     = name of the piece,
-    fr(1) = initial file, rank,
+    rf(1) = initial rank, file,
     c     = name of the captured piece, '-' otherwise,
-    fr(2) = final file, rank,
+    rf(2) = final rank, file,
     E     = T if en-passant, F otherwise,
     P     = name of promotion piece, _ otherwise.
 
@@ -14,15 +14,7 @@ Castling is represented by a move from the king.
 """
 
 
-Position = tuple[int, int]
-"""A board position represented as (file, rank)."""
-
-
-VALID_PIECES = ["P", "R", "N", "B", "Q", "K"]
-VALID_PROMOTIONS = ["R", "N", "B", "Q"]
-
-
-def _verify_position(position: Position) -> bool:
+def _verify_position(position: tuple[int, int]) -> bool:
     return (
         len(position) == 2
         and position[0] in [0, 1, 2, 3, 4, 5, 6, 7]
@@ -32,8 +24,8 @@ def _verify_position(position: Position) -> bool:
 
 def make_move(
     piece_name: str,
-    initial_position: Position,
-    final_position: Position,
+    initial_position: tuple[int, int],
+    final_position: tuple[int, int],
     en_passant: bool,
     capture_name: str | None = None,
     promotion: str | None = None,
@@ -43,19 +35,21 @@ def make_move(
 
     Parameters:
         piece_name (str): The character representing the moved piece.
-        initial_position (tuple[int, int]): The initial position (file, rank) of the moved piece.
-        final_position (tuple[int, int]): The final position (file, rank) of the moved piece.
-        capture_name (str | None): The name of the captured piece, if any.
+        initial_position (tuple[int, int]): The initial position (rank, file) of the moved piece.
+        final_position (tuple[int, int]): The final position (rank, file) of the moved piece.
+        capture_name (str): The name of the captured piece, if any.
         en_passant (bool): Whether the move was an en passant.
         promotion (str | None): The character representing the promotion piece, if a promotion occurred.
     """
-    assert piece_name in VALID_PIECES
-    assert capture_name is None or capture_name in VALID_PIECES
-    assert promotion is None or promotion in VALID_PROMOTIONS
+    assert piece_name in ["P", "R", "N", "B", "Q", "K"]
+    assert capture_name is None or capture_name in [
+        "P", "R", "N", "B", "Q", "K"]
+    assert promotion is None or promotion in ["R", "N", "B", "Q"]
     assert _verify_position(initial_position)
     assert _verify_position(final_position)
 
     move: Move = ""
+
     move += piece_name
     move += str(initial_position[0])
     move += str(initial_position[1])
@@ -64,6 +58,7 @@ def make_move(
     move += str(final_position[1])
     move += "T" if en_passant else "F"
     move += promotion if promotion else "_"
+
     return move
 
 
@@ -71,7 +66,7 @@ def get_piece(move: Move) -> str:
     return move[0]
 
 
-def get_initial_position(move: Move) -> Position:
+def get_initial_position(move: Move) -> tuple[int, int]:
     return (int(move[1]), int(move[2]))
 
 
@@ -79,7 +74,7 @@ def get_captured_piece(move: Move) -> str | None:
     return move[3] if move[3] != "-" else None
 
 
-def get_final_position(move: Move) -> Position:
+def get_final_position(move: Move) -> tuple[int, int]:
     return (int(move[4]), int(move[5]))
 
 
@@ -95,8 +90,8 @@ def get_castle(move: Move) -> str | None:
     if get_piece(move) != "K":
         return None
 
-    f0, r0 = get_initial_position(move)
-    f1, r1 = get_final_position(move)
+    r0, f0 = get_initial_position(move)
+    r1, f1 = get_final_position(move)
 
     if r0 != r1:
         return None
@@ -107,3 +102,15 @@ def get_castle(move: Move) -> str | None:
     if df == -2:
         return "0-0-0"
     return None
+
+
+def get_standard_representation(move: Move) -> str:
+    return "not implemented"
+
+
+def get_extended_representation(move: Move) -> str:
+    return "not implemented"
+
+
+def get_full_representation(move: Move) -> str:
+    return "not implemented"
