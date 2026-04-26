@@ -79,7 +79,7 @@ class _SessionState:
             `None` means there is no active error to display.
 
         banner_message (str | None):
-            A prominent message used to display game conclusion messages. 
+            A prominent message used to display game conclusion messages.
             `None` means there is no active banner message to display.
     """
 
@@ -264,15 +264,12 @@ class GameSession:
             return ResignResult(False, "error", "Could not resign game.")
         else:
             self._refresh_position_state(clear_move_text=True)
-
-            banner = (
-                "Black wins by resignation."
-                if self._game.outcome == "0-1"
-                else "White wins by resignation."
-            )
-            self._state.outcome_banner = banner
             self._state.last_error_message = None
-            return ResignResult(True, "resigned", banner)
+
+            resign_message = (
+                "White resigns." if self._game.outcome == "0-1" else "Black resigns."
+            )
+            return ResignResult(True, "resigned", resign_message)
 
     def _update_cursor(self, update: CursorMove):
         r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
@@ -282,7 +279,17 @@ class GameSession:
         )
 
     def _refresh_position_state(self, *, clear_move_text: bool) -> None:
-        self._legal_moves = self._game.get_moves()
+        if self._game.outcome != "":
+            self._legal_moves = set()
+            if self._game.outcome == "1-0":
+                self._state.outcome_banner = "White wins."
+            elif self._game.outcome == "0-1":
+                self._state.outcome_banner = "Black wins."
+            elif self._game.outcome == "1/2-1/2":
+                self._state.outcome_banner = "Draw."
+        else:
+            self._legal_moves = self._game.get_moves()
+            self._state.outcome_banner = None
 
         if self._game.moves_list:
             last_move, _ = self._game.moves_list[-1]
