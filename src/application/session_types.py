@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from src.engine.moves import Move
-
 
 PlayerSide = Literal["white", "black"]
 OpponentType = Literal["local", "bot"]
+Square = tuple[int, int]
 
 
 @dataclass(frozen=True)
@@ -16,16 +15,99 @@ class TimeControl:
 
 @dataclass(frozen=True)
 class SessionConfig:
+    """
+    Startup configuration for a local chess session.
+
+    Attributes:
+        player_side (PlayerSide):
+            Which side the human player is considered to control. This can be
+            used for board orientation and, later, for turn/AI behavior.
+
+        opponent (OpponentType):
+            The type of opponent for the session. "local" means two players on
+            the same client. "bot" reserves the shape needed for future engine
+            integration.
+
+        time_control (TimeControl | None):
+            Optional chess clock settings for the session. None means untimed.
+    """
+
     player_side: PlayerSide
     opponent: OpponentType = "local"
     time_control: TimeControl | None = None
 
 
 @dataclass(frozen=True)
+class MoveListItem:
+    ply: int
+    notation: str
+
+
+@dataclass(frozen=True)
 class Snapshot:
+    """
+    Render-ready view of the current session state.
+
+    Attributes:
+        board_glyphs (list[list[str]]):
+            8x8 matrix of piece/empty-square glyphs in board order for rendering.
+
+        side_to_move (PlayerSide):
+            The side whose turn it is in the current position.
+
+        flipped (bool):
+            Whether the board should be rendered from Black's perspective.
+
+        cursor (Square | None):
+            The square currently focused by keyboard/controller navigation, if any.
+
+        selected (Square | None):
+            The currently selected source square, if any.
+
+        legal_targets (set[Square]):
+            Squares that should be highlighted as valid destinations for the
+            current selection.
+
+        last_move_from (Square | None):
+            Origin square of the most recently applied move, if available.
+
+        last_move_to (Square | None):
+            Destination square of the most recently applied move, if available.
+
+        check_square (Square | None):
+            Square of the king currently in check, if any. Useful for danger
+            highlighting in the UI.
+
+        move_list (list[MoveListItem]):
+            Render-friendly move history entries for the sidebar or move panel.
+
+        status_text (str):
+            General status line for the current state, such as whose turn it is
+            or whether the current side is in check.
+
+        outcome_banner (str | None):
+            Final game result text to display prominently when the game has ended,
+            such as checkmate, resignation, or draw.
+
+        last_error_message (str | None):
+            Most recent user-facing action failure message, such as an illegal
+            move reason. None when there is no active error to show.
+    """
+
     board_glyphs: list[list[str]]
-    turn_white: bool
-    outcome: str
-    last_move: Move | None
-    legal_moves: set[Move]
-    highlights: set[tuple[int, int]]
+    side_to_move: PlayerSide
+    flipped: bool
+
+    cursor: Square | None
+    selected: Square | None
+    legal_targets: set[Square]
+
+    last_move_from: Square | None
+    last_move_to: Square | None
+    check_square: Square | None
+
+    move_list: list[MoveListItem]
+
+    status_text: str
+    outcome_banner: str | None
+    last_error_message: str | None
