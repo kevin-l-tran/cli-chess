@@ -78,7 +78,7 @@ class _SessionState:
             session, such as an illegal-move or game-concluded message.
             `None` means there is no active error to display.
 
-        banner_message (str | None):
+        outcome_banner (str | None):
             A prominent message used to display game conclusion messages.
             `None` means there is no active banner message to display.
     """
@@ -112,8 +112,9 @@ class GameSession:
         self._game = Game() if game is None else game
         self._config = config
         self._state: _SessionState = _SessionState()
-        self._legal_moves: set[Move] = self._game.get_moves()
+        self._legal_moves: set[Move] = set()
         self._listeners: list[Callable] = []
+        self._refresh_position_state(clear_move_text=False)
 
     def subscribe(self, fn: Callable):
         """
@@ -252,6 +253,26 @@ class GameSession:
             return UndoResult(True, "undone", success_message)
 
     def resign(self) -> ResignResult:
+        """
+        Attempt to resign the current game through the session controller.
+
+        Returns:
+            ResignResult:
+                Stable success/failure information suitable for the UI layer.
+
+        Success behavior:
+            - resigns the current game through the engine
+            - refreshes cached legal moves and last-move highlight state
+            - clears the current move-text draft and parse state
+            - clears any active error message
+            - returns a user-facing resignation message
+
+        Failure behavior:
+            - leaves the current move-text draft intact
+            - refreshes session-owned position state
+            - stores a user-facing failure message
+            - returns a stable failure result
+        """
         try:
             self._game.resign()
         except GameConcludedError:
