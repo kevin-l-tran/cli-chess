@@ -126,6 +126,11 @@ class Game:
         self.undo_halfmove()
         self.undo_halfmove()
 
+    def resign(self) -> None:
+        if self.outcome != "":
+            raise GameConcludedError(self.outcome)
+        self.outcome = "0-1" if self.is_white_turn else "1-0"
+
     def _get_num_stale_moves(self) -> int:
         stale_moves = 0
 

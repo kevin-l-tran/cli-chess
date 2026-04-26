@@ -16,6 +16,7 @@ class FakeGame(game.Game):
     - make_move(move, draw_offered=...)
     - undo_halfmove()
     - undo_fullmove()
+    - resign()
 
     It also maintains a lightweight moves_list history so session refresh logic
     can derive last-move highlight state.
@@ -32,6 +33,9 @@ class FakeGame(game.Game):
         undo_fullmove_moves: set[Move] | None = None,
         undo_halfmove_error: Exception | None = None,
         undo_fullmove_error: Exception | None = None,
+        outcome: str = "",
+        resign_error: Exception | None = None,
+        resign_outcome: str = "0-1",
     ) -> None:
         self._moves = set(initial_moves)
         self._next_moves = set(initial_moves if next_moves is None else next_moves)
@@ -45,11 +49,16 @@ class FakeGame(game.Game):
         self._undo_halfmove_error = undo_halfmove_error
         self._undo_fullmove_error = undo_fullmove_error
 
+        self.outcome = outcome
+        self._resign_error = resign_error
+        self._resign_outcome = resign_outcome
+
         self.moves_list: list[tuple[Move, object | None]] = list(history or [])  # type: ignore
 
         self.make_move_calls: list[tuple[Move, bool]] = []
         self.undo_halfmove_calls = 0
         self.undo_fullmove_calls = 0
+        self.resign_calls = 0
 
     def get_moves(self) -> set[Move]:
         return set(self._moves)
@@ -87,6 +96,15 @@ class FakeGame(game.Game):
         self.moves_list.pop()
         self.moves_list.pop()
         self._moves = set(self._undo_fullmove_moves)
+
+    def resign(self) -> None:
+        self.resign_calls += 1
+
+        if self._resign_error is not None:
+            raise self._resign_error
+
+        self.outcome = self._resign_outcome
+        self._moves = set()
 
 
 def make_session(
@@ -335,3 +353,92 @@ def test_undo_defaults_to_fullmove_for_bot_sessions() -> None:
     assert game_session._legal_moves == {restored}
     assert game_session._state.last_move_from is None
     assert game_session._state.last_move_to is None
+
+
+def test_resign_success_returns_result_clears_draft_and_updates_game_over_state() -> (
+    None
+):
+    current = make("P", "e2", "e4")
+    fake_game = FakeGame(
+        initial_moves={current},
+        resign_outcome="0-1",
+    )
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe2-e4"
+    game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
+    game_session._state.last_error_message = "old error"
+
+    result = game_session.resign()
+
+    assert fake_game.resign_calls == 1
+    assert result == session.ResignResult(
+        ok=True,
+        status="resigned",
+        message="White resigns.",
+    )
+
+    assert game_session._state.last_error_message is None
+    assert game_session._state.move_text == ""
+    assert game_session._state.parse_result is not None
+    assert game_session._state.parse_result.status == "empty"
+    assert game_session._legal_moves == set()
+    assert game_session._state.outcome_banner == "Black wins."
+
+
+def test_resign_game_over_failure_preserves_draft_and_returns_failure_result() -> None:
+    current = make("P", "e2", "e4")
+    parse_result = move_parser.parse("Pe2-e4", {current})
+    fake_game = FakeGame(
+        initial_moves={current},
+        outcome="1-0",
+        resign_error=game.GameConcludedError("1-0"),
+    )
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe2-e4"
+    game_session._state.parse_result = parse_result
+
+    result = game_session.resign()
+
+    assert fake_game.resign_calls == 1
+    assert result == session.ResignResult(
+        ok=False,
+        status="game_over",
+        message="Game has concluded.",
+    )
+
+    assert game_session._state.last_error_message == "Game has concluded."
+    assert game_session._state.move_text == "Pe2-e4"
+    assert game_session._state.parse_result.status == "no_match"
+    assert game_session._state.parse_result.raw_text == "Pe2-e4"
+    assert game_session._legal_moves == set()
+    assert game_session._state.outcome_banner == "White wins."
+
+
+def test_resign_unexpected_error_returns_generic_failure_and_preserves_draft() -> None:
+    current = make("P", "e2", "e4")
+    parse_result = move_parser.parse("Pe2-e4", {current})
+    fake_game = FakeGame(
+        initial_moves={current},
+        resign_error=RuntimeError("boom"),
+    )
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe2-e4"
+    game_session._state.parse_result = parse_result
+
+    result = game_session.resign()
+
+    assert fake_game.resign_calls == 1
+    assert result == session.ResignResult(
+        ok=False,
+        status="error",
+        message="Could not resign game.",
+    )
+
+    assert game_session._state.last_error_message == "Could not resign game."
+    assert game_session._state.move_text == "Pe2-e4"
+    assert game_session._state.parse_result == parse_result
+    assert game_session._legal_moves == {current}
+    assert game_session._state.outcome_banner is None

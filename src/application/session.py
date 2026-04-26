@@ -15,6 +15,7 @@ from .move_parser import ParseResult, parse
 MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
 UndoStatus = Literal["undone", "unavailable", "error"]
 UndoScope = Literal["halfmove", "fullmove"]
+ResignStatus = Literal["resigned", "game_over", "error"]
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,13 @@ class MoveAttemptResult:
 class UndoResult:
     ok: bool
     status: UndoStatus
+    message: str | None
+
+
+@dataclass(frozen=True)
+class ResignResult:
+    ok: bool
+    status: ResignStatus
     message: str | None
 
 
@@ -69,6 +77,10 @@ class _SessionState:
             The most recent user-facing failure message produced by the
             session, such as an illegal-move or game-concluded message.
             `None` means there is no active error to display.
+
+        outcome_banner (str | None):
+            A prominent message used to display game conclusion messages.
+            `None` means there is no active banner message to display.
     """
 
     cursor: Square | None = (0, 0)
@@ -81,6 +93,7 @@ class _SessionState:
     last_move_from: Square | None = None
     last_move_to: Square | None = None
     last_error_message: str | None = None
+    outcome_banner: str | None = None
 
 
 class GameSession:
@@ -99,8 +112,9 @@ class GameSession:
         self._game = Game() if game is None else game
         self._config = config
         self._state: _SessionState = _SessionState()
-        self._legal_moves: set[Move] = self._game.get_moves()
+        self._legal_moves: set[Move] = set()
         self._listeners: list[Callable] = []
+        self._refresh_position_state(clear_move_text=False)
 
     def subscribe(self, fn: Callable):
         """
@@ -238,6 +252,46 @@ class GameSession:
             self._state.last_error_message = None
             return UndoResult(True, "undone", success_message)
 
+    def resign(self) -> ResignResult:
+        """
+        Attempt to resign the current game through the session controller.
+
+        Returns:
+            ResignResult:
+                Stable success/failure information suitable for the UI layer.
+
+        Success behavior:
+            - resigns the current game through the engine
+            - refreshes cached legal moves and last-move highlight state
+            - clears the current move-text draft and parse state
+            - clears any active error message
+            - returns a user-facing resignation message
+
+        Failure behavior:
+            - leaves the current move-text draft intact
+            - refreshes session-owned position state
+            - stores a user-facing failure message
+            - returns a stable failure result
+        """
+        try:
+            self._game.resign()
+        except GameConcludedError:
+            self._refresh_position_state(clear_move_text=False)
+            self._state.last_error_message = "Game has concluded."
+            return ResignResult(False, "game_over", "Game has concluded.")
+        except Exception:
+            self._refresh_position_state(clear_move_text=False)
+            self._state.last_error_message = "Could not resign game."
+            return ResignResult(False, "error", "Could not resign game.")
+        else:
+            self._refresh_position_state(clear_move_text=True)
+            self._state.last_error_message = None
+
+            resign_message = (
+                "White resigns." if self._game.outcome == "0-1" else "Black resigns."
+            )
+            return ResignResult(True, "resigned", resign_message)
+
     def _update_cursor(self, update: CursorMove):
         r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
         self._state.cursor = (
@@ -246,7 +300,17 @@ class GameSession:
         )
 
     def _refresh_position_state(self, *, clear_move_text: bool) -> None:
-        self._legal_moves = self._game.get_moves()
+        if self._game.outcome != "":
+            self._legal_moves = set()
+            if self._game.outcome == "1-0":
+                self._state.outcome_banner = "White wins."
+            elif self._game.outcome == "0-1":
+                self._state.outcome_banner = "Black wins."
+            elif self._game.outcome == "1/2-1/2":
+                self._state.outcome_banner = "Draw."
+        else:
+            self._legal_moves = self._game.get_moves()
+            self._state.outcome_banner = None
 
         if self._game.moves_list:
             last_move, _ = self._game.moves_list[-1]
@@ -258,5 +322,5 @@ class GameSession:
 
         if clear_move_text:
             self._state.move_text = ""
-            
+
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
