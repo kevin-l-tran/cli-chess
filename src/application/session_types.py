@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from .move_parser import ParseStatus
+
 
 PlayerSide = Literal["white", "black"]
 OpponentType = Literal["local", "bot"]
@@ -44,6 +46,13 @@ class MoveListItem:
 
 
 @dataclass(frozen=True)
+class MoveDraftView:
+    text: str
+    status: ParseStatus
+    canonical_text: str | None
+
+
+@dataclass(frozen=True)
 class Snapshot:
     """
     Render-ready view of the current session state.
@@ -61,12 +70,8 @@ class Snapshot:
         cursor (Square | None):
             The square currently focused by keyboard/controller navigation, if any.
 
-        selected (Square | None):
-            The currently selected source square, if any.
-
-        legal_targets (set[Square]):
-            Squares that should be highlighted as valid destinations for the
-            current selection.
+        candidate_moves (set[tuple[Square, Square]]):
+            The set of (initial position, final position) tuples that should be highlighted.
 
         last_move_from (Square | None):
             Origin square of the most recently applied move, if available.
@@ -74,16 +79,19 @@ class Snapshot:
         last_move_to (Square | None):
             Destination square of the most recently applied move, if available.
 
-        check_square (Square | None):
-            Square of the king currently in check, if any. Useful for danger
-            highlighting in the UI.
-
         move_list (list[MoveListItem]):
             Render-friendly move history entries for the sidebar or move panel.
 
-        status_text (str):
-            General status line for the current state, such as whose turn it is
-            or whether the current side is in check.
+        move_draft (MoveDraftView):
+            Render-friendly object containing the user's move string, it's parse result,
+            and a legal matching canonical move string, if it resolves to one.
+
+        is_checked (bool):
+            Whether the current side is checked by the opponent.
+
+        check_square (Square | None):
+            Square of the king currently in check, if any. Useful for danger
+            highlighting in the UI.
 
         outcome_banner (str | None):
             Final game result text to display prominently when the game has ended,
@@ -99,15 +107,16 @@ class Snapshot:
     flipped: bool
 
     cursor: Square | None
-    selected: Square | None
-    legal_targets: set[Square]
+    candidate_moves: set[tuple[Square, Square]]
 
     last_move_from: Square | None
     last_move_to: Square | None
-    check_square: Square | None
 
     move_list: list[MoveListItem]
+    move_draft: MoveDraftView
 
-    status_text: str
+    check_square: Square | None
+    is_checked: bool
+
     outcome_banner: str | None
     last_error_message: str | None
