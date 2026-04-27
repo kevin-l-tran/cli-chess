@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable, Literal
 
+from src.engine.board import Piece, get_name, is_white
 from src.engine.game import (
     Game,
     GameConcludedError,
@@ -9,8 +10,8 @@ from src.engine.game import (
 )
 from src.engine.moves import Move, get_final_position, get_initial_position
 from .intents import CursorMove, GameUpdate
-from .session_types import SessionConfig, Square
-from .move_parser import ParseResult, parse
+from .session_types import MoveDraftView, MoveListItem, SessionConfig, Snapshot, Square
+from .move_parser import ParseResult, get_canonical, get_matched_spellings, parse
 
 MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
 UndoStatus = Literal["undone", "unavailable", "error"]
@@ -292,6 +293,34 @@ class GameSession:
             )
             return ResignResult(True, "resigned", resign_message)
 
+    def snapshot(self) -> Snapshot:
+        parse_result = self._state.parse_result
+        check_square = self._game.checked_king_position()
+
+        return Snapshot(
+            board_glyphs=self._get_board_glyphs(),
+            side_to_move="white" if self._game.is_white_turn else "black",
+            flipped=self._is_flipped(),
+            cursor=self._state.cursor,
+            candidate_moves=set(parse_result.source_to_target_highlights),
+            last_move_from=self._state.last_move_from,
+            last_move_to=self._state.last_move_to,
+            move_list=self._build_move_list(),
+            move_draft=MoveDraftView(
+                text=self._state.move_text,
+                status=parse_result.status,
+                canonical_text=parse_result.canonical_text,
+            ),
+            move_autocompletions=get_matched_spellings(
+                text=parse_result.raw_text,
+                legal_moves=self._legal_moves,
+            ),
+            check_square=check_square,
+            is_checked=check_square is not None,
+            outcome_banner=self._state.outcome_banner,
+            last_error_message=self._state.last_error_message,
+        )
+
     def _update_cursor(self, update: CursorMove):
         r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
         self._state.cursor = (
@@ -299,7 +328,7 @@ class GameSession:
             max(0, min(7, f + update.dx)),
         )
 
-    def _refresh_position_state(self, *, clear_move_text: bool) -> None:
+    def _refresh_position_state(self, *, clear_move_text: bool):
         if self._game.outcome != "":
             self._legal_moves = set()
             if self._game.outcome == "1-0":
@@ -324,3 +353,37 @@ class GameSession:
             self._state.move_text = ""
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def _is_flipped(self) -> bool:
+        default_flipped = self._config.player_side == "black"
+        if self._state.orientation_override:
+            return not default_flipped
+        return default_flipped
+
+    def _build_move_list(self) -> list[MoveListItem]:
+        items: list[MoveListItem] = []
+
+        for ply, (move, _) in enumerate(self._game.moves_list, start=1):
+            items.append(
+                MoveListItem(
+                    ply=ply,
+                    notation=get_canonical(move),
+                )
+            )
+
+        return items
+
+    def _get_board_glyphs(self) -> list[list[str]]:
+        def _piece_to_glyph(piece: Piece | None) -> str:
+            if piece is None:
+                return "."
+            name = get_name(piece)
+            return name if is_white(piece) else name.lower()
+
+        return [
+            [
+                _piece_to_glyph(self._game.board.piece_at((file, rank)))
+                for file in range(8)
+            ]
+            for rank in range(7, -1, -1)
+        ]
