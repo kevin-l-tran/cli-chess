@@ -131,6 +131,11 @@ class Game:
             raise GameConcludedError(self.outcome)
         self.outcome = "0-1" if self.is_white_turn else "1-0"
 
+    def checked_king_position(self) -> tuple[int, int] | None:
+        if not self.board.is_checked(self.is_white_turn):
+            return None
+        return self.board.king_position(self.is_white_turn)
+
     def _get_num_stale_moves(self) -> int:
         stale_moves = 0
 

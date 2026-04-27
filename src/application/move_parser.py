@@ -148,7 +148,6 @@ def _get_sans(
 
 def _get_full(
     move: Move,
-    legal_moves: set[Move],
 ) -> list[str]:
     """Returns the full representations of a move."""
     piece = get_piece(move)
@@ -167,7 +166,7 @@ def _get_full(
     return [divtext, nodivtext]
 
 
-def _get_canonical(
+def get_canonical(
     move: Move,
 ) -> str:
     """Returns the canonical move text of a move."""
@@ -190,7 +189,7 @@ def _get_canonical(
     return text
 
 
-def _get_spellings(
+def get_spellings(
     move: Move,
     legal_moves: set[Move]
 ) -> set[str]:
@@ -208,7 +207,7 @@ def _get_spellings(
         spellings.append("o-o-o")
 
     spellings.append(_get_sans(move, legal_moves))
-    spellings.extend(_get_full(move, legal_moves))
+    spellings.extend(_get_full(move))
 
     return set(spellings)
 
@@ -232,7 +231,7 @@ def parse(text: str, legal_moves: set[Move]) -> ParseResult:
     matching_moves: list[Move] = []
 
     for move in legal_moves:
-        spellings = _get_spellings(move, legal_moves)
+        spellings = get_spellings(move, legal_moves)
         if any(spelling.startswith(normalized) for spelling in spellings):
             matching_moves.append(move)
 
@@ -247,7 +246,7 @@ def parse(text: str, legal_moves: set[Move]) -> ParseResult:
     elif len(matching_moves) == 1:
         status = "resolved"
         resolved_move = matching_moves[0]
-        canonical_text = _get_canonical(resolved_move)
+        canonical_text = get_canonical(resolved_move)
     else:
         status = "ambiguous"
         resolved_move = None

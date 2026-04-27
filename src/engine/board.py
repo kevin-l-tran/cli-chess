@@ -55,15 +55,9 @@ def has_moved(p: Piece) -> bool:
 
 
 # Deltas are expressed as (delta_file, delta_rank).
-QUEEN_DELTAS = [
-    (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)
-]
-BISHOP_DELTAS = [
-    (1, 1), (-1, -1), (-1, 1), (1, -1)
-]
-ROOK_DELTAS = [
-    (0, 1), (1, 0), (-1, 0), (0, -1)
-]
+QUEEN_DELTAS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+BISHOP_DELTAS = [(1, 1), (-1, -1), (-1, 1), (1, -1)]
+ROOK_DELTAS = [(0, 1), (1, 0), (-1, 0), (0, -1)]
 KING_DELTAS = [
     (1, 1),
     (1, 0),
@@ -226,15 +220,25 @@ class Board:
 
             def apply(self: Self) -> None:
                 self._make_move(
-                    updated_king, initial_king_position, final_king_position)
+                    updated_king, initial_king_position, final_king_position
+                )
                 self._make_move(
-                    updated_rook, initial_rook_position, final_rook_position)
+                    updated_rook, initial_rook_position, final_rook_position
+                )
 
             def undo(self: Self) -> None:
-                self._undo_move(initial_king, initial_king_position,
-                                final_king_position, prev_ep_pawn)
-                self._undo_move(initial_rook, initial_rook_position,
-                                final_rook_position, prev_ep_pawn)
+                self._undo_move(
+                    initial_king,
+                    initial_king_position,
+                    final_king_position,
+                    prev_ep_pawn,
+                )
+                self._undo_move(
+                    initial_rook,
+                    initial_rook_position,
+                    final_rook_position,
+                    prev_ep_pawn,
+                )
 
         elif is_en_passant(move):
             initial_position = get_initial_position(move)
@@ -263,8 +267,9 @@ class Board:
 
             def undo(self: Self) -> None:
                 # move capturing pawn
-                self._undo_move(initial_pawn, initial_position,
-                                final_position, prev_ep_pawn)
+                self._undo_move(
+                    initial_pawn, initial_position, final_position, prev_ep_pawn
+                )
 
                 # add captured pawn
                 self._set_square(captured_position, captured_pawn)
@@ -284,9 +289,10 @@ class Board:
             name = get_promotion(move) or get_name(initial_piece)
             white = is_white(initial_piece)
             updated_piece = make_piece(name, white, True)
-            set_ep = get_name(initial_piece) == "P" and abs(
-                final_position[1] - initial_position[1]
-            ) == 2
+            set_ep = (
+                get_name(initial_piece) == "P"
+                and abs(final_position[1] - initial_position[1]) == 2
+            )
 
             def apply(self: Self) -> None:
                 self._make_move(
@@ -298,7 +304,11 @@ class Board:
 
             def undo(self: Self) -> None:
                 self._undo_move(
-                    initial_piece, initial_position, final_position, prev_ep_pawn, captured_piece
+                    initial_piece,
+                    initial_position,
+                    final_position,
+                    prev_ep_pawn,
+                    captured_piece,
                 )
 
         return apply, undo
@@ -311,6 +321,12 @@ class Board:
 
         attacked = self._get_squares_attacked_by(not check_white)
         return king_pos in attacked
+
+    def piece_at(self, position: Position) -> Piece | None:
+        return self.board[position[1]][position[0]]
+
+    def king_position(self, white: bool) -> Position:
+        return self.white_king if white else self.black_king
 
     def _get_square(self, position: Position) -> Piece | None:
         return self.board[position[1]][position[0]]
@@ -452,8 +468,11 @@ class Board:
         king = self._get_square((4, rank))
         q_rook = self._get_square((0, rank))
         k_rook = self._get_square((7, rank))
-        q_squares = [self._get_square((1, rank)), self._get_square(
-            (2, rank)), self._get_square((3, rank))]
+        q_squares = [
+            self._get_square((1, rank)),
+            self._get_square((2, rank)),
+            self._get_square((3, rank)),
+        ]
         k_squares = [self._get_square((5, rank)), self._get_square((6, rank))]
 
         if (
@@ -487,12 +506,16 @@ class Board:
         if self.en_passant_pawn is not None:
             if get_white:
                 pawn_positions = [
-                    pos for pos, pce in self.white_pieces.items() if get_name(pce) == "P"
+                    pos
+                    for pos, pce in self.white_pieces.items()
+                    if get_name(pce) == "P"
                 ]
                 rank_step = 1
             else:
                 pawn_positions = [
-                    pos for pos, pce in self.black_pieces.items() if get_name(pce) == "P"
+                    pos
+                    for pos, pce in self.black_pieces.items()
+                    if get_name(pce) == "P"
                 ]
                 rank_step = -1
 
@@ -561,13 +584,11 @@ class Board:
             if final_pos[1] == 7 or final_pos[1] == 0:
                 for promotion in ["Q", "B", "N", "R"]:
                     move = make_move(
-                        get_name(
-                            pawn), position, final_pos, False, captured, promotion
+                        get_name(pawn), position, final_pos, False, captured, promotion
                     )
                     moves.add(move)
             else:
-                move = make_move(get_name(pawn), position,
-                                 final_pos, False, captured)
+                move = make_move(get_name(pawn), position, final_pos, False, captured)
                 moves.add(move)
 
         return moves
