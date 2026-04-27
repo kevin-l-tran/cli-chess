@@ -110,12 +110,9 @@ class GameSession:
     """
 
     def __init__(self, config: SessionConfig, game: Game | None = None):
-        self._game = Game() if game is None else game
-        self._config = config
-        self._state: _SessionState = _SessionState()
-        self._legal_moves: set[Move] = set()
         self._listeners: list[Callable] = []
-        self._refresh_position_state(clear_move_text=False)
+        self._legal_moves: set[Move] = set()
+        self._bootstrap_session(config=config, game=game)
 
     def subscribe(self, fn: Callable):
         """
@@ -317,6 +314,17 @@ class GameSession:
             outcome_banner=self._state.outcome_banner,
             last_error_message=self._state.last_error_message,
         )
+
+    def _bootstrap_session(
+        self,
+        *,
+        config: SessionConfig,
+        game: Game | None = None,
+    ) -> None:
+        self._config = config
+        self._game = Game() if game is None else game
+        self._state = _SessionState()
+        self._refresh_position_state(clear_move_text=False)
 
     def _update_cursor(self, update: CursorMove):
         r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
