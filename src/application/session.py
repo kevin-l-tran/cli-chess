@@ -115,6 +115,20 @@ class GameSession:
         self._bootstrap_session(config=config, game=game)
 
     def restart_game(self, config: SessionConfig | None = None) -> None:
+        """
+        Start a fresh game session using the current or supplied configuration.
+
+        Parameters:
+            config (SessionConfig | None):
+                Optional replacement session configuration. When `None`, the
+                existing session configuration is preserved.
+
+        Behavior:
+            - rebuilds the backing engine `Game`
+            - resets controller-owned working state such as draft input,
+              parse state, highlights, and feedback
+            - refreshes cached legal moves and other derived position state
+        """
         self._bootstrap_session(
             config=self._config if config is None else config,
             game=None,
@@ -297,6 +311,15 @@ class GameSession:
             return ResignResult(True, "resigned", resign_message)
 
     def snapshot(self) -> Snapshot:
+        """
+        Build an immutable render-ready view of the current session.
+
+        Returns:
+            Snapshot:
+                A presentation-friendly snapshot containing board glyphs,
+                turn information, highlights, move history, draft-input state,
+                check state, and user-facing feedback messages.
+        """
         parse_result = self._state.parse_result
         check_square = self._game.checked_king_position()
 
