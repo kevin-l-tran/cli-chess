@@ -3,8 +3,18 @@ from helpers import make, sq
 from src.application import move_parser
 from src.application import session, session_types
 from src.engine import moves, game
+from src.engine.board import Piece, make_piece
+from src.application.move_parser import get_canonical
 
 Move = moves.Move
+
+
+class FakeBoard:
+    def __init__(self, pieces: dict[tuple[int, int], Piece] | None = None) -> None:
+        self._pieces = dict(pieces or {})
+
+    def piece_at(self, position: tuple[int, int]) -> Piece | None:
+        return self._pieces.get(position)
 
 
 class FakeGame(game.Game):
@@ -17,6 +27,8 @@ class FakeGame(game.Game):
     - undo_halfmove()
     - undo_fullmove()
     - resign()
+    - checked_king_position()
+    - board.piece_at(...)
 
     It also maintains a lightweight moves_list history so session refresh logic
     can derive last-move highlight state.
@@ -36,6 +48,9 @@ class FakeGame(game.Game):
         outcome: str = "",
         resign_error: Exception | None = None,
         resign_outcome: str = "0-1",
+        is_white_turn: bool = True,
+        checked_king_square: tuple[int, int] | None = None,
+        board_pieces: dict[tuple[int, int], Piece] | None = None,
     ) -> None:
         self._moves = set(initial_moves)
         self._next_moves = set(initial_moves if next_moves is None else next_moves)
@@ -52,6 +67,9 @@ class FakeGame(game.Game):
         self.outcome = outcome
         self._resign_error = resign_error
         self._resign_outcome = resign_outcome
+        self.is_white_turn = is_white_turn
+        self._checked_king_square = checked_king_square
+        self.board = FakeBoard(board_pieces)
 
         self.moves_list: list[tuple[Move, object | None]] = list(history or [])  # type: ignore
 
@@ -105,6 +123,9 @@ class FakeGame(game.Game):
 
         self.outcome = self._resign_outcome
         self._moves = set()
+
+    def checked_king_position(self) -> tuple[int, int] | None:
+        return self._checked_king_square
 
 
 def make_session(
@@ -442,3 +463,101 @@ def test_resign_unexpected_error_returns_generic_failure_and_preserves_draft() -
     assert game_session._state.parse_result == parse_result
     assert game_session._legal_moves == {current}
     assert game_session._state.outcome_banner is None
+
+
+def test_snapshot_projects_current_render_state() -> None:
+    previous = make("P", "e2", "e4")
+    current_a = make("P", "e7", "e5")
+    current_b = make("N", "g8", "f6")
+    legal_moves = {current_a, current_b}
+    parse_result = move_parser.parse("", legal_moves)
+    board_pieces = {
+        sq("a8"): make_piece("R", False, False),
+        sq("e8"): make_piece("K", False, False),
+        sq("e1"): make_piece("K", True, False),
+    }
+    fake_game = FakeGame(
+        initial_moves=legal_moves,
+        history=[(previous, None)],
+        is_white_turn=False,
+        checked_king_square=sq("e8"),
+        board_pieces=board_pieces,
+    )
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = ""
+    game_session._state.parse_result = parse_result
+    game_session._state.last_error_message = "old error"
+
+    snapshot = game_session.snapshot()
+
+    assert snapshot.side_to_move == "black"
+    assert snapshot.flipped is False
+    assert snapshot.cursor == (0, 0)
+
+    assert len(snapshot.board_glyphs) == 8
+    assert all(len(rank) == 8 for rank in snapshot.board_glyphs)
+    assert snapshot.board_glyphs[0][0] == "r"  # a8
+    assert snapshot.board_glyphs[0][4] == "k"  # e8
+    assert snapshot.board_glyphs[7][4] == "K"  # e1
+
+    assert snapshot.last_move_from == sq("e2")
+    assert snapshot.last_move_to == sq("e4")
+    assert snapshot.move_list == [
+        session_types.MoveListItem(ply=1, notation=get_canonical(previous))
+    ]
+
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="",
+        status="empty",
+        canonical_text=None,
+    )
+    assert snapshot.move_autocompletions == []
+    assert snapshot.candidate_moves == set()
+
+    assert snapshot.check_square == sq("e8")
+    assert snapshot.is_checked is True
+    assert snapshot.outcome_banner is None
+    assert snapshot.last_error_message == "old error"
+
+
+def test_snapshot_uses_parser_matches_for_candidates_and_autocompletions() -> None:
+    move_a = make("P", "e2", "e4")
+    move_b = make("P", "e2", "e3")
+    legal_moves = {move_a, move_b}
+    fake_game = FakeGame(initial_moves=legal_moves)
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe"
+    game_session._state.parse_result = move_parser.parse("Pe", legal_moves)
+
+    snapshot = game_session.snapshot()
+
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="Pe",
+        status="ambiguous",
+        canonical_text=None,
+    )
+    assert snapshot.candidate_moves == {
+        (sq("e2"), sq("e3")),
+        (sq("e2"), sq("e4")),
+    }
+    assert snapshot.move_autocompletions == [
+        "Pe2-e3",
+        "Pe2-e4",
+        "Pe2e3",
+        "Pe2e4",
+    ]
+
+
+def test_snapshot_flipped_reflects_player_side_and_orientation_override() -> None:
+    move = make("P", "e2", "e4")
+    fake_game = FakeGame(initial_moves={move})
+    config = session_types.SessionConfig(player_side="black")
+    game_session = session.GameSession(config=config, game=fake_game)
+
+    assert game_session.snapshot().flipped is True
+
+    game_session._state.orientation_override = True
+
+    assert game_session.snapshot().flipped is False

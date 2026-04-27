@@ -8,15 +8,12 @@ from src.engine.moves import (
     get_final_position,
     get_initial_position,
     get_piece,
-    get_promotion
+    get_promotion,
 )
 
 
 Square = tuple[int, int]
 ParseStatus = Literal["empty", "no_match", "ambiguous", "resolved"]
-
-FILES = "abcdefgh"
-PROMOTION_PIECES = set({"Q", "R", "B", "N"})
 
 
 @dataclass(frozen=True)
@@ -27,7 +24,7 @@ class ParseResult:
     Attributes:
         raw_text (str):
             The raw text being parsed.
-        
+
         normalized_text (str):
             The raw text after being normalized according to the move string specifications.
 
@@ -36,6 +33,9 @@ class ParseResult:
 
         matching_moves (list[Move]):
             A list of moves that match the normalized text according to the move string specifications.
+
+        matching_spellings (list[str]):
+            A list of move strings that match the normalized text according to the move string specifications.
 
         source_to_target_highlights (list[tuple[Square, Square]]):
             A list of `(Square, Square)` tuples representing the `(source square, destination square)` of each matched move.
@@ -46,10 +46,12 @@ class ParseResult:
         canonical_text (str | None):
             The canonical text representation, according to the move string specifications, of the resolved move, if it exists.
     """
+
     raw_text: str
     normalized_text: str
     status: ParseStatus
     matching_moves: list[Move]
+    matching_spellings: list[str]
     source_to_target_highlights: list[tuple[Square, Square]]
     resolved_move: Move | None
     canonical_text: str | None
@@ -148,7 +150,6 @@ def _get_sans(
 
 def _get_full(
     move: Move,
-    legal_moves: set[Move],
 ) -> list[str]:
     """Returns the full representations of a move."""
     piece = get_piece(move)
@@ -167,7 +168,7 @@ def _get_full(
     return [divtext, nodivtext]
 
 
-def _get_canonical(
+def get_canonical(
     move: Move,
 ) -> str:
     """Returns the canonical move text of a move."""
@@ -190,10 +191,7 @@ def _get_canonical(
     return text
 
 
-def _get_spellings(
-    move: Move,
-    legal_moves: set[Move]
-) -> set[str]:
+def _get_spellings(move: Move, legal_moves: set[Move]) -> set[str]:
     """Returns the SAN/SAN-compatible representations of a move."""
     spellings = []
 
@@ -208,14 +206,35 @@ def _get_spellings(
         spellings.append("o-o-o")
 
     spellings.append(_get_sans(move, legal_moves))
-    spellings.extend(_get_full(move, legal_moves))
+    spellings.extend(_get_full(move))
 
     return set(spellings)
 
 
+def _collect_matches(
+    text: str, legal_moves: set[Move]
+) -> tuple[str, list[Move], list[str]]:
+    normalized = _normalize_move_text(text)
+    if normalized == "":
+        return normalized, [], []
+
+    move_to_spellings: list[tuple[Move, list[str]]] = []
+    matched_spellings: set[str] = set()
+
+    for move in sorted(legal_moves, key=get_canonical):
+        spellings = sorted(_get_spellings(move, legal_moves))
+        matched_for_move = [s for s in spellings if s.startswith(normalized)]
+        if matched_for_move:
+            move_to_spellings.append((move, matched_for_move))
+            matched_spellings.update(matched_for_move)
+
+    matching_moves = [move for move, _ in move_to_spellings]
+    return normalized, matching_moves, sorted(matched_spellings)
+
+
 def parse(text: str, legal_moves: set[Move]) -> ParseResult:
     """Takes a text string and converts it into a ParseResult"""
-    normalized = _normalize_move_text(text)
+    normalized, matching_moves, matching_spellings = _collect_matches(text, legal_moves)
 
     # Deliberate special case: keep empty input inert.
     if normalized == "":
@@ -224,20 +243,15 @@ def parse(text: str, legal_moves: set[Move]) -> ParseResult:
             normalized_text=normalized,
             status="empty",
             matching_moves=[],
+            matching_spellings=[],
             source_to_target_highlights=[],
             resolved_move=None,
             canonical_text=None,
         )
 
-    matching_moves: list[Move] = []
-
-    for move in legal_moves:
-        spellings = _get_spellings(move, legal_moves)
-        if any(spelling.startswith(normalized) for spelling in spellings):
-            matching_moves.append(move)
-
     source_to_target_highlights = [
-        (get_initial_position(move), get_final_position(move)) for move in matching_moves
+        (get_initial_position(move), get_final_position(move))
+        for move in matching_moves
     ]
 
     if not matching_moves:
@@ -247,7 +261,7 @@ def parse(text: str, legal_moves: set[Move]) -> ParseResult:
     elif len(matching_moves) == 1:
         status = "resolved"
         resolved_move = matching_moves[0]
-        canonical_text = _get_canonical(resolved_move)
+        canonical_text = get_canonical(resolved_move)
     else:
         status = "ambiguous"
         resolved_move = None
@@ -258,6 +272,7 @@ def parse(text: str, legal_moves: set[Move]) -> ParseResult:
         normalized_text=normalized,
         status=status,
         matching_moves=matching_moves,
+        matching_spellings=matching_spellings,
         source_to_target_highlights=source_to_target_highlights,
         resolved_move=resolved_move,
         canonical_text=canonical_text,
