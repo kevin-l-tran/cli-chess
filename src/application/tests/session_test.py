@@ -135,7 +135,9 @@ def make_session(
     return session.GameSession(config=config, game=game)
 
 
-def test_try_make_move_applies_move_clears_draft_and_refreshes_legal_moves() -> None:
+def test_confirm_move_draft_applies_resolved_move_clears_draft_and_refreshes_legal_moves() -> (
+    None
+):
     move = make("P", "e2", "e4")
     reply = make("P", "e7", "e5")
     fake_game = FakeGame(initial_moves={move}, next_moves={reply})
@@ -145,7 +147,7 @@ def test_try_make_move_applies_move_clears_draft_and_refreshes_legal_moves() -> 
     game_session._state.parse_result = move_parser.parse("Pe2-e4", {move})
     game_session._state.last_error_message = "old error"
 
-    result = game_session.try_make_move(move, offer_draw=True)
+    result = game_session.confirm_move_draft(offer_draw=True)
 
     assert fake_game.make_move_calls == [(move, True)]
     assert result == session.MoveAttemptResult(
@@ -166,7 +168,98 @@ def test_try_make_move_applies_move_clears_draft_and_refreshes_legal_moves() -> 
     assert game_session._legal_moves == {reply}
 
 
-def test_try_make_move_illegal_failure_sets_feedback_and_preserves_existing_draft() -> (
+def test_confirm_move_draft_empty_failure_returns_stable_feedback_without_calling_engine() -> (
+    None
+):
+    move = make("P", "e2", "e4")
+    fake_game = FakeGame(initial_moves={move})
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = ""
+    game_session._state.parse_result = move_parser.parse("", {move})
+    game_session._state.last_move_from = sq("a2")
+    game_session._state.last_move_to = sq("a4")
+
+    result = game_session.confirm_move_draft()
+
+    assert fake_game.make_move_calls == []
+    assert result == session.MoveAttemptResult(
+        ok=False,
+        status="empty",
+        message="Enter a move first.",
+    )
+    assert game_session._state.last_error_message == "Enter a move first."
+    assert game_session._state.move_text == ""
+    assert game_session._state.parse_result == move_parser.parse("", {move})
+    assert game_session._state.last_move_from == sq("a2")
+    assert game_session._state.last_move_to == sq("a4")
+    assert game_session._legal_moves == {move}
+
+
+def test_confirm_move_draft_ambiguous_failure_returns_stable_feedback_without_calling_engine() -> (
+    None
+):
+    move_a = make("P", "e2", "e4")
+    move_b = make("P", "e2", "e3")
+    legal_moves = {move_a, move_b}
+    parse_result = move_parser.parse("Pe", legal_moves)
+    fake_game = FakeGame(initial_moves=legal_moves)
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe"
+    game_session._state.parse_result = parse_result
+    game_session._state.last_move_from = sq("a2")
+    game_session._state.last_move_to = sq("a4")
+
+    result = game_session.confirm_move_draft()
+
+    assert fake_game.make_move_calls == []
+    assert result == session.MoveAttemptResult(
+        ok=False,
+        status="ambiguous",
+        message="Move is ambiguous.",
+    )
+    assert game_session._state.last_error_message == "Move is ambiguous."
+    assert game_session._state.move_text == "Pe"
+    assert game_session._state.parse_result == parse_result
+    assert game_session._state.last_move_from == sq("a2")
+    assert game_session._state.last_move_to == sq("a4")
+    assert game_session._legal_moves == legal_moves
+
+
+def test_confirm_move_draft_no_match_failure_returns_stable_feedback_without_calling_engine() -> (
+    None
+):
+    move = make("P", "e2", "e4")
+    parse_result = move_parser.parse("zzzz", {move})
+    fake_game = FakeGame(initial_moves={move})
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "zzzz"
+    game_session._state.parse_result = parse_result
+    game_session._state.last_move_from = sq("a2")
+    game_session._state.last_move_to = sq("a4")
+
+    result = game_session.confirm_move_draft()
+
+    assert fake_game.make_move_calls == []
+    assert result == session.MoveAttemptResult(
+        ok=False,
+        status="no_match",
+        message="No legal move matches the current draft.",
+    )
+    assert (
+        game_session._state.last_error_message
+        == "No legal move matches the current draft."
+    )
+    assert game_session._state.move_text == "zzzz"
+    assert game_session._state.parse_result == parse_result
+    assert game_session._state.last_move_from == sq("a2")
+    assert game_session._state.last_move_to == sq("a4")
+    assert game_session._legal_moves == {move}
+
+
+def test_confirm_move_draft_illegal_failure_sets_feedback_and_preserves_existing_draft() -> (
     None
 ):
     move = make("P", "e2", "e4")
@@ -182,7 +275,7 @@ def test_try_make_move_illegal_failure_sets_feedback_and_preserves_existing_draf
     game_session._state.last_move_from = sq("a2")
     game_session._state.last_move_to = sq("a4")
 
-    result = game_session.try_make_move(move)
+    result = game_session.confirm_move_draft()
 
     assert fake_game.make_move_calls == [(move, False)]
     assert result == session.MoveAttemptResult(
@@ -205,26 +298,37 @@ def test_try_make_move_illegal_failure_sets_feedback_and_preserves_existing_draf
     assert game_session._legal_moves == {move}
 
 
-def test_try_make_move_game_over_failure_returns_game_over_status() -> None:
+def test_confirm_move_draft_game_over_failure_returns_game_over_status_without_calling_engine() -> (
+    None
+):
     move = make("P", "e2", "e4")
+    parse_result = move_parser.parse("Pe2-e4", {move})
     fake_game = FakeGame(
         initial_moves={move},
-        error=game.GameConcludedError("1-0"),
+        outcome="1-0",
     )
     game_session = make_session(fake_game)
 
-    result = game_session.try_make_move(move)
+    game_session._state.move_text = "Pe2-e4"
+    game_session._state.parse_result = parse_result
 
-    assert fake_game.make_move_calls == [(move, False)]
+    result = game_session.confirm_move_draft()
+
+    assert fake_game.make_move_calls == []
     assert result == session.MoveAttemptResult(
         ok=False,
         status="game_over",
         message="Game has concluded.",
     )
     assert game_session._state.last_error_message == "Game has concluded."
+    assert game_session._state.move_text == "Pe2-e4"
+    assert game_session._state.parse_result.status == "no_match"
+    assert game_session._state.parse_result.raw_text == "Pe2-e4"
+    assert game_session._legal_moves == set()
+    assert game_session._state.outcome_banner == "White wins."
 
 
-def test_try_make_move_unexpected_error_returns_generic_result_message() -> None:
+def test_confirm_move_draft_unexpected_error_returns_generic_result_message() -> None:
     move = make("P", "e2", "e4")
     parse_result = move_parser.parse("Pe2-e4", {move})
     fake_game = FakeGame(
@@ -236,7 +340,7 @@ def test_try_make_move_unexpected_error_returns_generic_result_message() -> None
     game_session._state.move_text = "Pe2-e4"
     game_session._state.parse_result = parse_result
 
-    result = game_session.try_make_move(move)
+    result = game_session.confirm_move_draft()
 
     assert fake_game.make_move_calls == [(move, False)]
     assert result == session.MoveAttemptResult(

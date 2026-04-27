@@ -13,7 +13,15 @@ from .intents import CursorMove, GameUpdate
 from .session_types import MoveDraftView, MoveListItem, SessionConfig, Snapshot, Square
 from .move_parser import ParseResult, get_canonical, parse
 
-MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
+MoveAttemptStatus = Literal[
+    "applied",
+    "empty",
+    "no_match",
+    "ambiguous",
+    "illegal",
+    "game_over",
+    "error",
+]
 UndoStatus = Literal["undone", "unavailable", "error"]
 UndoScope = Literal["halfmove", "fullmove"]
 ResignStatus = Literal["resigned", "game_over", "error"]
@@ -166,59 +174,64 @@ class GameSession:
         if isinstance(intent, CursorMove):
             self._update_cursor(intent)
 
-    def try_make_move(self, move: Move, offer_draw: bool = False) -> MoveAttemptResult:
+    def confirm_move_draft(self, offer_draw: bool = False) -> MoveAttemptResult:
         """
-        Attempt to apply a resolved move through the engine.
-
-        This is the main application-layer move entrypoint for callers that
-        already have a resolved engine move. It translates engine failures into
-        stable session-level results and updates session-owned feedback state.
+        Attempt to confirm and apply the current draft text.
 
         Parameters:
-            move (Move):
-                The fully resolved engine move to attempt.
-
             offer_draw (bool):
-                Whether the move should also carry a draw offer.
+                Whether the confirmed move should also include a draw offer.
 
         Returns:
             MoveAttemptResult:
                 Stable success/failure information suitable for the UI layer.
 
         Success behavior:
-            - applies the move through the engine
-            - refreshes the cached legal-move set
-            - records last-move highlight squares
-            - clears any prior error message
-            - clears the move-text draft
-            - resets the draft parse result to the empty-input parse state
+            - re-parses the current move draft against current legal moves
+            - confirms that the draft uniquely resolves to a legal move
+            - applies the resolved move through the engine
+            - refreshes cached legal moves and derived position state
+            - updates last-move highlight squares
+            - clears the move draft and resets parse state
+            - clears any active error message
 
         Failure behavior:
-            - preserves existing draft input state
-            - records a user-facing error message
-            - returns a stable failure result
+            - returns stable feedback for game-concluded, empty, ambiguous,
+            no-match, and unexpected-resolution cases
+            - preserves the current draft text for correction
+            - stores a user-facing error message
+            - does not modify the board position unless move application succeeds
         """
-        try:
-            self._game.make_move(move, draw_offered=offer_draw)
-        except IllegalMoveError:
-            self._state.last_error_message = "Could not apply illegal move."
-            return MoveAttemptResult(
-                ok=False, status="illegal", message="Could not apply illegal move."
-            )
-        except GameConcludedError:
+        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+        parse_result = self._state.parse_result
+
+        if self._game.outcome != "":
+            self._refresh_position_state(clear_move_text=False)
             self._state.last_error_message = "Game has concluded."
+            return MoveAttemptResult(False, "game_over", "Game has concluded.")
+
+        if parse_result.status == "empty":
+            self._state.last_error_message = "Enter a move first."
+            return MoveAttemptResult(False, "empty", "Enter a move first.")
+
+        if parse_result.status == "ambiguous":
+            self._state.last_error_message = "Move is ambiguous."
+            return MoveAttemptResult(False, "ambiguous", "Move is ambiguous.")
+
+        if parse_result.status == "no_match":
+            self._state.last_error_message = "No legal move matches the current draft."
             return MoveAttemptResult(
-                ok=False, status="game_over", message="Game has concluded."
+                False,
+                "no_match",
+                "No legal move matches the current draft.",
             )
-        except Exception:
-            self._state.last_error_message = "Could not apply move."
-            return MoveAttemptResult(
-                ok=False, status="error", message="Could not apply move."
-            )
-        else:
-            self._refresh_position_state(clear_move_text=True)
-            self._state.last_error_message = None
-            return MoveAttemptResult(ok=True, status="applied", message=None)
+
+        move = parse_result.resolved_move
+        if move is None:
+            self._state.last_error_message = "Could not resolve move."
+            return MoveAttemptResult(False, "error", "Could not resolve move.")
+
+        return self._apply_resolved_move(move, offer_draw=offer_draw)
 
     def undo(self, scope: UndoScope | None = None) -> UndoResult:
         """
@@ -357,7 +370,6 @@ class GameSession:
 
     def _bootstrap_session(
         self,
-        *,
         config: SessionConfig,
         game: Game | None = None,
     ) -> None:
@@ -372,6 +384,28 @@ class GameSession:
             max(0, min(7, r + update.dy)),
             max(0, min(7, f + update.dx)),
         )
+
+    def _apply_resolved_move(
+        self,
+        move: Move,
+        offer_draw: bool = False,
+    ) -> MoveAttemptResult:
+        try:
+            self._game.make_move(move, draw_offered=offer_draw)
+        except IllegalMoveError:
+            self._state.last_error_message = "Could not apply illegal move."
+            return MoveAttemptResult(False, "illegal", "Could not apply illegal move.")
+        except GameConcludedError:
+            self._refresh_position_state(clear_move_text=False)
+            self._state.last_error_message = "Game has concluded."
+            return MoveAttemptResult(False, "game_over", "Game has concluded.")
+        except Exception:
+            self._state.last_error_message = "Could not apply move."
+            return MoveAttemptResult(False, "error", "Could not apply move.")
+        else:
+            self._refresh_position_state(clear_move_text=True)
+            self._state.last_error_message = None
+            return MoveAttemptResult(True, "applied", None)
 
     def _refresh_position_state(self, *, clear_move_text: bool):
         if self._game.outcome != "":
