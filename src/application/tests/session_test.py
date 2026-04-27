@@ -691,3 +691,111 @@ def test_restart_game_with_new_config_replaces_config_and_uses_new_default_orien
     assert game_session._state.move_text == ""
     assert game_session._state.parse_result.status == "empty"
     assert game_session._legal_moves == game_session._game.get_moves()
+
+
+def test_set_move_text_empty_reparses_to_empty_snapshot_state() -> None:
+    move = make("P", "e2", "e4")
+    fake_game = FakeGame(initial_moves={move})
+    game_session = make_session(fake_game)
+
+    game_session.set_move_text("")
+
+    expected = move_parser.parse("", {move})
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.move_text == ""
+    assert game_session._state.parse_result == expected
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="",
+        status=expected.status,
+        canonical_text=expected.canonical_text,
+    )
+    assert snapshot.move_autocompletions == expected.matching_spellings
+    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+
+
+def test_set_move_text_no_match_updates_snapshot_state() -> None:
+    move = make("P", "e2", "e4")
+    fake_game = FakeGame(initial_moves={move})
+    game_session = make_session(fake_game)
+
+    game_session.set_move_text("zzzz")
+
+    expected = move_parser.parse("zzzz", {move})
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.move_text == "zzzz"
+    assert game_session._state.parse_result == expected
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="zzzz",
+        status=expected.status,
+        canonical_text=expected.canonical_text,
+    )
+    assert snapshot.move_autocompletions == expected.matching_spellings
+    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+
+
+def test_set_move_text_ambiguous_updates_autocompletions_and_candidates() -> None:
+    move_a = make("P", "e2", "e4")
+    move_b = make("P", "e2", "e3")
+    legal_moves = {move_a, move_b}
+    fake_game = FakeGame(initial_moves=legal_moves)
+    game_session = make_session(fake_game)
+
+    game_session.set_move_text("Pe")
+
+    expected = move_parser.parse("Pe", legal_moves)
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.parse_result == expected
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="Pe",
+        status=expected.status,
+        canonical_text=expected.canonical_text,
+    )
+    assert snapshot.move_autocompletions == expected.matching_spellings
+    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+
+
+def test_set_move_text_resolved_updates_canonical_text_and_candidate() -> None:
+    move = make("P", "e2", "e4")
+    fake_game = FakeGame(initial_moves={move})
+    game_session = make_session(fake_game)
+
+    game_session.set_move_text("Pe2-e4")
+
+    expected = move_parser.parse("Pe2-e4", {move})
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.parse_result == expected
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="Pe2-e4",
+        status=expected.status,
+        canonical_text=expected.canonical_text,
+    )
+    assert snapshot.move_autocompletions == expected.matching_spellings
+    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+
+
+def test_clear_move_text_clears_existing_draft_and_resets_snapshot_state() -> None:
+    move_a = make("P", "e2", "e4")
+    move_b = make("P", "e2", "e3")
+    legal_moves = {move_a, move_b}
+    fake_game = FakeGame(initial_moves=legal_moves)
+    game_session = make_session(fake_game)
+
+    game_session.set_move_text("Pe")
+    game_session.clear_move_text()
+
+    expected = move_parser.parse("", legal_moves)
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.move_text == ""
+    assert game_session._state.parse_result == expected
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="",
+        status=expected.status,
+        canonical_text=expected.canonical_text,
+    )
+    assert snapshot.move_autocompletions == expected.matching_spellings
+    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
