@@ -407,6 +407,41 @@ def test_resign_success_returns_result_clears_draft_and_updates_game_over_state(
     assert game_session._state.outcome_banner == "Black wins."
 
 
+def test_resign_success_for_black_returns_black_resigns_message_and_keeps_last_move_highlight() -> (
+    None
+):
+    previous = make("P", "e2", "e4")
+    current = make("P", "e7", "e5")
+    fake_game = FakeGame(
+        initial_moves={current},
+        history=[(previous, None)],
+        resign_outcome="1-0",
+    )
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe7-e5"
+    game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
+    game_session._state.last_error_message = "old error"
+
+    result = game_session.resign()
+
+    assert fake_game.resign_calls == 1
+    assert result == session.ResignResult(
+        ok=True,
+        status="resigned",
+        message="Black resigns.",
+    )
+
+    assert game_session._state.last_error_message is None
+    assert game_session._state.move_text == ""
+    assert game_session._state.parse_result is not None
+    assert game_session._state.parse_result.status == "empty"
+    assert game_session._legal_moves == set()
+    assert game_session._state.outcome_banner == "White wins."
+    assert game_session._state.last_move_from == sq("e2")
+    assert game_session._state.last_move_to == sq("e4")
+
+
 def test_resign_game_over_failure_preserves_draft_and_returns_failure_result() -> None:
     current = make("P", "e2", "e4")
     parse_result = move_parser.parse("Pe2-e4", {current})
@@ -435,6 +470,35 @@ def test_resign_game_over_failure_preserves_draft_and_returns_failure_result() -
     assert game_session._state.parse_result.raw_text == "Pe2-e4"
     assert game_session._legal_moves == set()
     assert game_session._state.outcome_banner == "White wins."
+
+
+def test_resign_game_over_failure_with_draw_outcome_sets_draw_banner() -> None:
+    current = make("P", "e2", "e4")
+    parse_result = move_parser.parse("Pe2-e4", {current})
+    fake_game = FakeGame(
+        initial_moves={current},
+        outcome="1/2-1/2",
+        resign_error=game.GameConcludedError("1/2-1/2"),
+    )
+    game_session = make_session(fake_game)
+
+    game_session._state.move_text = "Pe2-e4"
+    game_session._state.parse_result = parse_result
+
+    result = game_session.resign()
+
+    assert fake_game.resign_calls == 1
+    assert result == session.ResignResult(
+        ok=False,
+        status="game_over",
+        message="Game has concluded.",
+    )
+    assert game_session._state.last_error_message == "Game has concluded."
+    assert game_session._state.move_text == "Pe2-e4"
+    assert game_session._state.parse_result.status == "no_match"
+    assert game_session._state.parse_result.raw_text == "Pe2-e4"
+    assert game_session._legal_moves == set()
+    assert game_session._state.outcome_banner == "Draw."
 
 
 def test_resign_unexpected_error_returns_generic_failure_and_preserves_draft() -> None:
@@ -561,3 +625,69 @@ def test_snapshot_flipped_reflects_player_side_and_orientation_override() -> Non
     game_session._state.orientation_override = True
 
     assert game_session.snapshot().flipped is False
+
+
+def test_restart_game_preserves_existing_config_and_clears_session_owned_state() -> (
+    None
+):
+    previous = make("P", "e2", "e4")
+    current = make("P", "e7", "e5")
+    fake_game = FakeGame(
+        initial_moves={current},
+        history=[(previous, None)],
+        outcome="1-0",
+    )
+    config = session_types.SessionConfig(player_side="black", opponent="local")
+    game_session = session.GameSession(config=config, game=fake_game)
+
+    game_session._state.cursor = sq("c3")
+    game_session._state.move_text = "Pe7-e5"
+    game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
+    game_session._state.orientation_override = True
+    game_session._state.last_error_message = "old error"
+
+    listeners_before = []
+    game_session.subscribe(listeners_before.append)
+    old_game = game_session._game
+
+    game_session.restart_game()
+
+    assert game_session._config == config
+    assert game_session._game is not old_game
+    assert game_session._listeners == [listeners_before.append]
+
+    assert game_session._state.cursor == (0, 0)
+    assert game_session._state.move_text == ""
+    assert game_session._state.parse_result.status == "empty"
+    assert game_session._state.orientation_override is False
+    assert game_session._state.last_move_from is None
+    assert game_session._state.last_move_to is None
+    assert game_session._state.last_error_message is None
+    assert game_session._state.outcome_banner is None
+
+    assert game_session._game.moves_list == []
+    assert game_session._legal_moves == game_session._game.get_moves()
+    assert game_session.snapshot().flipped is True
+
+
+def test_restart_game_with_new_config_replaces_config_and_uses_new_default_orientation() -> (
+    None
+):
+    current = make("P", "e2", "e4")
+    fake_game = FakeGame(initial_moves={current})
+    original = session_types.SessionConfig(player_side="white", opponent="local")
+    replacement = session_types.SessionConfig(player_side="black", opponent="bot")
+    game_session = session.GameSession(config=original, game=fake_game)
+
+    game_session._state.orientation_override = True
+    game_session._state.move_text = "Pe2-e4"
+    game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
+
+    game_session.restart_game(config=replacement)
+
+    assert game_session._config == replacement
+    assert game_session.snapshot().flipped is True
+    assert game_session._state.orientation_override is False
+    assert game_session._state.move_text == ""
+    assert game_session._state.parse_result.status == "empty"
+    assert game_session._legal_moves == game_session._game.get_moves()
