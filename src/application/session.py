@@ -114,6 +114,12 @@ class GameSession:
         self._legal_moves: set[Move] = set()
         self._bootstrap_session(config=config, game=game)
 
+    def restart_game(self, config: SessionConfig | None = None) -> None:
+        self._bootstrap_session(
+            config=self._config if config is None else config,
+            game=None,
+        )
+
     def subscribe(self, fn: Callable):
         """
         Register a listener for future session updates.
