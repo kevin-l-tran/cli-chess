@@ -35,14 +35,14 @@ def test_get_square_name_uses_file_rank_coordinates(
 
 def test_get_spellings_for_unique_piece_move_are_san_and_full_forms_only() -> None:
     move = make("N", "b1", "c3")
-    spellings = move_parser.get_spellings(move, {move})
+    spellings = move_parser._get_spellings(move, {move})
 
     assert spellings == {"Nc3", "Nb1-c3", "Nb1c3"}
 
 
 def test_get_spellings_for_pawn_capture_promotion_include_san_and_full_forms() -> None:
     move = make("P", "f7", "e8", capture="R", promotion="N")
-    spellings = move_parser.get_spellings(move, {move})
+    spellings = move_parser._get_spellings(move, {move})
 
     assert spellings == {"fxe8=N", "Pf7xe8=N", "Pf7e8=N"}
 
