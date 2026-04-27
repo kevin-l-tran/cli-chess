@@ -11,7 +11,7 @@ from src.engine.game import (
 from src.engine.moves import Move, get_final_position, get_initial_position
 from .intents import CursorMove, GameUpdate
 from .session_types import MoveDraftView, MoveListItem, SessionConfig, Snapshot, Square
-from .move_parser import ParseResult, get_canonical, get_matched_spellings, parse
+from .move_parser import ParseResult, get_canonical, parse
 
 MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
 UndoStatus = Literal["undone", "unavailable", "error"]
@@ -311,10 +311,7 @@ class GameSession:
                 status=parse_result.status,
                 canonical_text=parse_result.canonical_text,
             ),
-            move_autocompletions=get_matched_spellings(
-                text=parse_result.raw_text,
-                legal_moves=self._legal_moves,
-            ),
+            move_autocompletions=parse_result.matching_spellings,
             check_square=check_square,
             is_checked=check_square is not None,
             outcome_banner=self._state.outcome_banner,

@@ -34,6 +34,9 @@ class ParseResult:
         matching_moves (list[Move]):
             A list of moves that match the normalized text according to the move string specifications.
 
+        matching_spellings (list[str]):
+            A list of move strings that match the normalized text according to the move string specifications.
+
         source_to_target_highlights (list[tuple[Square, Square]]):
             A list of `(Square, Square)` tuples representing the `(source square, destination square)` of each matched move.
 
@@ -48,6 +51,7 @@ class ParseResult:
     normalized_text: str
     status: ParseStatus
     matching_moves: list[Move]
+    matching_spellings: list[str]
     source_to_target_highlights: list[tuple[Square, Square]]
     resolved_move: Move | None
     canonical_text: str | None
@@ -228,14 +232,9 @@ def _collect_matches(
     return normalized, matching_moves, sorted(matched_spellings)
 
 
-def get_matched_spellings(text: str, legal_moves: set[Move]) -> list[str]:
-    _, _, spellings = _collect_matches(text, legal_moves)
-    return spellings
-
-
 def parse(text: str, legal_moves: set[Move]) -> ParseResult:
     """Takes a text string and converts it into a ParseResult"""
-    normalized, matching_moves, _ = _collect_matches(text, legal_moves)
+    normalized, matching_moves, matching_spellings = _collect_matches(text, legal_moves)
 
     # Deliberate special case: keep empty input inert.
     if normalized == "":
@@ -244,6 +243,7 @@ def parse(text: str, legal_moves: set[Move]) -> ParseResult:
             normalized_text=normalized,
             status="empty",
             matching_moves=[],
+            matching_spellings=[],
             source_to_target_highlights=[],
             resolved_move=None,
             canonical_text=None,
@@ -272,6 +272,7 @@ def parse(text: str, legal_moves: set[Move]) -> ParseResult:
         normalized_text=normalized,
         status=status,
         matching_moves=matching_moves,
+        matching_spellings=matching_spellings,
         source_to_target_highlights=source_to_target_highlights,
         resolved_move=resolved_move,
         canonical_text=canonical_text,
