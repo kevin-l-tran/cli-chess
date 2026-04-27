@@ -13,7 +13,15 @@ from .intents import CursorMove, GameUpdate
 from .session_types import MoveDraftView, MoveListItem, SessionConfig, Snapshot, Square
 from .move_parser import ParseResult, get_canonical, parse
 
-MoveAttemptStatus = Literal["applied", "illegal", "game_over", "error"]
+MoveAttemptStatus = Literal[
+    "applied",
+    "empty",
+    "no_match",
+    "ambiguous",
+    "illegal",
+    "game_over",
+    "error",
+]
 UndoStatus = Literal["undone", "unavailable", "error"]
 UndoScope = Literal["halfmove", "fullmove"]
 ResignStatus = Literal["resigned", "game_over", "error"]
