@@ -8,7 +8,9 @@ from src.application import move_parser
 Move = moves.Move
 
 
-def pairset(result: move_parser.ParseResult) -> set[tuple[tuple[int, int], tuple[int, int]]]:
+def pairset(
+    result: move_parser.ParseResult,
+) -> set[tuple[tuple[int, int], tuple[int, int]]]:
     return set(result.source_to_target_highlights)
 
 
@@ -25,20 +27,22 @@ def test_normalize_move_text_trims_and_removes_internal_spaces() -> None:
         ((7, 7), "h8"),
     ],
 )
-def test_get_square_name_uses_file_rank_coordinates(square: tuple[int, int], expected: str) -> None:
+def test_get_square_name_uses_file_rank_coordinates(
+    square: tuple[int, int], expected: str
+) -> None:
     assert move_parser._get_square_name(square) == expected
 
 
 def test_get_spellings_for_unique_piece_move_are_san_and_full_forms_only() -> None:
     move = make("N", "b1", "c3")
-    spellings = move_parser._get_spellings(move, {move})
+    spellings = move_parser.get_spellings(move, {move})
 
     assert spellings == {"Nc3", "Nb1-c3", "Nb1c3"}
 
 
 def test_get_spellings_for_pawn_capture_promotion_include_san_and_full_forms() -> None:
     move = make("P", "f7", "e8", capture="R", promotion="N")
-    spellings = move_parser._get_spellings(move, {move})
+    spellings = move_parser.get_spellings(move, {move})
 
     assert spellings == {"fxe8=N", "Pf7xe8=N", "Pf7e8=N"}
 
@@ -154,7 +158,9 @@ def test_parse_castling_token_is_ambiguous_when_both_castles_are_legal() -> None
     assert set(result.matching_moves) == legal_moves
 
 
-def test_parse_uses_minimal_rank_disambiguation_when_two_same_file_pieces_share_destination() -> None:
+def test_parse_uses_minimal_rank_disambiguation_when_two_same_file_pieces_share_destination() -> (
+    None
+):
     q4 = make("Q", "d4", "d5")
     q6 = make("Q", "d6", "d5")
     legal_moves = {q4, q6}
