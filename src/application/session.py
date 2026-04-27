@@ -349,8 +349,8 @@ class GameSession:
         self._state.move_text = text
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
 
-    def clear_move_draft(self) -> None:
-        """Clear the current draft and reset parse state to the empty-input result."""
+    def clear_move_text(self) -> None:
+        """Clear the current draft text and reset parse state to the empty-input result."""
         self._state.move_text = ""
         self._clear_transient_selection_state()
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
