@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Literal
+from typing import Callable
 
 from src.application.click_draft import click_to_move_text
 from src.engine.board import Piece, get_name, is_white
@@ -11,42 +11,18 @@ from src.engine.game import (
 )
 from src.engine.moves import Move, get_final_position, get_initial_position
 from .intents import CursorMove, GameUpdate
-from .session_types import MoveDraftView, MoveListItem, SessionConfig, Snapshot, Square
+from .session_types import (
+    MoveAttemptResult,
+    MoveDraftView,
+    MoveListItem,
+    ResignResult,
+    SessionConfig,
+    Snapshot,
+    Square,
+    UndoResult,
+    UndoScope,
+)
 from .move_parser import ParseResult, get_canonical, parse
-
-MoveAttemptStatus = Literal[
-    "applied",
-    "empty",
-    "no_match",
-    "ambiguous",
-    "illegal",
-    "game_over",
-    "error",
-]
-UndoStatus = Literal["undone", "unavailable", "error"]
-UndoScope = Literal["halfmove", "fullmove"]
-ResignStatus = Literal["resigned", "game_over", "error"]
-
-
-@dataclass(frozen=True)
-class MoveAttemptResult:
-    ok: bool
-    status: MoveAttemptStatus
-    message: str | None
-
-
-@dataclass(frozen=True)
-class UndoResult:
-    ok: bool
-    status: UndoStatus
-    message: str | None
-
-
-@dataclass(frozen=True)
-class ResignResult:
-    ok: bool
-    status: ResignStatus
-    message: str | None
 
 
 @dataclass

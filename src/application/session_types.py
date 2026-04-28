@@ -7,6 +7,18 @@ from .move_parser import ParseStatus
 PlayerSide = Literal["white", "black"]
 OpponentType = Literal["local", "bot"]
 Square = tuple[int, int]
+MoveAttemptStatus = Literal[
+    "applied",
+    "empty",
+    "no_match",
+    "ambiguous",
+    "illegal",
+    "game_over",
+    "error",
+]
+UndoStatus = Literal["undone", "unavailable", "error"]
+UndoScope = Literal["halfmove", "fullmove"]
+ResignStatus = Literal["resigned", "game_over", "error"]
 
 
 @dataclass(frozen=True)
@@ -125,3 +137,24 @@ class Snapshot:
 
     outcome_banner: str | None
     last_error_message: str | None
+
+
+@dataclass(frozen=True)
+class MoveAttemptResult:
+    ok: bool
+    status: MoveAttemptStatus
+    message: str | None
+
+
+@dataclass(frozen=True)
+class UndoResult:
+    ok: bool
+    status: UndoStatus
+    message: str | None
+
+
+@dataclass(frozen=True)
+class ResignResult:
+    ok: bool
+    status: ResignStatus
+    message: str | None
