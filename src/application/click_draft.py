@@ -9,6 +9,41 @@ def click_to_move_text(
     legal_moves: set[Move],
     square: Square,
 ) -> str:
+    """
+    Derive the next move-draft text from a click on a board square.
+
+    Parameters:
+        current_text (str):
+            The current raw draft text before the click.
+
+        parse_result (ParseResult):
+            The current parse result for `current_text`, used as the active
+            click context.
+
+        legal_moves (set[Move]):
+            The legal moves in the current position.
+
+        square (Square):
+            The clicked board square.
+
+    Returns:
+        str:
+            The next draft text to store.
+
+    Behavior:
+        - starts from the parser-implied candidate move set for the current
+          draft, or from all legal moves when the draft is empty
+        - if the current draft implies a unique source square, clicking that
+          same source clears the draft
+        - if the current draft implies a unique source square, clicking a
+          legal target refines the draft toward moves to that target
+        - otherwise, clicking a candidate source refines the draft toward
+          moves from that source
+        - if refinement fails, clicking a movable square replaces the draft
+          with a new source-based canonical prefix
+        - if the click does not correspond to any useful refinement or
+          replacement, the current draft text is returned unchanged
+    """
     active = _active_candidates(parse_result, legal_moves)
 
     # First try to refine the current draft.

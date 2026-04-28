@@ -370,6 +370,25 @@ class GameSession:
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
 
     def click_square(self, square: Square) -> None:
+        """
+        Rewrite the move draft in response to a board-square click.
+
+        Parameters:
+            square (Square):
+                The clicked board square.
+
+        Behavior:
+            - updates the session cursor to the clicked square
+            - does nothing if the game has already concluded
+            - derives the next move-draft text from the current draft,
+              parse result, legal moves, and clicked square
+            - stores that derived text through `set_move_text()`, so the
+              standard parse/update path is reused
+
+        Notes:
+            This method does not apply a move directly. Clicks only edit the
+            draft text.
+        """
         self._state.cursor = square
 
         if self._game.outcome != "":
