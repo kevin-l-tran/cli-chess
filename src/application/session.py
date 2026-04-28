@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable, Literal
 
+from src.application.click_draft import click_to_move_text
 from src.engine.board import Piece, get_name, is_white
 from src.engine.game import (
     Game,
@@ -367,6 +368,21 @@ class GameSession:
         self._state.move_text = ""
         self._clear_transient_selection_state()
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def click_square(self, square: Square) -> None:
+        self._state.cursor = square
+
+        if self._game.outcome != "":
+            return
+
+        self.set_move_text(
+            click_to_move_text(
+                current_text=self._state.move_text,
+                parse_result=self._state.parse_result,
+                legal_moves=self._legal_moves,
+                square=square,
+            )
+        )
 
     def _bootstrap_session(
         self,
