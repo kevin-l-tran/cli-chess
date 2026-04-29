@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Literal
+from typing import Literal
 
 from src.application.click_draft import click_to_move_text
 from src.application.snapshot import SnapshotInputs, build_snapshot
@@ -16,7 +16,6 @@ from src.engine.game import (
     NoMoveToUndoError,
 )
 
-from .intents import CursorMove, GameUpdate
 from .move_parser import ParseResult, get_canonical, parse
 from .session_types import (
     MoveAttemptResult,
@@ -38,22 +37,12 @@ class _SessionState:
     used to build an immutable render-ready snapshot.
 
     Attributes:
-        cursor (Square | None):
-            The square currently focused by keyboard/controller navigation.
-            `None` means there is no active cursor.
-
         move_text (str):
             The current raw move text being edited by the user, such as
             `"Nf3"` or `"Pe2-e4"` depending on the accepted input format.
 
         parse_result (ParseResult):
             The most recent parse result for `move_text`.
-
-        orientation_override (bool):
-            An optional override for board orientation. `True` means the board
-            should be rendered opposite of the default orientation for the
-            current player, while `False` means it should be rendered in the
-            default orientation.
 
         last_move_from (Square | None):
             The origin square of the most recently applied move, if any. Used
@@ -72,13 +61,8 @@ class _SessionState:
             A prominent message used to display game conclusion messages.
             `None` means there is no active banner message to display.
     """
-
-    cursor: Square | None = (0, 0)
-
     move_text: str = ""
     parse_result: ParseResult = parse("", set())
-
-    orientation_override: bool = False
 
     last_move_from: Square | None = None
     last_move_to: Square | None = None
@@ -95,11 +79,9 @@ class GameSession:
     - session configuration
     - mutable UI-adjacent working state
     - a cached legal-move set for the current position
-    - optional listeners for future publication of session updates
     """
 
     def __init__(self, config: SessionConfig, game: Game | None = None):
-        self._listeners: list[Callable] = []
         self._legal_moves: set[Move] = set()
         self._bootstrap_session(config=config, game=game)
 
@@ -122,38 +104,6 @@ class GameSession:
             config=self._config if config is None else config,
             game=None,
         )
-
-    def subscribe(self, fn: Callable):
-        """
-        Register a listener for future session updates.
-
-        Parameters:
-            fn (Callable):
-                Callback to store for later notification.
-
-        Notes:
-            Listeners are currently only stored and not yet invoked. This
-            method exists to support a future publication path when the
-            session begins producing snapshots or explicit update events.
-        """
-        self._listeners.append(fn)
-
-    def dispatch(self, intent: GameUpdate):
-        """
-        Handle a UI-originated session intent.
-
-        Parameters:
-            intent (GameUpdate):
-                The application intent to process.
-
-        Notes:
-            This method currently handles cursor movement only. As the session
-            grows, this method can route additional intent types such as move
-            text changes, square selection, board flipping, and move
-            confirmation.
-        """
-        if isinstance(intent, CursorMove):
-            self._update_cursor(intent)
 
     def confirm_move_draft(self, offer_draw: bool = False) -> MoveAttemptResult:
         """
@@ -317,9 +267,6 @@ class GameSession:
         return build_snapshot(
             self._game,
             SnapshotInputs(
-                player_side=self._config.player_side,
-                orientation_override=self._state.orientation_override,
-                cursor=self._state.cursor,
                 move_text=self._state.move_text,
                 parse_result=self._state.parse_result,
                 last_move_from=self._state.last_move_from,
@@ -348,7 +295,6 @@ class GameSession:
                 The clicked board square.
 
         Behavior:
-            - updates the session cursor to the clicked square
             - does nothing if the game has already concluded
             - derives the next move-draft text from the current draft,
               parse result, legal moves, and clicked square
@@ -359,8 +305,6 @@ class GameSession:
             This method does not apply a move directly. Clicks only edit the
             draft text.
         """
-        self._state.cursor = square
-
         if self._game.outcome != "":
             return
 
@@ -393,10 +337,6 @@ class GameSession:
                 self.set_move_text(get_canonical(move))
                 return
 
-    def toggle_orientation(self) -> None:
-        """Invert the controller-owned board orientation override."""
-        self._state.orientation_override = not self._state.orientation_override
-
     def _bootstrap_session(
         self,
         config: SessionConfig,
@@ -406,13 +346,6 @@ class GameSession:
         self._game = Game() if game is None else game
         self._state = _SessionState()
         self._refresh_position_state(clear_move_text=False)
-
-    def _update_cursor(self, update: CursorMove):
-        r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
-        self._state.cursor = (
-            max(0, min(7, r + update.dy)),
-            max(0, min(7, f + update.dx)),
-        )
 
     def _apply_resolved_move(
         self,

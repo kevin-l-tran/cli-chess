@@ -5,15 +5,11 @@ from src.engine.game import Game
 from src.engine.moves import get_final_position, get_initial_position, get_promotion
 
 from .move_parser import ParseResult, Square, get_canonical
-from .session_types import MoveDraftView, MoveListItem, PlayerSide, Snapshot
+from .session_types import MoveDraftView, MoveListItem, Snapshot
 
 
 @dataclass(frozen=True)
 class SnapshotInputs:
-    player_side: PlayerSide
-    orientation_override: bool
-
-    cursor: Square | None
     move_text: str
     parse_result: ParseResult
 
@@ -38,19 +34,17 @@ def build_snapshot(
 
         inputs (SnapshotInputs):
             The session-owned UI state needed to project the current view,
-            including cursor position, move draft, parse result, orientation
-            settings, last-move highlights, and feedback messages.
+            including move draft, parse result, last-move highlights, and 
+            feedback messages.
 
     Returns:
         Snapshot:
-            An immutable view-model containing board glyphs, turn and
-            orientation state, candidate-move highlights, move history,
-            draft/autocompletion state, promotion-popup anchor state, check
-            state, and user-facing banners or errors.
+            An immutable view-model containing board glyphs, turn state, 
+            candidate-move highlights, move history, draft/autocompletion state, 
+            promotion-popup anchor state, check state, and user-facing banners or errors.
 
     Behavior:
         - converts the current board into render glyphs
-        - derives board orientation from player side and orientation override
         - projects parser-derived candidate moves, canonical draft state, and
         autocompletions into the snapshot
         - includes the last applied move highlights and move list
@@ -64,11 +58,6 @@ def build_snapshot(
     return Snapshot(
         board_glyphs=_build_board_glyphs(game),
         side_to_move="white" if game.is_white_turn else "black",
-        flipped=_compute_flipped(
-            player_side=inputs.player_side,
-            orientation_override=inputs.orientation_override,
-        ),
-        cursor=inputs.cursor,
         candidate_moves=set(parse_result.source_to_target_highlights),
         last_move_from=inputs.last_move_from,
         last_move_to=inputs.last_move_to,
@@ -85,16 +74,6 @@ def build_snapshot(
         outcome_banner=inputs.outcome_banner,
         last_error_message=inputs.last_error_message,
     )
-
-
-def _compute_flipped(
-    player_side: PlayerSide,
-    orientation_override: bool,
-) -> bool:
-    default_flipped = player_side == "black"
-    if orientation_override:
-        return not default_flipped
-    return default_flipped
 
 
 def _build_move_list(game: Game) -> list[MoveListItem]:

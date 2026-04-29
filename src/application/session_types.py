@@ -35,7 +35,7 @@ class SessionConfig:
     Attributes:
         player_side (PlayerSide):
             Which side the human player is considered to control. This can be
-            used for board orientation and, later, for turn/AI behavior.
+            used for turn/AI behavior.
 
         opponent (OpponentType):
             The type of opponent for the session. "local" means two players on
@@ -75,12 +75,6 @@ class Snapshot:
 
         side_to_move (PlayerSide):
             The side whose turn it is in the current position.
-
-        flipped (bool):
-            Whether the board should be rendered from Black's perspective.
-
-        cursor (Square | None):
-            The square currently focused by keyboard/controller navigation, if any.
 
         candidate_moves (set[tuple[Square, Square]]):
             The set of (initial position, final position) tuples that should be highlighted.
@@ -123,9 +117,6 @@ class Snapshot:
 
     board_glyphs: list[list[str]]
     side_to_move: PlayerSide
-    flipped: bool
-
-    cursor: Square | None
     candidate_moves: set[tuple[Square, Square]]
 
     last_move_from: Square | None
