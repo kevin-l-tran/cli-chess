@@ -135,968 +135,1260 @@ def make_session(
     return session.GameSession(config=config, game=fake_game)
 
 
-def test_confirm_move_draft_applies_resolved_move_sets_action_message_and_refreshes_legal_moves() -> (
-    None
-):
-    move = make("P", "e2", "e4")
-    reply = make("P", "e7", "e5")
-    fake_game = FakeGame(initial_moves={move}, next_moves={reply})
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = move_parser.parse("Pe2-e4", {move})
-    game_session._state.last_error_message = "old error"
-
-    result = game_session.confirm_move_draft(offer_draw=True)
-
-    assert fake_game.make_move_calls == [(move, True)]
-    assert result == session.MoveAttemptResult(
-        ok=True,
-        status="applied",
-        message="Played Pe2-e4.",
-    )
-
-    assert game_session._state.last_move_from == sq("e2")
-    assert game_session._state.last_move_to == sq("e4")
-    assert game_session._state.last_error_message is None
-    assert game_session._state.last_action_message == "Played Pe2-e4."
-
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result.status == "empty"
-    assert game_session._legal_moves == {reply}
-
-    snapshot = game_session.snapshot()
-    assert snapshot.last_error_message is None
-    assert snapshot.last_action_message == "Played Pe2-e4."
-
-
-def test_confirm_move_draft_empty_failure_sets_error_and_clears_stale_action() -> None:
-    move = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={move})
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = ""
-    game_session._state.parse_result = move_parser.parse("", {move})
-    game_session._state.last_action_message = "old action"
-    game_session._state.last_move_from = sq("a2")
-    game_session._state.last_move_to = sq("a4")
-
-    result = game_session.confirm_move_draft()
-
-    assert fake_game.make_move_calls == []
-    assert result == session.MoveAttemptResult(
-        ok=False,
-        status="empty",
-        message="Enter a move first.",
-    )
-    assert game_session._state.last_error_message == "Enter a move first."
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result == move_parser.parse("", {move})
-    assert game_session._state.last_move_from == sq("a2")
-    assert game_session._state.last_move_to == sq("a4")
-    assert game_session._legal_moves == {move}
-
-
-def test_confirm_move_draft_ambiguous_failure_returns_stable_feedback_without_calling_engine() -> (
-    None
-):
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    parse_result = move_parser.parse("Pe", legal_moves)
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe"
-    game_session._state.parse_result = parse_result
-    game_session._state.last_action_message = "old action"
-    game_session._state.last_move_from = sq("a2")
-    game_session._state.last_move_to = sq("a4")
-
-    result = game_session.confirm_move_draft()
-
-    assert fake_game.make_move_calls == []
-    assert result == session.MoveAttemptResult(
-        ok=False,
-        status="ambiguous",
-        message="Move is ambiguous.",
-    )
-    assert game_session._state.last_error_message == "Move is ambiguous."
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == "Pe"
-    assert game_session._state.parse_result == parse_result
-    assert game_session._state.last_move_from == sq("a2")
-    assert game_session._state.last_move_to == sq("a4")
-    assert game_session._legal_moves == legal_moves
-
-
-def test_confirm_move_draft_no_match_failure_returns_stable_feedback_without_calling_engine() -> (
-    None
-):
-    move = make("P", "e2", "e4")
-    parse_result = move_parser.parse("zzzz", {move})
-    fake_game = FakeGame(initial_moves={move})
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "zzzz"
-    game_session._state.parse_result = parse_result
-    game_session._state.last_action_message = "old action"
-    game_session._state.last_move_from = sq("a2")
-    game_session._state.last_move_to = sq("a4")
-
-    result = game_session.confirm_move_draft()
-
-    assert fake_game.make_move_calls == []
-    assert result == session.MoveAttemptResult(
-        ok=False,
-        status="no_match",
-        message="No legal move matches the current draft.",
-    )
-    assert (
-        game_session._state.last_error_message
-        == "No legal move matches the current draft."
-    )
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == "zzzz"
-    assert game_session._state.parse_result == parse_result
-    assert game_session._state.last_move_from == sq("a2")
-    assert game_session._state.last_move_to == sq("a4")
-    assert game_session._legal_moves == {move}
-
-
-def test_confirm_move_draft_illegal_failure_sets_feedback_and_preserves_existing_draft() -> (
-    None
-):
-    move = make("P", "e2", "e4")
-    parse_result = move_parser.parse("Pe2-e4", {move})
-    fake_game = FakeGame(
-        initial_moves={move},
-        error=game.IllegalMoveError("illegal move"),
-    )
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = parse_result
-    game_session._state.last_action_message = "old action"
-    game_session._state.last_move_from = sq("a2")
-    game_session._state.last_move_to = sq("a4")
-
-    result = game_session.confirm_move_draft()
-
-    assert fake_game.make_move_calls == [(move, False)]
-    assert result == session.MoveAttemptResult(
-        ok=False,
-        status="illegal",
-        message="Could not apply illegal move.",
-    )
-
-    assert game_session._state.last_error_message == "Could not apply illegal move."
-    assert game_session._state.last_action_message is None
-
-    assert game_session._state.move_text == "Pe2-e4"
-    assert game_session._state.parse_result == parse_result
-    assert game_session._state.last_move_from == sq("a2")
-    assert game_session._state.last_move_to == sq("a4")
-    assert game_session._legal_moves == {move}
-
-
-def test_confirm_move_draft_game_over_failure_returns_game_over_status_without_calling_engine() -> (
-    None
-):
-    move = make("P", "e2", "e4")
-    parse_result = move_parser.parse("Pe2-e4", {move})
-    fake_game = FakeGame(initial_moves={move}, outcome="1-0")
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = parse_result
-    game_session._state.last_action_message = "old action"
-
-    result = game_session.confirm_move_draft()
-
-    assert fake_game.make_move_calls == []
-    assert result == session.MoveAttemptResult(
-        ok=False,
-        status="game_over",
-        message="Game has concluded.",
-    )
-    assert game_session._state.last_error_message == "Game has concluded."
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == "Pe2-e4"
-    assert game_session._state.parse_result.status == "no_match"
-    assert game_session._state.parse_result.raw_text == "Pe2-e4"
-    assert game_session._legal_moves == set()
-    assert game_session._state.outcome_banner == "White wins."
-
-
-def test_confirm_move_draft_unexpected_error_returns_generic_result_message() -> None:
-    move = make("P", "e2", "e4")
-    parse_result = move_parser.parse("Pe2-e4", {move})
-    fake_game = FakeGame(initial_moves={move}, error=RuntimeError("boom"))
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = parse_result
-    game_session._state.last_action_message = "old action"
-
-    result = game_session.confirm_move_draft()
-
-    assert fake_game.make_move_calls == [(move, False)]
-    assert result == session.MoveAttemptResult(
-        ok=False,
-        status="error",
-        message="Could not apply move.",
-    )
-    assert game_session._state.last_error_message == "Could not apply move."
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == "Pe2-e4"
-    assert game_session._state.parse_result == parse_result
-
-
-def test_undo_halfmove_success_sets_action_message_and_rewinds_highlight() -> None:
-    first = make("P", "e2", "e4")
-    second = make("P", "e7", "e5")
-    after_first = make("N", "g8", "f6")
-    current = make("N", "g1", "f3")
-    fake_game = FakeGame(
-        initial_moves={current},
-        history=[(first, None), (second, None)],
-        undo_halfmove_moves={after_first},
-    )
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Ng1-f3"
-    game_session._state.parse_result = move_parser.parse("Ng1-f3", {current})
-    game_session._state.last_error_message = "old error"
-
-    result = game_session.undo(scope="halfmove")
-
-    assert fake_game.undo_halfmove_calls == 1
-    assert fake_game.undo_fullmove_calls == 0
-    assert result == session.UndoResult(
-        ok=True,
-        status="undone",
-        message="Move undone.",
-    )
-
-    assert game_session._state.last_error_message is None
-    assert game_session._state.last_action_message == "Move undone."
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result.status == "empty"
-    assert game_session._legal_moves == {after_first}
-    assert game_session._state.last_move_from == sq("e2")
-    assert game_session._state.last_move_to == sq("e4")
-
-
-def test_undo_unavailable_returns_failure_preserves_draft_and_clears_stale_highlight() -> (
-    None
-):
-    current = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={current}, history=[])
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
-    game_session._state.last_action_message = "old action"
-    game_session._state.last_move_from = sq("a2")
-    game_session._state.last_move_to = sq("a4")
-
-    result = game_session.undo(scope="halfmove")
-
-    assert fake_game.undo_halfmove_calls == 1
-    assert result == session.UndoResult(
-        ok=False,
-        status="unavailable",
-        message="No move to undo.",
-    )
-
-    assert game_session._state.last_error_message == "No move to undo."
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == "Pe2-e4"
-    assert game_session._state.parse_result == move_parser.parse("Pe2-e4", {current})
-    assert game_session._state.last_move_from is None
-    assert game_session._state.last_move_to is None
-    assert game_session._legal_moves == {current}
-
-
-def test_undo_unexpected_error_returns_generic_failure_and_preserves_draft() -> None:
-    last_move = make("P", "e2", "e4")
-    current = make("P", "e7", "e5")
-    fake_game = FakeGame(
-        initial_moves={current},
-        history=[(last_move, None)],
-        undo_halfmove_error=RuntimeError("boom"),
-    )
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe7-e5"
-    game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
-    game_session._state.last_action_message = "old action"
-
-    result = game_session.undo(scope="halfmove")
-
-    assert fake_game.undo_halfmove_calls == 1
-    assert result == session.UndoResult(
-        ok=False,
-        status="error",
-        message="Could not undo move.",
-    )
-    assert game_session._state.last_error_message == "Could not undo move."
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == "Pe7-e5"
-    assert game_session._state.parse_result == move_parser.parse("Pe7-e5", {current})
-    assert game_session._state.last_move_from == sq("e2")
-    assert game_session._state.last_move_to == sq("e4")
-    assert game_session._legal_moves == {current}
-
-
-def test_undo_defaults_to_fullmove_for_bot_sessions() -> None:
-    white_move = make("P", "e2", "e4")
-    black_move = make("P", "e7", "e5")
-    restored = make("P", "d2", "d4")
-    fake_game = FakeGame(
-        initial_moves={make("N", "g1", "f3")},
-        history=[(white_move, None), (black_move, None)],
-        undo_fullmove_moves={restored},
-    )
-    game_session = make_session(fake_game, opponent="bot")
-
-    result = game_session.undo()
-
-    assert fake_game.undo_halfmove_calls == 0
-    assert fake_game.undo_fullmove_calls == 1
-    assert result == session.UndoResult(
-        ok=True,
-        status="undone",
-        message="Turn undone.",
-    )
-    assert game_session._state.last_action_message == "Turn undone."
-    assert game_session._legal_moves == {restored}
-    assert game_session._state.last_move_from is None
-    assert game_session._state.last_move_to is None
-
-
-def test_resign_success_returns_result_clears_draft_and_updates_game_over_state() -> (
-    None
-):
-    current = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={current}, resign_outcome="0-1")
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
-    game_session._state.last_error_message = "old error"
-
-    result = game_session.resign()
-
-    assert fake_game.resign_calls == 1
-    assert result == session.ResignResult(
-        ok=True,
-        status="resigned",
-        message="White resigns.",
-    )
-
-    assert game_session._state.last_error_message is None
-    assert game_session._state.last_action_message == "White resigns."
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result.status == "empty"
-    assert game_session._legal_moves == set()
-    assert game_session._state.outcome_banner == "Black wins."
-
-
-def test_resign_success_for_black_returns_black_resigns_message_and_keeps_last_move_highlight() -> (
-    None
-):
-    previous = make("P", "e2", "e4")
-    current = make("P", "e7", "e5")
-    fake_game = FakeGame(
-        initial_moves={current},
-        history=[(previous, None)],
-        resign_outcome="1-0",
-    )
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe7-e5"
-    game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
-    game_session._state.last_error_message = "old error"
-
-    result = game_session.resign()
-
-    assert fake_game.resign_calls == 1
-    assert result == session.ResignResult(
-        ok=True,
-        status="resigned",
-        message="Black resigns.",
-    )
-
-    assert game_session._state.last_error_message is None
-    assert game_session._state.last_action_message == "Black resigns."
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result.status == "empty"
-    assert game_session._legal_moves == set()
-    assert game_session._state.outcome_banner == "White wins."
-    assert game_session._state.last_move_from == sq("e2")
-    assert game_session._state.last_move_to == sq("e4")
-
-
-def test_resign_game_over_failure_preserves_draft_and_returns_failure_result() -> None:
-    current = make("P", "e2", "e4")
-    parse_result = move_parser.parse("Pe2-e4", {current})
-    fake_game = FakeGame(
-        initial_moves={current},
-        outcome="1-0",
-        resign_error=game.GameConcludedError("1-0"),
-    )
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = parse_result
-    game_session._state.last_action_message = "old action"
-
-    result = game_session.resign()
-
-    assert fake_game.resign_calls == 1
-    assert result == session.ResignResult(
-        ok=False,
-        status="game_over",
-        message="Game has concluded.",
-    )
-
-    assert game_session._state.last_error_message == "Game has concluded."
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == "Pe2-e4"
-    assert game_session._state.parse_result.status == "no_match"
-    assert game_session._state.parse_result.raw_text == "Pe2-e4"
-    assert game_session._legal_moves == set()
-    assert game_session._state.outcome_banner == "White wins."
-
-
-def test_resign_unexpected_error_returns_generic_failure_and_preserves_draft() -> None:
-    current = make("P", "e2", "e4")
-    parse_result = move_parser.parse("Pe2-e4", {current})
-    fake_game = FakeGame(initial_moves={current}, resign_error=RuntimeError("boom"))
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = parse_result
-    game_session._state.last_action_message = "old action"
-
-    result = game_session.resign()
-
-    assert fake_game.resign_calls == 1
-    assert result == session.ResignResult(
-        ok=False,
-        status="error",
-        message="Could not resign game.",
-    )
-
-    assert game_session._state.last_error_message == "Could not resign game."
-    assert game_session._state.last_action_message is None
-    assert game_session._state.move_text == "Pe2-e4"
-    assert game_session._state.parse_result == parse_result
-    assert game_session._legal_moves == {current}
-    assert game_session._state.outcome_banner is None
-
-
-def test_snapshot_projects_current_render_state() -> None:
-    previous = make("P", "e2", "e4")
-    current_a = make("P", "e7", "e5")
-    current_b = make("N", "g8", "f6")
-    legal_moves = {current_a, current_b}
-    parse_result = move_parser.parse("", legal_moves)
-    board_pieces = {
-        sq("a8"): make_piece("R", False, False),
-        sq("e8"): make_piece("K", False, False),
-        sq("e1"): make_piece("K", True, False),
-    }
-    fake_game = FakeGame(
-        initial_moves=legal_moves,
-        history=[(previous, None)],
-        is_white_turn=False,
-        checked_king_square=sq("e8"),
-        board_pieces=board_pieces,
-    )
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = ""
-    game_session._state.parse_result = parse_result
-    game_session._state.last_action_message = "Move undone."
-
-    snapshot = game_session.snapshot()
-
-    assert snapshot.side_to_move == "black"
-    assert len(snapshot.board_glyphs) == 8
-    assert all(len(rank) == 8 for rank in snapshot.board_glyphs)
-    assert snapshot.board_glyphs[0][0] == "r"  # a8
-    assert snapshot.board_glyphs[0][4] == "k"  # e8
-    assert snapshot.board_glyphs[7][4] == "K"  # e1
-
-    assert snapshot.last_move_from == sq("e2")
-    assert snapshot.last_move_to == sq("e4")
-    assert snapshot.move_list == [
-        session_types.MoveListItem(ply=1, notation=get_canonical(previous))
-    ]
-
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="",
-        status="empty",
-        canonical_text=None,
-    )
-    assert snapshot.move_autocompletions == []
-    assert snapshot.candidate_moves == set()
-    assert snapshot.promotion_prompt_position is None
-
-    assert snapshot.check_square == sq("e8")
-    assert snapshot.is_player_checked is True
-    assert snapshot.outcome_banner is None
-    assert snapshot.last_error_message is None
-    assert snapshot.last_action_message == "Move undone."
-
-
-def test_snapshot_uses_parser_matches_for_candidates_and_autocompletions() -> None:
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe"
-    game_session._state.parse_result = move_parser.parse("Pe", legal_moves)
-
-    snapshot = game_session.snapshot()
-
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe",
-        status="ambiguous",
-        canonical_text=None,
-    )
-    assert snapshot.candidate_moves == {
-        (sq("e2"), sq("e3")),
-        (sq("e2"), sq("e4")),
-    }
-    assert snapshot.move_autocompletions == [
-        "Pe2-e3",
-        "Pe2-e4",
-        "Pe2e3",
-        "Pe2e4",
-    ]
-    assert snapshot.promotion_prompt_position is None
-
-
-def test_restart_game_preserves_existing_config_and_clears_session_owned_state() -> (
-    None
-):
-    previous = make("P", "e2", "e4")
-    current = make("P", "e7", "e5")
-    fake_game = FakeGame(
-        initial_moves={current}, history=[(previous, None)], outcome="1-0"
-    )
-    config = session_types.SessionConfig(player_side="black", opponent="local")
-    game_session = session.GameSession(config=config, game=fake_game)
-
-    game_session._state.move_text = "Pe7-e5"
-    game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
-    game_session._state.last_error_message = "old error"
-
-    old_game = game_session._game
-    game_session.restart_game()
-
-    assert game_session._config == config
-    assert game_session._game is not old_game
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result.status == "empty"
-    assert game_session._state.last_move_from is None
-    assert game_session._state.last_move_to is None
-    assert game_session._state.last_error_message is None
-    assert game_session._state.last_action_message == "Game restarted."
-    assert game_session._state.outcome_banner is None
-    assert game_session._game.moves_list == []
-    assert game_session._legal_moves == game_session._game.get_moves()
-
-
-def test_restart_game_with_new_config_replaces_config_and_sets_action_message() -> None:
-    current = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={current})
-    original = session_types.SessionConfig(player_side="white", opponent="local")
-    replacement = session_types.SessionConfig(player_side="black", opponent="bot")
-    game_session = session.GameSession(config=original, game=fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
-
-    game_session.restart_game(config=replacement)
-
-    assert game_session._config == replacement
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result.status == "empty"
-    assert game_session._state.last_action_message == "Game restarted."
-    assert game_session._legal_moves == game_session._game.get_moves()
-
-
-def test_feedback_persists_across_draft_editing_until_next_command_attempt() -> None:
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session._state.last_action_message = "Move undone."
-    game_session.set_move_text("Pe")
-    assert game_session.snapshot().last_action_message == "Move undone."
-
-    game_session.clear_move_text()
-    assert game_session.snapshot().last_action_message == "Move undone."
-
-    game_session.click_square(sq("e2"))
-    assert game_session.snapshot().last_action_message == "Move undone."
-
-
-def test_set_move_text_empty_reparses_to_empty_snapshot_state() -> None:
-    move = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={move})
-    game_session = make_session(fake_game)
-
-    game_session.set_move_text("")
-
-    expected = move_parser.parse("", {move})
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result == expected
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="",
-        status=expected.status,
-        canonical_text=expected.canonical_text,
-    )
-    assert snapshot.move_autocompletions == expected.matching_spellings
-    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
-
-
-def test_set_move_text_no_match_updates_snapshot_state() -> None:
-    move = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={move})
-    game_session = make_session(fake_game)
-
-    game_session.set_move_text("zzzz")
-
-    expected = move_parser.parse("zzzz", {move})
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "zzzz"
-    assert game_session._state.parse_result == expected
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="zzzz",
-        status=expected.status,
-        canonical_text=expected.canonical_text,
-    )
-    assert snapshot.move_autocompletions == expected.matching_spellings
-    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
-
-
-def test_set_move_text_ambiguous_updates_autocompletions_and_candidates() -> None:
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.set_move_text("Pe")
-
-    expected = move_parser.parse("Pe", legal_moves)
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.parse_result == expected
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe",
-        status=expected.status,
-        canonical_text=expected.canonical_text,
-    )
-    assert snapshot.move_autocompletions == expected.matching_spellings
-    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
-
-
-def test_set_move_text_resolved_updates_canonical_text_and_candidate() -> None:
-    move = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={move})
-    game_session = make_session(fake_game)
-
-    game_session.set_move_text("Pe2-e4")
-
-    expected = move_parser.parse("Pe2-e4", {move})
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.parse_result == expected
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe2-e4",
-        status=expected.status,
-        canonical_text=expected.canonical_text,
-    )
-    assert snapshot.move_autocompletions == expected.matching_spellings
-    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
-
-
-def test_clear_move_text_clears_existing_draft_and_resets_snapshot_state() -> None:
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.set_move_text("Pe")
-    game_session.clear_move_text()
-
-    expected = move_parser.parse("", legal_moves)
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == ""
-    assert game_session._state.parse_result == expected
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="",
-        status=expected.status,
-        canonical_text=expected.canonical_text,
-    )
-    assert snapshot.move_autocompletions == expected.matching_spellings
-    assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
-
-
-def test_click_square_empty_draft_on_movable_source_authors_source_prefix() -> None:
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.click_square(sq("e2"))
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "Pe2"
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe2",
-        status="ambiguous",
-        canonical_text=None,
-    )
-    assert snapshot.candidate_moves == {
-        (sq("e2"), sq("e3")),
-        (sq("e2"), sq("e4")),
-    }
-    assert snapshot.move_autocompletions == [
-        "Pe2-e3",
-        "Pe2-e4",
-        "Pe2e3",
-        "Pe2e4",
-    ]
-
-
-def test_click_square_second_click_on_target_refines_to_resolved_move() -> None:
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.click_square(sq("e2"))
-    game_session.click_square(sq("e4"))
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "Pe2-e4"
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe2-e4",
-        status="resolved",
-        canonical_text="Pe2-e4",
-    )
-    assert snapshot.candidate_moves == {(sq("e2"), sq("e4"))}
-    assert snapshot.move_autocompletions == ["Pe2-e4"]
-
-
-def test_click_square_replaces_partial_draft_with_new_source_when_new_square_is_movable() -> (
-    None
-):
-    e2e4 = make("P", "e2", "e4")
-    e2e3 = make("P", "e2", "e3")
-    g1f3 = make("N", "g1", "f3")
-    g1h3 = make("N", "g1", "h3")
-    legal_moves = {e2e4, e2e3, g1f3, g1h3}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.click_square(sq("e2"))
-    game_session.click_square(sq("g1"))
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "Ng1"
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Ng1",
-        status="ambiguous",
-        canonical_text=None,
-    )
-    assert snapshot.candidate_moves == {
-        (sq("g1"), sq("f3")),
-        (sq("g1"), sq("h3")),
-    }
-
-
-def test_click_square_on_no_match_typed_draft_replaces_with_clicked_source_prefix() -> (
-    None
-):
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.set_move_text("zzzz")
-    assert game_session._state.parse_result.status == "no_match"
-
-    game_session.click_square(sq("e2"))
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "Pe2"
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe2",
-        status="ambiguous",
-        canonical_text=None,
-    )
-    assert snapshot.candidate_moves == {
-        (sq("e2"), sq("e3")),
-        (sq("e2"), sq("e4")),
-    }
-
-
-def test_click_square_game_over_is_inert() -> None:
-    move = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={move}, outcome="1-0")
-    game_session = make_session(fake_game)
-
-    game_session._state.move_text = "Pe2-e4"
-    game_session._state.parse_result = move_parser.parse("Pe2-e4", set())
-
-    game_session.click_square(sq("e2"))
-
-    assert game_session._state.move_text == "Pe2-e4"
-    assert game_session._state.parse_result == move_parser.parse("Pe2-e4", set())
-
-
-def test_click_square_dead_end_click_self_clears_draft() -> None:
-    move_a = make("P", "e2", "e4")
-    move_b = make("P", "e2", "e3")
-    legal_moves = {move_a, move_b}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.click_square(sq("e2"))
-    assert game_session._state.move_text == "Pe2"
-
-    game_session.click_square(sq("a1"))
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == ""
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="",
-        status="empty",
-        canonical_text=None,
-    )
-    assert snapshot.candidate_moves == set()
-    assert snapshot.move_autocompletions == []
-    assert snapshot.promotion_prompt_position is None
-
-
-def test_click_square_promotion_source_does_not_show_prompt_until_destination_is_chosen() -> (
-    None
-):
-    q = make("P", "e7", "e8", promotion="Q")
-    r = make("P", "e7", "e8", promotion="R")
-    b = make("P", "e7", "e8", promotion="B")
-    n = make("P", "e7", "e8", promotion="N")
-    legal_moves = {q, r, b, n}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.click_square(sq("e7"))
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "Pe7"
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe7",
-        status="ambiguous",
-        canonical_text=None,
-    )
-    assert snapshot.candidate_moves == {(sq("e7"), sq("e8"))}
-    assert snapshot.promotion_prompt_position is None
-
-
-def test_click_square_promotion_destination_sets_ambiguous_promotion_prefix_and_prompt() -> (
-    None
-):
-    q = make("P", "e7", "e8", promotion="Q")
-    r = make("P", "e7", "e8", promotion="R")
-    b = make("P", "e7", "e8", promotion="B")
-    n = make("P", "e7", "e8", promotion="N")
-    legal_moves = {q, r, b, n}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.click_square(sq("e7"))
-    game_session.click_square(sq("e8"))
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "Pe7-e8="
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe7-e8=",
-        status="ambiguous",
-        canonical_text=None,
-    )
-    assert snapshot.candidate_moves == {(sq("e7"), sq("e8"))}
-    assert snapshot.move_autocompletions == [
-        "Pe7-e8=B",
-        "Pe7-e8=N",
-        "Pe7-e8=Q",
-        "Pe7-e8=R",
-    ]
-    assert snapshot.promotion_prompt_position == sq("e8")
-
-
-def test_select_promotion_piece_resolves_draft_and_clears_prompt() -> None:
-    q = make("P", "e7", "e8", promotion="Q")
-    r = make("P", "e7", "e8", promotion="R")
-    b = make("P", "e7", "e8", promotion="B")
-    n = make("P", "e7", "e8", promotion="N")
-    legal_moves = {q, r, b, n}
-    fake_game = FakeGame(initial_moves=legal_moves)
-    game_session = make_session(fake_game)
-
-    game_session.click_square(sq("e7"))
-    game_session.click_square(sq("e8"))
-    game_session.select_promotion_piece("Q")
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "Pe7-e8=Q"
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe7-e8=Q",
-        status="resolved",
-        canonical_text="Pe7-e8=Q",
-    )
-    assert snapshot.candidate_moves == {(sq("e7"), sq("e8"))}
-    assert snapshot.move_autocompletions == ["Pe7-e8=Q"]
-    assert snapshot.promotion_prompt_position is None
-
-
-def test_select_promotion_piece_without_active_promotion_prompt_is_inert() -> None:
-    move = make("P", "e2", "e4")
-    fake_game = FakeGame(initial_moves={move})
-    game_session = make_session(fake_game)
-
-    game_session.set_move_text("Pe2-e4")
-    before_parse = game_session._state.parse_result
-
-    game_session.select_promotion_piece("Q")
-    snapshot = game_session.snapshot()
-
-    assert game_session._state.move_text == "Pe2-e4"
-    assert game_session._state.parse_result == before_parse
-    assert snapshot.move_draft == session_types.MoveDraftView(
-        text="Pe2-e4",
-        status="resolved",
-        canonical_text="Pe2-e4",
-    )
-    assert snapshot.promotion_prompt_position is None
+def assert_snapshot_flags(
+    snapshot: session_types.Snapshot,
+    *,
+    is_game_over: bool,
+    can_confirm_move: bool,
+    can_undo_halfmove: bool,
+    can_undo_fullmove: bool,
+    can_resign: bool,
+    is_promotion_pending: bool,
+    is_player_checked: bool | None = None,
+) -> None:
+    assert snapshot.is_game_over is is_game_over
+    assert snapshot.can_confirm_move is can_confirm_move
+    assert snapshot.can_undo_halfmove is can_undo_halfmove
+    assert snapshot.can_undo_fullmove is can_undo_fullmove
+    assert snapshot.can_resign is can_resign
+    assert snapshot.is_promotion_pending is is_promotion_pending
+    if is_player_checked is not None:
+        assert snapshot.is_player_checked is is_player_checked
+
+
+class TestConfirmMoveDraft:
+    def test_applies_resolved_move_sets_action_message_and_refreshes_legal_moves(
+        self,
+    ) -> None:
+        move = make("P", "e2", "e4")
+        reply = make("P", "e7", "e5")
+        fake_game = FakeGame(initial_moves={move}, next_moves={reply})
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = move_parser.parse("Pe2-e4", {move})
+        game_session._state.last_error_message = "old error"
+
+        result = game_session.confirm_move_draft(offer_draw=True)
+
+        assert fake_game.make_move_calls == [(move, True)]
+        assert result == session.MoveAttemptResult(
+            ok=True,
+            status="applied",
+            message="Played Pe2-e4.",
+        )
+
+        assert game_session._state.last_move_from == sq("e2")
+        assert game_session._state.last_move_to == sq("e4")
+        assert game_session._state.last_error_message is None
+        assert game_session._state.last_action_message == "Played Pe2-e4."
+
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result.status == "empty"
+        assert game_session._legal_moves == {reply}
+
+        snapshot = game_session.snapshot()
+        assert snapshot.last_error_message is None
+        assert snapshot.last_action_message == "Played Pe2-e4."
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=True,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_empty_failure_sets_error_and_clears_stale_action(self) -> None:
+        move = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={move})
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = ""
+        game_session._state.parse_result = move_parser.parse("", {move})
+        game_session._state.last_action_message = "old action"
+        game_session._state.last_move_from = sq("a2")
+        game_session._state.last_move_to = sq("a4")
+
+        result = game_session.confirm_move_draft()
+
+        assert fake_game.make_move_calls == []
+        assert result == session.MoveAttemptResult(
+            ok=False,
+            status="empty",
+            message="Enter a move first.",
+        )
+        assert game_session._state.last_error_message == "Enter a move first."
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result == move_parser.parse("", {move})
+        assert game_session._state.last_move_from == sq("a2")
+        assert game_session._state.last_move_to == sq("a4")
+        assert game_session._legal_moves == {move}
+
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_ambiguous_failure_returns_stable_feedback_without_calling_engine(
+        self,
+    ) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        parse_result = move_parser.parse("Pe", legal_moves)
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe"
+        game_session._state.parse_result = parse_result
+        game_session._state.last_action_message = "old action"
+        game_session._state.last_move_from = sq("a2")
+        game_session._state.last_move_to = sq("a4")
+
+        result = game_session.confirm_move_draft()
+
+        assert fake_game.make_move_calls == []
+        assert result == session.MoveAttemptResult(
+            ok=False,
+            status="ambiguous",
+            message="Move is ambiguous.",
+        )
+        assert game_session._state.last_error_message == "Move is ambiguous."
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == "Pe"
+        assert game_session._state.parse_result == parse_result
+        assert game_session._state.last_move_from == sq("a2")
+        assert game_session._state.last_move_to == sq("a4")
+        assert game_session._legal_moves == legal_moves
+
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_no_match_failure_returns_stable_feedback_without_calling_engine(
+        self,
+    ) -> None:
+        move = make("P", "e2", "e4")
+        parse_result = move_parser.parse("zzzz", {move})
+        fake_game = FakeGame(initial_moves={move})
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "zzzz"
+        game_session._state.parse_result = parse_result
+        game_session._state.last_action_message = "old action"
+        game_session._state.last_move_from = sq("a2")
+        game_session._state.last_move_to = sq("a4")
+
+        result = game_session.confirm_move_draft()
+
+        assert fake_game.make_move_calls == []
+        assert result == session.MoveAttemptResult(
+            ok=False,
+            status="no_match",
+            message="No legal move matches the current draft.",
+        )
+        assert (
+            game_session._state.last_error_message
+            == "No legal move matches the current draft."
+        )
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == "zzzz"
+        assert game_session._state.parse_result == parse_result
+        assert game_session._state.last_move_from == sq("a2")
+        assert game_session._state.last_move_to == sq("a4")
+        assert game_session._legal_moves == {move}
+
+    def test_illegal_failure_sets_feedback_and_preserves_existing_draft(self) -> None:
+        move = make("P", "e2", "e4")
+        parse_result = move_parser.parse("Pe2-e4", {move})
+        fake_game = FakeGame(
+            initial_moves={move},
+            error=game.IllegalMoveError("illegal move"),
+        )
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = parse_result
+        game_session._state.last_action_message = "old action"
+        game_session._state.last_move_from = sq("a2")
+        game_session._state.last_move_to = sq("a4")
+
+        result = game_session.confirm_move_draft()
+
+        assert fake_game.make_move_calls == [(move, False)]
+        assert result == session.MoveAttemptResult(
+            ok=False,
+            status="illegal",
+            message="Could not apply illegal move.",
+        )
+
+        assert game_session._state.last_error_message == "Could not apply illegal move."
+        assert game_session._state.last_action_message is None
+
+        assert game_session._state.move_text == "Pe2-e4"
+        assert game_session._state.parse_result == parse_result
+        assert game_session._state.last_move_from == sq("a2")
+        assert game_session._state.last_move_to == sq("a4")
+        assert game_session._legal_moves == {move}
+
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=True,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_game_over_failure_returns_game_over_status_without_calling_engine(
+        self,
+    ) -> None:
+        move = make("P", "e2", "e4")
+        parse_result = move_parser.parse("Pe2-e4", {move})
+        fake_game = FakeGame(initial_moves={move}, outcome="1-0")
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = parse_result
+        game_session._state.last_action_message = "old action"
+
+        result = game_session.confirm_move_draft()
+
+        assert fake_game.make_move_calls == []
+        assert result == session.MoveAttemptResult(
+            ok=False,
+            status="game_over",
+            message="Game has concluded.",
+        )
+        assert game_session._state.last_error_message == "Game has concluded."
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == "Pe2-e4"
+        assert game_session._state.parse_result.status == "no_match"
+        assert game_session._state.parse_result.raw_text == "Pe2-e4"
+        assert game_session._legal_moves == set()
+        assert game_session._state.outcome_banner == "White wins."
+
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=True,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=False,
+            is_promotion_pending=False,
+        )
+
+    def test_unexpected_error_returns_generic_result_message(self) -> None:
+        move = make("P", "e2", "e4")
+        parse_result = move_parser.parse("Pe2-e4", {move})
+        fake_game = FakeGame(initial_moves={move}, error=RuntimeError("boom"))
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = parse_result
+        game_session._state.last_action_message = "old action"
+
+        result = game_session.confirm_move_draft()
+
+        assert fake_game.make_move_calls == [(move, False)]
+        assert result == session.MoveAttemptResult(
+            ok=False,
+            status="error",
+            message="Could not apply move.",
+        )
+        assert game_session._state.last_error_message == "Could not apply move."
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == "Pe2-e4"
+        assert game_session._state.parse_result == parse_result
+
+
+class TestUndo:
+    def test_halfmove_success_sets_action_message_and_rewinds_highlight(self) -> None:
+        first = make("P", "e2", "e4")
+        second = make("P", "e7", "e5")
+        after_first = make("N", "g8", "f6")
+        current = make("N", "g1", "f3")
+        fake_game = FakeGame(
+            initial_moves={current},
+            history=[(first, None), (second, None)],
+            undo_halfmove_moves={after_first},
+        )
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Ng1-f3"
+        game_session._state.parse_result = move_parser.parse("Ng1-f3", {current})
+        game_session._state.last_error_message = "old error"
+
+        result = game_session.undo(scope="halfmove")
+
+        assert fake_game.undo_halfmove_calls == 1
+        assert fake_game.undo_fullmove_calls == 0
+        assert result == session.UndoResult(
+            ok=True,
+            status="undone",
+            message="Move undone.",
+        )
+
+        assert game_session._state.last_error_message is None
+        assert game_session._state.last_action_message == "Move undone."
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result.status == "empty"
+        assert game_session._legal_moves == {after_first}
+        assert game_session._state.last_move_from == sq("e2")
+        assert game_session._state.last_move_to == sq("e4")
+
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=True,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_unavailable_returns_failure_preserves_draft_and_clears_stale_highlight(
+        self,
+    ) -> None:
+        current = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={current}, history=[])
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
+        game_session._state.last_action_message = "old action"
+        game_session._state.last_move_from = sq("a2")
+        game_session._state.last_move_to = sq("a4")
+
+        result = game_session.undo(scope="halfmove")
+
+        assert fake_game.undo_halfmove_calls == 1
+        assert result == session.UndoResult(
+            ok=False,
+            status="unavailable",
+            message="No move to undo.",
+        )
+
+        assert game_session._state.last_error_message == "No move to undo."
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == "Pe2-e4"
+        assert game_session._state.parse_result == move_parser.parse("Pe2-e4", {current})
+        assert game_session._state.last_move_from is None
+        assert game_session._state.last_move_to is None
+        assert game_session._legal_moves == {current}
+
+    def test_unexpected_error_returns_generic_failure_and_preserves_draft(self) -> None:
+        last_move = make("P", "e2", "e4")
+        current = make("P", "e7", "e5")
+        fake_game = FakeGame(
+            initial_moves={current},
+            history=[(last_move, None)],
+            undo_halfmove_error=RuntimeError("boom"),
+        )
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe7-e5"
+        game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
+        game_session._state.last_action_message = "old action"
+
+        result = game_session.undo(scope="halfmove")
+
+        assert fake_game.undo_halfmove_calls == 1
+        assert result == session.UndoResult(
+            ok=False,
+            status="error",
+            message="Could not undo move.",
+        )
+        assert game_session._state.last_error_message == "Could not undo move."
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == "Pe7-e5"
+        assert game_session._state.parse_result == move_parser.parse("Pe7-e5", {current})
+        assert game_session._state.last_move_from == sq("e2")
+        assert game_session._state.last_move_to == sq("e4")
+        assert game_session._legal_moves == {current}
+
+    def test_defaults_to_fullmove_for_bot_sessions(self) -> None:
+        white_move = make("P", "e2", "e4")
+        black_move = make("P", "e7", "e5")
+        restored = make("P", "d2", "d4")
+        fake_game = FakeGame(
+            initial_moves={make("N", "g1", "f3")},
+            history=[(white_move, None), (black_move, None)],
+            undo_fullmove_moves={restored},
+        )
+        game_session = make_session(fake_game, opponent="bot")
+
+        result = game_session.undo()
+
+        assert fake_game.undo_halfmove_calls == 0
+        assert fake_game.undo_fullmove_calls == 1
+        assert result == session.UndoResult(
+            ok=True,
+            status="undone",
+            message="Turn undone.",
+        )
+        assert game_session._state.last_action_message == "Turn undone."
+        assert game_session._legal_moves == {restored}
+        assert game_session._state.last_move_from is None
+        assert game_session._state.last_move_to is None
+
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_online_sessions_reject_undo_and_expose_no_undo_flags(self) -> None:
+        prior = make("P", "e2", "e4")
+        current = make("P", "e7", "e5")
+        fake_game = FakeGame(initial_moves={current}, history=[(prior, None)])
+        game_session = make_session(fake_game, opponent="online")
+
+        result = game_session.undo()
+
+        assert fake_game.undo_halfmove_calls == 0
+        assert fake_game.undo_fullmove_calls == 0
+        assert result == session.UndoResult(
+            ok=False,
+            status="unavailable",
+            message="Can't undo in an online game.",
+        )
+        assert game_session.snapshot().last_error_message == "Can't undo in an online game."
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+
+class TestResign:
+    def test_success_returns_result_clears_draft_and_updates_game_over_state(
+        self,
+    ) -> None:
+        current = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={current}, resign_outcome="0-1")
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
+        game_session._state.last_error_message = "old error"
+
+        result = game_session.resign()
+
+        assert fake_game.resign_calls == 1
+        assert result == session.ResignResult(
+            ok=True,
+            status="resigned",
+            message="White resigns.",
+        )
+
+        assert game_session._state.last_error_message is None
+        assert game_session._state.last_action_message == "White resigns."
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result.status == "empty"
+        assert game_session._legal_moves == set()
+        assert game_session._state.outcome_banner == "Black wins."
+
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=True,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=False,
+            is_promotion_pending=False,
+        )
+
+    def test_success_for_black_returns_black_resigns_message_and_keeps_last_move_highlight(
+        self,
+    ) -> None:
+        previous = make("P", "e2", "e4")
+        current = make("P", "e7", "e5")
+        fake_game = FakeGame(
+            initial_moves={current},
+            history=[(previous, None)],
+            resign_outcome="1-0",
+        )
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe7-e5"
+        game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
+        game_session._state.last_error_message = "old error"
+
+        result = game_session.resign()
+
+        assert fake_game.resign_calls == 1
+        assert result == session.ResignResult(
+            ok=True,
+            status="resigned",
+            message="Black resigns.",
+        )
+
+        assert game_session._state.last_error_message is None
+        assert game_session._state.last_action_message == "Black resigns."
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result.status == "empty"
+        assert game_session._legal_moves == set()
+        assert game_session._state.outcome_banner == "White wins."
+        assert game_session._state.last_move_from == sq("e2")
+        assert game_session._state.last_move_to == sq("e4")
+
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=True,
+            can_confirm_move=False,
+            can_undo_halfmove=True,
+            can_undo_fullmove=False,
+            can_resign=False,
+            is_promotion_pending=False,
+        )
+
+    def test_game_over_failure_preserves_draft_and_returns_failure_result(self) -> None:
+        current = make("P", "e2", "e4")
+        parse_result = move_parser.parse("Pe2-e4", {current})
+        fake_game = FakeGame(
+            initial_moves={current},
+            outcome="1-0",
+            resign_error=game.GameConcludedError("1-0"),
+        )
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = parse_result
+        game_session._state.last_action_message = "old action"
+
+        result = game_session.resign()
+
+        assert fake_game.resign_calls == 1
+        assert result == session.ResignResult(
+            ok=False,
+            status="game_over",
+            message="Game has concluded.",
+        )
+
+        assert game_session._state.last_error_message == "Game has concluded."
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == "Pe2-e4"
+        assert game_session._state.parse_result.status == "no_match"
+        assert game_session._state.parse_result.raw_text == "Pe2-e4"
+        assert game_session._legal_moves == set()
+        assert game_session._state.outcome_banner == "White wins."
+
+    def test_unexpected_error_returns_generic_failure_and_preserves_draft(self) -> None:
+        current = make("P", "e2", "e4")
+        parse_result = move_parser.parse("Pe2-e4", {current})
+        fake_game = FakeGame(initial_moves={current}, resign_error=RuntimeError("boom"))
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = parse_result
+        game_session._state.last_action_message = "old action"
+
+        result = game_session.resign()
+
+        assert fake_game.resign_calls == 1
+        assert result == session.ResignResult(
+            ok=False,
+            status="error",
+            message="Could not resign game.",
+        )
+
+        assert game_session._state.last_error_message == "Could not resign game."
+        assert game_session._state.last_action_message is None
+        assert game_session._state.move_text == "Pe2-e4"
+        assert game_session._state.parse_result == parse_result
+        assert game_session._legal_moves == {current}
+        assert game_session._state.outcome_banner is None
+
+
+class TestSnapshotProjection:
+    def test_projects_current_render_state(self) -> None:
+        previous = make("P", "e2", "e4")
+        current_a = make("P", "e7", "e5")
+        current_b = make("N", "g8", "f6")
+        legal_moves = {current_a, current_b}
+        parse_result = move_parser.parse("", legal_moves)
+        board_pieces = {
+            sq("a8"): make_piece("R", False, False),
+            sq("e8"): make_piece("K", False, False),
+            sq("e1"): make_piece("K", True, False),
+        }
+        fake_game = FakeGame(
+            initial_moves=legal_moves,
+            history=[(previous, None)],
+            is_white_turn=False,
+            checked_king_square=sq("e8"),
+            board_pieces=board_pieces,
+        )
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = ""
+        game_session._state.parse_result = parse_result
+        game_session._state.last_action_message = "Move undone."
+
+        snapshot = game_session.snapshot()
+
+        assert snapshot.side_to_move == "black"
+        assert len(snapshot.board_glyphs) == 8
+        assert all(len(rank) == 8 for rank in snapshot.board_glyphs)
+        assert snapshot.board_glyphs[0][0] == "r"  # a8
+        assert snapshot.board_glyphs[0][4] == "k"  # e8
+        assert snapshot.board_glyphs[7][4] == "K"  # e1
+
+        assert snapshot.last_move_from == sq("e2")
+        assert snapshot.last_move_to == sq("e4")
+        assert snapshot.move_list == [
+            session_types.MoveListItem(ply=1, notation=get_canonical(previous))
+        ]
+
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="",
+            status="empty",
+            canonical_text=None,
+        )
+        assert snapshot.move_autocompletions == []
+        assert snapshot.candidate_moves == set()
+        assert snapshot.promotion_prompt_position is None
+
+        assert snapshot.check_square == sq("e8")
+        assert snapshot.outcome_banner is None
+        assert snapshot.last_error_message is None
+        assert snapshot.last_action_message == "Move undone."
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=True,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+            is_player_checked=True,
+        )
+
+    def test_uses_parser_matches_for_candidates_autocompletions_and_flags(self) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe"
+        game_session._state.parse_result = move_parser.parse("Pe", legal_moves)
+
+        snapshot = game_session.snapshot()
+
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe",
+            status="ambiguous",
+            canonical_text=None,
+        )
+        assert snapshot.candidate_moves == {
+            (sq("e2"), sq("e3")),
+            (sq("e2"), sq("e4")),
+        }
+        assert snapshot.move_autocompletions == [
+            "Pe2-e3",
+            "Pe2-e4",
+            "Pe2e3",
+            "Pe2e4",
+        ]
+        assert snapshot.promotion_prompt_position is None
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_exposes_opponent_sensitive_undo_flags(self) -> None:
+        first = make("P", "e2", "e4")
+        second = make("P", "e7", "e5")
+        current = make("N", "g1", "f3")
+
+        local_session = make_session(
+            FakeGame(initial_moves={current}, history=[(first, None), (second, None)]),
+            opponent="local",
+        )
+        bot_session = make_session(
+            FakeGame(initial_moves={current}, history=[(first, None), (second, None)]),
+            opponent="bot",
+        )
+        online_session = make_session(
+            FakeGame(initial_moves={current}, history=[(first, None), (second, None)]),
+            opponent="online",
+        )
+
+        assert_snapshot_flags(
+            local_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=True,
+            can_undo_fullmove=True,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+        assert_snapshot_flags(
+            bot_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=True,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+        assert_snapshot_flags(
+            online_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+
+class TestLifecycle:
+    def test_restart_game_preserves_existing_config_and_clears_session_owned_state(
+        self,
+    ) -> None:
+        previous = make("P", "e2", "e4")
+        current = make("P", "e7", "e5")
+        fake_game = FakeGame(
+            initial_moves={current}, history=[(previous, None)], outcome="1-0"
+        )
+        config = session_types.SessionConfig(player_side="black", opponent="local")
+        game_session = session.GameSession(config=config, game=fake_game)
+
+        game_session._state.move_text = "Pe7-e5"
+        game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
+        game_session._state.last_error_message = "old error"
+
+        old_game = game_session._game
+        game_session.restart_game()
+
+        assert game_session._config == config
+        assert game_session._game is not old_game
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result.status == "empty"
+        assert game_session._state.last_move_from is None
+        assert game_session._state.last_move_to is None
+        assert game_session._state.last_error_message is None
+        assert game_session._state.last_action_message == "Game restarted."
+        assert game_session._state.outcome_banner is None
+        assert game_session._game.moves_list == []
+        assert game_session._legal_moves == game_session._game.get_moves()
+        assert_snapshot_flags(
+            game_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_restart_game_with_new_config_replaces_config_and_sets_action_message(self) -> None:
+        current = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={current})
+        original = session_types.SessionConfig(player_side="white", opponent="local")
+        replacement = session_types.SessionConfig(player_side="black", opponent="bot")
+        game_session = session.GameSession(config=original, game=fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
+
+        game_session.restart_game(config=replacement)
+
+        assert game_session._config == replacement
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result.status == "empty"
+        assert game_session._state.last_action_message == "Game restarted."
+        assert game_session._legal_moves == game_session._game.get_moves()
+
+
+class TestDraftEditing:
+    def test_feedback_persists_across_draft_editing_until_next_command_attempt(self) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session._state.last_action_message = "Move undone."
+        game_session.set_move_text("Pe")
+        assert game_session.snapshot().last_action_message == "Move undone."
+
+        game_session.clear_move_text()
+        assert game_session.snapshot().last_action_message == "Move undone."
+
+        game_session.click_square(sq("e2"))
+        assert game_session.snapshot().last_action_message == "Move undone."
+
+    def test_set_move_text_empty_reparses_to_empty_snapshot_state(self) -> None:
+        move = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={move})
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("")
+
+        expected = move_parser.parse("", {move})
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result == expected
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="",
+            status=expected.status,
+            canonical_text=expected.canonical_text,
+        )
+        assert snapshot.move_autocompletions == expected.matching_spellings
+        assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_set_move_text_no_match_updates_snapshot_state(self) -> None:
+        move = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={move})
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("zzzz")
+
+        expected = move_parser.parse("zzzz", {move})
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "zzzz"
+        assert game_session._state.parse_result == expected
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="zzzz",
+            status=expected.status,
+            canonical_text=expected.canonical_text,
+        )
+        assert snapshot.move_autocompletions == expected.matching_spellings
+        assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_set_move_text_ambiguous_updates_autocompletions_and_candidates(self) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("Pe")
+
+        expected = move_parser.parse("Pe", legal_moves)
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.parse_result == expected
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe",
+            status=expected.status,
+            canonical_text=expected.canonical_text,
+        )
+        assert snapshot.move_autocompletions == expected.matching_spellings
+        assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_set_move_text_resolved_updates_canonical_text_candidate_and_flags(self) -> None:
+        move = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={move})
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("Pe2-e4")
+
+        expected = move_parser.parse("Pe2-e4", {move})
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.parse_result == expected
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe2-e4",
+            status=expected.status,
+            canonical_text=expected.canonical_text,
+        )
+        assert snapshot.move_autocompletions == expected.matching_spellings
+        assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=True,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_clear_move_text_clears_existing_draft_and_resets_snapshot_state(self) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("Pe")
+        game_session.clear_move_text()
+
+        expected = move_parser.parse("", legal_moves)
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result == expected
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="",
+            status=expected.status,
+            canonical_text=expected.canonical_text,
+        )
+        assert snapshot.move_autocompletions == expected.matching_spellings
+        assert snapshot.candidate_moves == set(expected.source_to_target_highlights)
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+
+class TestClickDrafting:
+    def test_empty_draft_on_movable_source_authors_source_prefix(self) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.click_square(sq("e2"))
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "Pe2"
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe2",
+            status="ambiguous",
+            canonical_text=None,
+        )
+        assert snapshot.candidate_moves == {
+            (sq("e2"), sq("e3")),
+            (sq("e2"), sq("e4")),
+        }
+        assert snapshot.move_autocompletions == [
+            "Pe2-e3",
+            "Pe2-e4",
+            "Pe2e3",
+            "Pe2e4",
+        ]
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_second_click_on_target_refines_to_resolved_move(self) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.click_square(sq("e2"))
+        game_session.click_square(sq("e4"))
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "Pe2-e4"
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe2-e4",
+            status="resolved",
+            canonical_text="Pe2-e4",
+        )
+        assert snapshot.candidate_moves == {(sq("e2"), sq("e4"))}
+        assert snapshot.move_autocompletions == ["Pe2-e4"]
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=True,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_replaces_partial_draft_with_new_source_when_new_square_is_movable(self) -> None:
+        e2e4 = make("P", "e2", "e4")
+        e2e3 = make("P", "e2", "e3")
+        g1f3 = make("N", "g1", "f3")
+        g1h3 = make("N", "g1", "h3")
+        legal_moves = {e2e4, e2e3, g1f3, g1h3}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.click_square(sq("e2"))
+        game_session.click_square(sq("g1"))
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "Ng1"
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Ng1",
+            status="ambiguous",
+            canonical_text=None,
+        )
+        assert snapshot.candidate_moves == {
+            (sq("g1"), sq("f3")),
+            (sq("g1"), sq("h3")),
+        }
+
+    def test_on_no_match_typed_draft_replaces_with_clicked_source_prefix(self) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("zzzz")
+        assert game_session._state.parse_result.status == "no_match"
+
+        game_session.click_square(sq("e2"))
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "Pe2"
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe2",
+            status="ambiguous",
+            canonical_text=None,
+        )
+        assert snapshot.candidate_moves == {
+            (sq("e2"), sq("e3")),
+            (sq("e2"), sq("e4")),
+        }
+
+    def test_game_over_is_inert(self) -> None:
+        move = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={move}, outcome="1-0")
+        game_session = make_session(fake_game)
+
+        game_session._state.move_text = "Pe2-e4"
+        game_session._state.parse_result = move_parser.parse("Pe2-e4", set())
+
+        game_session.click_square(sq("e2"))
+
+        assert game_session._state.move_text == "Pe2-e4"
+        assert game_session._state.parse_result == move_parser.parse("Pe2-e4", set())
+
+    def test_dead_end_click_self_clears_draft(self) -> None:
+        move_a = make("P", "e2", "e4")
+        move_b = make("P", "e2", "e3")
+        legal_moves = {move_a, move_b}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.click_square(sq("e2"))
+        assert game_session._state.move_text == "Pe2"
+
+        game_session.click_square(sq("a1"))
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == ""
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="",
+            status="empty",
+            canonical_text=None,
+        )
+        assert snapshot.candidate_moves == set()
+        assert snapshot.move_autocompletions == []
+        assert snapshot.promotion_prompt_position is None
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+
+class TestPromotionDrafting:
+    def test_click_square_promotion_source_does_not_show_prompt_until_destination_is_chosen(
+        self,
+    ) -> None:
+        q = make("P", "e7", "e8", promotion="Q")
+        r = make("P", "e7", "e8", promotion="R")
+        b = make("P", "e7", "e8", promotion="B")
+        n = make("P", "e7", "e8", promotion="N")
+        legal_moves = {q, r, b, n}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.click_square(sq("e7"))
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "Pe7"
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe7",
+            status="ambiguous",
+            canonical_text=None,
+        )
+        assert snapshot.candidate_moves == {(sq("e7"), sq("e8"))}
+        assert snapshot.promotion_prompt_position is None
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_click_square_promotion_destination_sets_ambiguous_promotion_prefix_and_prompt(
+        self,
+    ) -> None:
+        q = make("P", "e7", "e8", promotion="Q")
+        r = make("P", "e7", "e8", promotion="R")
+        b = make("P", "e7", "e8", promotion="B")
+        n = make("P", "e7", "e8", promotion="N")
+        legal_moves = {q, r, b, n}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.click_square(sq("e7"))
+        game_session.click_square(sq("e8"))
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "Pe7-e8="
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe7-e8=",
+            status="ambiguous",
+            canonical_text=None,
+        )
+        assert snapshot.candidate_moves == {(sq("e7"), sq("e8"))}
+        assert snapshot.move_autocompletions == [
+            "Pe7-e8=B",
+            "Pe7-e8=N",
+            "Pe7-e8=Q",
+            "Pe7-e8=R",
+        ]
+        assert snapshot.promotion_prompt_position == sq("e8")
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=True,
+        )
+
+    def test_select_promotion_piece_resolves_draft_and_clears_prompt(self) -> None:
+        q = make("P", "e7", "e8", promotion="Q")
+        r = make("P", "e7", "e8", promotion="R")
+        b = make("P", "e7", "e8", promotion="B")
+        n = make("P", "e7", "e8", promotion="N")
+        legal_moves = {q, r, b, n}
+        fake_game = FakeGame(initial_moves=legal_moves)
+        game_session = make_session(fake_game)
+
+        game_session.click_square(sq("e7"))
+        game_session.click_square(sq("e8"))
+        game_session.select_promotion_piece("Q")
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "Pe7-e8=Q"
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe7-e8=Q",
+            status="resolved",
+            canonical_text="Pe7-e8=Q",
+        )
+        assert snapshot.candidate_moves == {(sq("e7"), sq("e8"))}
+        assert snapshot.move_autocompletions == ["Pe7-e8=Q"]
+        assert snapshot.promotion_prompt_position is None
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=True,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
+
+    def test_select_promotion_piece_without_active_promotion_prompt_is_inert(self) -> None:
+        move = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={move})
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("Pe2-e4")
+        before_parse = game_session._state.parse_result
+
+        game_session.select_promotion_piece("Q")
+        snapshot = game_session.snapshot()
+
+        assert game_session._state.move_text == "Pe2-e4"
+        assert game_session._state.parse_result == before_parse
+        assert snapshot.move_draft == session_types.MoveDraftView(
+            text="Pe2-e4",
+            status="resolved",
+            canonical_text="Pe2-e4",
+        )
+        assert snapshot.promotion_prompt_position is None
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=True,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+        )
