@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Literal
+from typing import Literal
 
 from src.application.click_draft import click_to_move_text
 from src.application.snapshot import SnapshotInputs, build_snapshot
@@ -16,7 +16,6 @@ from src.engine.game import (
     NoMoveToUndoError,
 )
 
-from .intents import CursorMove, GameUpdate
 from .move_parser import ParseResult, get_canonical, parse
 from .session_types import (
     MoveAttemptResult,
@@ -38,22 +37,12 @@ class _SessionState:
     used to build an immutable render-ready snapshot.
 
     Attributes:
-        cursor (Square | None):
-            The square currently focused by keyboard/controller navigation.
-            `None` means there is no active cursor.
-
         move_text (str):
             The current raw move text being edited by the user, such as
             `"Nf3"` or `"Pe2-e4"` depending on the accepted input format.
 
         parse_result (ParseResult):
             The most recent parse result for `move_text`.
-
-        orientation_override (bool):
-            An optional override for board orientation. `True` means the board
-            should be rendered opposite of the default orientation for the
-            current player, while `False` means it should be rendered in the
-            default orientation.
 
         last_move_from (Square | None):
             The origin square of the most recently applied move, if any. Used
@@ -73,12 +62,8 @@ class _SessionState:
             `None` means there is no active banner message to display.
     """
 
-    cursor: Square | None = (0, 0)
-
     move_text: str = ""
     parse_result: ParseResult = parse("", set())
-
-    orientation_override: bool = False
 
     last_move_from: Square | None = None
     last_move_to: Square | None = None
@@ -95,13 +80,15 @@ class GameSession:
     - session configuration
     - mutable UI-adjacent working state
     - a cached legal-move set for the current position
-    - optional listeners for future publication of session updates
     """
 
     def __init__(self, config: SessionConfig, game: Game | None = None):
-        self._listeners: list[Callable] = []
         self._legal_moves: set[Move] = set()
         self._bootstrap_session(config=config, game=game)
+
+    # ============================================================================
+    # Lifecycle
+    # ============================================================================
 
     def restart_game(self, config: SessionConfig | None = None) -> None:
         """
@@ -123,37 +110,74 @@ class GameSession:
             game=None,
         )
 
-    def subscribe(self, fn: Callable):
+    # ============================================================================
+    # Draft editing
+    # ============================================================================
+
+    def set_move_text(self, text: str) -> None:
+        """Store raw draft text and re-parse it against current legal moves."""
+        self._state.move_text = text
+        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def clear_move_text(self) -> None:
+        """Clear the current draft text and reset parse state to the empty-input result."""
+        self._state.move_text = ""
+        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def click_square(self, square: Square) -> None:
         """
-        Register a listener for future session updates.
+        Rewrite the move draft in response to a board-square click.
 
         Parameters:
-            fn (Callable):
-                Callback to store for later notification.
+            square (Square):
+                The clicked board square.
+
+        Behavior:
+            - does nothing if the game has already concluded
+            - derives the next move-draft text from the current draft,
+              parse result, legal moves, and clicked square
+            - stores that derived text through `set_move_text()`, so the
+              standard parse/update path is reused
 
         Notes:
-            Listeners are currently only stored and not yet invoked. This
-            method exists to support a future publication path when the
-            session begins producing snapshots or explicit update events.
+            This method does not apply a move directly. Clicks only edit the
+            draft text.
         """
-        self._listeners.append(fn)
+        if self._game.outcome != "":
+            return
 
-    def dispatch(self, intent: GameUpdate):
+        self.set_move_text(
+            click_to_move_text(
+                parse_result=self._state.parse_result,
+                legal_moves=self._legal_moves,
+                square=square,
+            )
+        )
+
+    def select_promotion_piece(self, piece: Literal["Q", "R", "B", "N"]) -> None:
         """
-        Handle a UI-originated session intent.
+        Resolve the current promotion draft to a specific promotion piece.
 
         Parameters:
-            intent (GameUpdate):
-                The application intent to process.
+            piece (Literal["Q", "R", "B", "N"]):
+                The promotion piece chosen by the user.
 
-        Notes:
-            This method currently handles cursor movement only. As the session
-            grows, this method can route additional intent types such as move
-            text changes, square selection, board flipping, and move
-            confirmation.
+        Behavior:
+            - scans the current parse result's matching moves for a promotion move
+            whose promotion piece matches the requested value
+            - when a match is found, rewrites the draft to that move's canonical
+            text through ``set_move_text()``
+            - reuses the normal parse/update path so the draft, highlights, and
+            promotion prompt state refresh consistently
         """
-        if isinstance(intent, CursorMove):
-            self._update_cursor(intent)
+        for move in self._state.parse_result.matching_moves:
+            if get_promotion(move) == piece:
+                self.set_move_text(get_canonical(move))
+                return
+
+    # ============================================================================
+    # Game commands
+    # ============================================================================
 
     def confirm_move_draft(self, offer_draw: bool = False) -> MoveAttemptResult:
         """
@@ -304,6 +328,10 @@ class GameSession:
             )
             return ResignResult(True, "resigned", resign_message)
 
+    # ============================================================================
+    # Read model
+    # ============================================================================
+
     def snapshot(self) -> Snapshot:
         """
         Build an immutable render-ready view of the current session.
@@ -317,9 +345,6 @@ class GameSession:
         return build_snapshot(
             self._game,
             SnapshotInputs(
-                player_side=self._config.player_side,
-                orientation_override=self._state.orientation_override,
-                cursor=self._state.cursor,
                 move_text=self._state.move_text,
                 parse_result=self._state.parse_result,
                 last_move_from=self._state.last_move_from,
@@ -329,69 +354,9 @@ class GameSession:
             ),
         )
 
-    def set_move_text(self, text: str) -> None:
-        """Store raw draft text and re-parse it against current legal moves."""
-        self._state.move_text = text
-        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
-
-    def clear_move_text(self) -> None:
-        """Clear the current draft text and reset parse state to the empty-input result."""
-        self._state.move_text = ""
-        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
-
-    def click_square(self, square: Square) -> None:
-        """
-        Rewrite the move draft in response to a board-square click.
-
-        Parameters:
-            square (Square):
-                The clicked board square.
-
-        Behavior:
-            - updates the session cursor to the clicked square
-            - does nothing if the game has already concluded
-            - derives the next move-draft text from the current draft,
-              parse result, legal moves, and clicked square
-            - stores that derived text through `set_move_text()`, so the
-              standard parse/update path is reused
-
-        Notes:
-            This method does not apply a move directly. Clicks only edit the
-            draft text.
-        """
-        self._state.cursor = square
-
-        if self._game.outcome != "":
-            return
-
-        self.set_move_text(
-            click_to_move_text(
-                parse_result=self._state.parse_result,
-                legal_moves=self._legal_moves,
-                square=square,
-            )
-        )
-
-    def select_promotion_piece(self, piece: Literal["Q", "R", "B", "N"]) -> None:
-        """
-        Resolve the current promotion draft to a specific promotion piece.
-
-        Parameters:
-            piece (Literal["Q", "R", "B", "N"]):
-                The promotion piece chosen by the user.
-
-        Behavior:
-            - scans the current parse result's matching moves for a promotion move
-            whose promotion piece matches the requested value
-            - when a match is found, rewrites the draft to that move's canonical
-            text through ``set_move_text()``
-            - reuses the normal parse/update path so the draft, highlights, and
-            promotion prompt state refresh consistently
-        """
-        for move in self._state.parse_result.matching_moves:
-            if get_promotion(move) == piece:
-                self.set_move_text(get_canonical(move))
-                return
+    # ============================================================================
+    # Private helpers
+    # ============================================================================
 
     def _bootstrap_session(
         self,
@@ -402,13 +367,6 @@ class GameSession:
         self._game = Game() if game is None else game
         self._state = _SessionState()
         self._refresh_position_state(clear_move_text=False)
-
-    def _update_cursor(self, update: CursorMove):
-        r, f = self._state.cursor if self._state.cursor is not None else (0, 0)
-        self._state.cursor = (
-            max(0, min(7, r + update.dy)),
-            max(0, min(7, f + update.dx)),
-        )
 
     def _apply_resolved_move(
         self,
