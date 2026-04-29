@@ -682,6 +682,7 @@ def test_snapshot_projects_current_render_state() -> None:
     )
     assert snapshot.move_autocompletions == []
     assert snapshot.candidate_moves == set()
+    assert snapshot.promotion_prompt_position is None
 
     assert snapshot.check_square == sq("e8")
     assert snapshot.is_checked is True
@@ -716,6 +717,7 @@ def test_snapshot_uses_parser_matches_for_candidates_and_autocompletions() -> No
         "Pe2e3",
         "Pe2e4",
     ]
+    assert snapshot.promotion_prompt_position is None
 
 
 def test_snapshot_flipped_reflects_player_side_and_orientation_override() -> None:
@@ -1033,3 +1035,139 @@ def test_click_square_game_over_only_updates_cursor_and_preserves_draft() -> Non
     assert game_session._state.cursor == sq("e2")
     assert game_session._state.move_text == "Pe2-e4"
     assert game_session._state.parse_result == move_parser.parse("Pe2-e4", set())
+
+
+def test_click_square_dead_end_click_self_clears_draft() -> None:
+    move_a = make("P", "e2", "e4")
+    move_b = make("P", "e2", "e3")
+    legal_moves = {move_a, move_b}
+    fake_game = FakeGame(initial_moves=legal_moves)
+    game_session = make_session(fake_game)
+
+    game_session.click_square(sq("e2"))
+    assert game_session._state.move_text == "Pe2"
+
+    game_session.click_square(sq("a1"))
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.cursor == sq("a1")
+    assert game_session._state.move_text == ""
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="",
+        status="empty",
+        canonical_text=None,
+    )
+    assert snapshot.candidate_moves == set()
+    assert snapshot.move_autocompletions == []
+    assert snapshot.promotion_prompt_position is None
+
+
+def test_click_square_promotion_source_does_not_show_prompt_until_destination_is_chosen() -> (
+    None
+):
+    q = make("P", "e7", "e8", promotion="Q")
+    r = make("P", "e7", "e8", promotion="R")
+    b = make("P", "e7", "e8", promotion="B")
+    n = make("P", "e7", "e8", promotion="N")
+    legal_moves = {q, r, b, n}
+    fake_game = FakeGame(initial_moves=legal_moves)
+    game_session = make_session(fake_game)
+
+    game_session.click_square(sq("e7"))
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.move_text == "Pe7"
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="Pe7",
+        status="ambiguous",
+        canonical_text=None,
+    )
+    assert snapshot.candidate_moves == {
+        (sq("e7"), sq("e8")),
+    }
+    assert snapshot.promotion_prompt_position is None
+
+
+def test_click_square_promotion_destination_sets_ambiguous_promotion_prefix_and_prompt() -> (
+    None
+):
+    q = make("P", "e7", "e8", promotion="Q")
+    r = make("P", "e7", "e8", promotion="R")
+    b = make("P", "e7", "e8", promotion="B")
+    n = make("P", "e7", "e8", promotion="N")
+    legal_moves = {q, r, b, n}
+    fake_game = FakeGame(initial_moves=legal_moves)
+    game_session = make_session(fake_game)
+
+    game_session.click_square(sq("e7"))
+    game_session.click_square(sq("e8"))
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.cursor == sq("e8")
+    assert game_session._state.move_text == "Pe7-e8="
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="Pe7-e8=",
+        status="ambiguous",
+        canonical_text=None,
+    )
+    assert snapshot.candidate_moves == {
+        (sq("e7"), sq("e8")),
+    }
+    assert snapshot.move_autocompletions == [
+        "Pe7-e8=B",
+        "Pe7-e8=N",
+        "Pe7-e8=Q",
+        "Pe7-e8=R",
+    ]
+    assert snapshot.promotion_prompt_position == sq("e8")
+
+
+def test_select_promotion_piece_resolves_draft_and_clears_prompt() -> None:
+    q = make("P", "e7", "e8", promotion="Q")
+    r = make("P", "e7", "e8", promotion="R")
+    b = make("P", "e7", "e8", promotion="B")
+    n = make("P", "e7", "e8", promotion="N")
+    legal_moves = {q, r, b, n}
+    fake_game = FakeGame(initial_moves=legal_moves)
+    game_session = make_session(fake_game)
+
+    game_session.click_square(sq("e7"))
+    game_session.click_square(sq("e8"))
+    game_session.select_promotion_piece("Q")
+
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.move_text == "Pe7-e8=Q"
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="Pe7-e8=Q",
+        status="resolved",
+        canonical_text="Pe7-e8=Q",
+    )
+    assert snapshot.candidate_moves == {
+        (sq("e7"), sq("e8")),
+    }
+    assert snapshot.move_autocompletions == [
+        "Pe7-e8=Q",
+    ]
+    assert snapshot.promotion_prompt_position is None
+
+
+def test_select_promotion_piece_without_active_promotion_prompt_is_inert() -> None:
+    move = make("P", "e2", "e4")
+    fake_game = FakeGame(initial_moves={move})
+    game_session = make_session(fake_game)
+
+    game_session.set_move_text("Pe2-e4")
+    before_parse = game_session._state.parse_result
+
+    game_session.select_promotion_piece("Q")
+    snapshot = game_session.snapshot()
+
+    assert game_session._state.move_text == "Pe2-e4"
+    assert game_session._state.parse_result == before_parse
+    assert snapshot.move_draft == session_types.MoveDraftView(
+        text="Pe2-e4",
+        status="resolved",
+        canonical_text="Pe2-e4",
+    )
+    assert snapshot.promotion_prompt_position is None
