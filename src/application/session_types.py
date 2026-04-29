@@ -4,9 +4,21 @@ from typing import Literal
 from .move_parser import ParseStatus
 
 
+Square = tuple[int, int]
 PlayerSide = Literal["white", "black"]
 OpponentType = Literal["local", "bot"]
-Square = tuple[int, int]
+MoveAttemptStatus = Literal[
+    "applied",
+    "empty",
+    "no_match",
+    "ambiguous",
+    "illegal",
+    "game_over",
+    "error",
+]
+UndoStatus = Literal["undone", "unavailable", "error"]
+UndoScope = Literal["halfmove", "fullmove"]
+ResignStatus = Literal["resigned", "game_over", "error"]
 
 
 @dataclass(frozen=True)
@@ -90,6 +102,9 @@ class Snapshot:
             A list of autocomplete-ready move strings that share the same prefix as
             the player's inputted move string.
 
+        promotion_prompt_position (Square | None):
+            The destination square of the promoting pawn. Used to anchor the promotion popup.
+
         is_checked (bool):
             Whether the current side is checked by the opponent.
 
@@ -119,9 +134,31 @@ class Snapshot:
     move_list: list[MoveListItem]
     move_draft: MoveDraftView
     move_autocompletions: list[str]
+    promotion_prompt_position: Square | None
 
     check_square: Square | None
     is_checked: bool
 
     outcome_banner: str | None
     last_error_message: str | None
+
+
+@dataclass(frozen=True)
+class MoveAttemptResult:
+    ok: bool
+    status: MoveAttemptStatus
+    message: str | None
+
+
+@dataclass(frozen=True)
+class UndoResult:
+    ok: bool
+    status: UndoStatus
+    message: str | None
+
+
+@dataclass(frozen=True)
+class ResignResult:
+    ok: bool
+    status: ResignStatus
+    message: str | None

@@ -1,51 +1,32 @@
 from dataclasses import dataclass
 from typing import Callable, Literal
 
-from src.engine.board import Piece, get_name, is_white
+from src.application.click_draft import click_to_move_text
+from src.application.snapshot import SnapshotInputs, build_snapshot
+from src.engine.moves import (
+    Move,
+    get_final_position,
+    get_initial_position,
+    get_promotion,
+)
 from src.engine.game import (
     Game,
     GameConcludedError,
     IllegalMoveError,
     NoMoveToUndoError,
 )
-from src.engine.moves import Move, get_final_position, get_initial_position
+
 from .intents import CursorMove, GameUpdate
-from .session_types import MoveDraftView, MoveListItem, SessionConfig, Snapshot, Square
 from .move_parser import ParseResult, get_canonical, parse
-
-MoveAttemptStatus = Literal[
-    "applied",
-    "empty",
-    "no_match",
-    "ambiguous",
-    "illegal",
-    "game_over",
-    "error",
-]
-UndoStatus = Literal["undone", "unavailable", "error"]
-UndoScope = Literal["halfmove", "fullmove"]
-ResignStatus = Literal["resigned", "game_over", "error"]
-
-
-@dataclass(frozen=True)
-class MoveAttemptResult:
-    ok: bool
-    status: MoveAttemptStatus
-    message: str | None
-
-
-@dataclass(frozen=True)
-class UndoResult:
-    ok: bool
-    status: UndoStatus
-    message: str | None
-
-
-@dataclass(frozen=True)
-class ResignResult:
-    ok: bool
-    status: ResignStatus
-    message: str | None
+from .session_types import (
+    MoveAttemptResult,
+    ResignResult,
+    SessionConfig,
+    Snapshot,
+    Square,
+    UndoResult,
+    UndoScope,
+)
 
 
 @dataclass
@@ -333,28 +314,19 @@ class GameSession:
                 turn information, highlights, move history, draft-input state,
                 check state, and user-facing feedback messages.
         """
-        parse_result = self._state.parse_result
-        check_square = self._game.checked_king_position()
-
-        return Snapshot(
-            board_glyphs=self._get_board_glyphs(),
-            side_to_move="white" if self._game.is_white_turn else "black",
-            flipped=self._is_flipped(),
-            cursor=self._state.cursor,
-            candidate_moves=set(parse_result.source_to_target_highlights),
-            last_move_from=self._state.last_move_from,
-            last_move_to=self._state.last_move_to,
-            move_list=self._build_move_list(),
-            move_draft=MoveDraftView(
-                text=self._state.move_text,
-                status=parse_result.status,
-                canonical_text=parse_result.canonical_text,
+        return build_snapshot(
+            self._game,
+            SnapshotInputs(
+                player_side=self._config.player_side,
+                orientation_override=self._state.orientation_override,
+                cursor=self._state.cursor,
+                move_text=self._state.move_text,
+                parse_result=self._state.parse_result,
+                last_move_from=self._state.last_move_from,
+                last_move_to=self._state.last_move_to,
+                outcome_banner=self._state.outcome_banner,
+                last_error_message=self._state.last_error_message,
             ),
-            move_autocompletions=parse_result.matching_spellings,
-            check_square=check_square,
-            is_checked=check_square is not None,
-            outcome_banner=self._state.outcome_banner,
-            last_error_message=self._state.last_error_message,
         )
 
     def set_move_text(self, text: str) -> None:
@@ -365,8 +337,61 @@ class GameSession:
     def clear_move_text(self) -> None:
         """Clear the current draft text and reset parse state to the empty-input result."""
         self._state.move_text = ""
-        self._clear_transient_selection_state()
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def click_square(self, square: Square) -> None:
+        """
+        Rewrite the move draft in response to a board-square click.
+
+        Parameters:
+            square (Square):
+                The clicked board square.
+
+        Behavior:
+            - updates the session cursor to the clicked square
+            - does nothing if the game has already concluded
+            - derives the next move-draft text from the current draft,
+              parse result, legal moves, and clicked square
+            - stores that derived text through `set_move_text()`, so the
+              standard parse/update path is reused
+
+        Notes:
+            This method does not apply a move directly. Clicks only edit the
+            draft text.
+        """
+        self._state.cursor = square
+
+        if self._game.outcome != "":
+            return
+
+        self.set_move_text(
+            click_to_move_text(
+                parse_result=self._state.parse_result,
+                legal_moves=self._legal_moves,
+                square=square,
+            )
+        )
+
+    def select_promotion_piece(self, piece: Literal["Q", "R", "B", "N"]) -> None:
+        """
+        Resolve the current promotion draft to a specific promotion piece.
+
+        Parameters:
+            piece (Literal["Q", "R", "B", "N"]):
+                The promotion piece chosen by the user.
+
+        Behavior:
+            - scans the current parse result's matching moves for a promotion move
+            whose promotion piece matches the requested value
+            - when a match is found, rewrites the draft to that move's canonical
+            text through ``set_move_text()``
+            - reuses the normal parse/update path so the draft, highlights, and
+            promotion prompt state refresh consistently
+        """
+        for move in self._state.parse_result.matching_moves:
+            if get_promotion(move) == piece:
+                self.set_move_text(get_canonical(move))
+                return
 
     def _bootstrap_session(
         self,
@@ -432,41 +457,3 @@ class GameSession:
             self._state.move_text = ""
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
-
-    def _is_flipped(self) -> bool:
-        default_flipped = self._config.player_side == "black"
-        if self._state.orientation_override:
-            return not default_flipped
-        return default_flipped
-
-    def _build_move_list(self) -> list[MoveListItem]:
-        items: list[MoveListItem] = []
-
-        for ply, (move, _) in enumerate(self._game.moves_list, start=1):
-            items.append(
-                MoveListItem(
-                    ply=ply,
-                    notation=get_canonical(move),
-                )
-            )
-
-        return items
-
-    def _get_board_glyphs(self) -> list[list[str]]:
-        def _piece_to_glyph(piece: Piece | None) -> str:
-            if piece is None:
-                return "."
-            name = get_name(piece)
-            return name if is_white(piece) else name.lower()
-
-        return [
-            [
-                _piece_to_glyph(self._game.board.piece_at((file, rank)))
-                for file in range(8)
-            ]
-            for rank in range(7, -1, -1)
-        ]
-
-    def _clear_transient_selection_state(self) -> None:
-        # No dedicated click-selection state exists yet.
-        pass
