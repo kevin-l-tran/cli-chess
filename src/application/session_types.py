@@ -113,6 +113,11 @@ class Snapshot:
         last_error_message (str | None):
             Most recent user-facing action failure message, such as an illegal
             move reason. None when there is no active error to show.
+
+        last_action_message (str | None):
+            The most recent user-facing action message produced by the
+            session, such as an applied-move or undone-move message.
+            `None` means there is no active action to display.
     """
 
     board_glyphs: list[list[str]]
@@ -132,6 +137,7 @@ class Snapshot:
 
     outcome_banner: str | None
     last_error_message: str | None
+    last_action_message: str | None
 
 
 @dataclass(frozen=True)

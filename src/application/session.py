@@ -57,6 +57,11 @@ class _SessionState:
             session, such as an illegal-move or game-concluded message.
             `None` means there is no active error to display.
 
+        last_action_message (str | None):
+            The most recent user-facing action message produced by the
+            session, such as an applied-move or undone-move message.
+            `None` means there is no active action to display.
+
         outcome_banner (str | None):
             A prominent message used to display game conclusion messages.
             `None` means there is no active banner message to display.
@@ -67,7 +72,9 @@ class _SessionState:
 
     last_move_from: Square | None = None
     last_move_to: Square | None = None
+
     last_error_message: str | None = None
+    last_action_message: str | None = None
     outcome_banner: str | None = None
 
 
@@ -109,6 +116,7 @@ class GameSession:
             config=self._config if config is None else config,
             game=None,
         )
+        self._set_action_message("Game restarted.")
 
     # ============================================================================
     # Draft editing
@@ -212,19 +220,19 @@ class GameSession:
 
         if self._game.outcome != "":
             self._refresh_position_state(clear_move_text=False)
-            self._state.last_error_message = "Game has concluded."
+            self._set_error_message("Game has concluded.")
             return MoveAttemptResult(False, "game_over", "Game has concluded.")
 
         if parse_result.status == "empty":
-            self._state.last_error_message = "Enter a move first."
+            self._set_error_message("Enter a move first.")
             return MoveAttemptResult(False, "empty", "Enter a move first.")
 
         if parse_result.status == "ambiguous":
-            self._state.last_error_message = "Move is ambiguous."
+            self._set_error_message("Move is ambiguous.")
             return MoveAttemptResult(False, "ambiguous", "Move is ambiguous.")
 
         if parse_result.status == "no_match":
-            self._state.last_error_message = "No legal move matches the current draft."
+            self._set_error_message("No legal move matches the current draft.")
             return MoveAttemptResult(
                 False,
                 "no_match",
@@ -233,7 +241,7 @@ class GameSession:
 
         move = parse_result.resolved_move
         if move is None:
-            self._state.last_error_message = "Could not resolve move."
+            self._set_error_message("Could not resolve move.")
             return MoveAttemptResult(False, "error", "Could not resolve move.")
 
         return self._apply_resolved_move(move, offer_draw=offer_draw)
@@ -277,15 +285,15 @@ class GameSession:
                 success_message = "Move undone."
         except NoMoveToUndoError:
             self._refresh_position_state(clear_move_text=False)
-            self._state.last_error_message = "No move to undo."
+            self._set_error_message("No move to undo.")
             return UndoResult(False, "unavailable", "No move to undo.")
         except Exception:
             self._refresh_position_state(clear_move_text=False)
-            self._state.last_error_message = "Could not undo move."
+            self._set_error_message("Could not undo move.")
             return UndoResult(False, "error", "Could not undo move.")
         else:
             self._refresh_position_state(clear_move_text=True)
-            self._state.last_error_message = None
+            self._set_action_message(success_message)
             return UndoResult(True, "undone", success_message)
 
     def resign(self) -> ResignResult:
@@ -313,19 +321,19 @@ class GameSession:
             self._game.resign()
         except GameConcludedError:
             self._refresh_position_state(clear_move_text=False)
-            self._state.last_error_message = "Game has concluded."
+            self._set_error_message("Game has concluded.")
             return ResignResult(False, "game_over", "Game has concluded.")
         except Exception:
             self._refresh_position_state(clear_move_text=False)
-            self._state.last_error_message = "Could not resign game."
+            self._set_error_message("Could not resign game.")
             return ResignResult(False, "error", "Could not resign game.")
         else:
             self._refresh_position_state(clear_move_text=True)
-            self._state.last_error_message = None
 
             resign_message = (
                 "White resigns." if self._game.outcome == "0-1" else "Black resigns."
             )
+            self._set_action_message(resign_message)
             return ResignResult(True, "resigned", resign_message)
 
     # ============================================================================
@@ -351,6 +359,7 @@ class GameSession:
                 last_move_to=self._state.last_move_to,
                 outcome_banner=self._state.outcome_banner,
                 last_error_message=self._state.last_error_message,
+                last_action_message=self._state.last_action_message,
             ),
         )
 
@@ -376,19 +385,20 @@ class GameSession:
         try:
             self._game.make_move(move, draw_offered=offer_draw)
         except IllegalMoveError:
-            self._state.last_error_message = "Could not apply illegal move."
+            self._set_error_message("Could not apply illegal move.")
             return MoveAttemptResult(False, "illegal", "Could not apply illegal move.")
         except GameConcludedError:
             self._refresh_position_state(clear_move_text=False)
-            self._state.last_error_message = "Game has concluded."
+            self._set_error_message("Game has concluded.")
             return MoveAttemptResult(False, "game_over", "Game has concluded.")
         except Exception:
-            self._state.last_error_message = "Could not apply move."
+            self._set_error_message("Could not apply move.")
             return MoveAttemptResult(False, "error", "Could not apply move.")
         else:
             self._refresh_position_state(clear_move_text=True)
-            self._state.last_error_message = None
-            return MoveAttemptResult(True, "applied", None)
+            action_message = f"Played {get_canonical(move)}."
+            self._set_action_message(action_message)
+            return MoveAttemptResult(True, "applied", action_message)
 
     def _refresh_position_state(self, *, clear_move_text: bool):
         if self._game.outcome != "":
@@ -415,3 +425,11 @@ class GameSession:
             self._state.move_text = ""
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def _set_action_message(self, message: str | None) -> None:
+        self._state.last_action_message = message
+        self._state.last_error_message = None
+
+    def _set_error_message(self, message: str | None) -> None:
+        self._state.last_error_message = message
+        self._state.last_action_message = None
