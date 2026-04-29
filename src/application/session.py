@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from src.application.click_draft import click_to_move_text
@@ -68,7 +68,7 @@ class _SessionState:
     """
 
     move_text: str = ""
-    parse_result: ParseResult = parse("", set())
+    parse_result: ParseResult = field(default_factory=lambda: parse("", set()))
 
     last_move_from: Square | None = None
     last_move_to: Square | None = None
@@ -248,14 +248,20 @@ class GameSession:
 
     def undo(self, scope: UndoScope | None = None) -> UndoResult:
         """
-        Attempt to undo the most recent move through the session controller.
+        Attempt to undo recent move history through the session controller.
 
         Parameters:
             scope (UndoScope | None):
                 Which undo policy to apply. `"halfmove"` undoes one ply and
-                `"fullmove"` undoes two plies as a turn pair. If `None`, the
-                session chooses a default based on the configured opponent:
-                `"halfmove"` for local play and `"fullmove"` for bot play.
+                `"fullmove"` undoes two plies as a turn pair.
+
+                When `None`, the session chooses a default based on the configured
+                opponent:
+                - `"halfmove"` for local play
+                - `"fullmove"` for bot play
+
+                Online play does not permit undo through this controller; in that
+                case the method fails with an unavailable result regardless of scope.
 
         Returns:
             UndoResult:
@@ -268,11 +274,18 @@ class GameSession:
             - clears any active error message
 
         Failure behavior:
+            - returns `"unavailable"` when undo is not allowed for the current
+            session mode or when there is no move to undo
             - leaves the current move-text draft intact
             - refreshes session-owned position state
             - stores a user-facing failure message
             - returns a stable failure result
         """
+        if self._config.opponent == "online":
+            self._refresh_position_state(clear_move_text=False)
+            self._set_error_message("Can't undo in an online game.")
+            return UndoResult(False, "unavailable", "Can't undo in an online game.")
+
         if scope is None:
             scope = "fullmove" if self._config.opponent == "bot" else "halfmove"
 
@@ -346,9 +359,10 @@ class GameSession:
 
         Returns:
             Snapshot:
-                A presentation-friendly snapshot containing board glyphs,
-                turn information, highlights, move history, draft-input state,
-                check state, and user-facing feedback messages.
+                A presentation-friendly snapshot containing board glyphs, turn
+                information, highlights, move history, draft-input state, check state,
+                opponent-sensitive action availability flags, and user-facing feedback
+                messages.
         """
         return build_snapshot(
             self._game,
@@ -360,6 +374,7 @@ class GameSession:
                 outcome_banner=self._state.outcome_banner,
                 last_error_message=self._state.last_error_message,
                 last_action_message=self._state.last_action_message,
+                opponent_type=self._config.opponent,
             ),
         )
 

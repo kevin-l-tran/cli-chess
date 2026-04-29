@@ -5,7 +5,7 @@ from src.engine.game import Game
 from src.engine.moves import get_final_position, get_initial_position, get_promotion
 
 from .move_parser import ParseResult, Square, get_canonical
-from .session_types import MoveDraftView, MoveListItem, Snapshot
+from .session_types import MoveDraftView, MoveListItem, OpponentType, Snapshot
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,7 @@ class SnapshotInputs:
     outcome_banner: str | None
     last_error_message: str | None
     last_action_message: str | None
+    opponent_type: OpponentType
 
 
 def build_snapshot(
@@ -34,27 +35,39 @@ def build_snapshot(
             history, and check information.
 
         inputs (SnapshotInputs):
-            The session-owned UI state needed to project the current view,
-            including move draft, parse result, last-move highlights, and
-            feedback messages.
+            Session-owned UI state needed to project the current view, including
+            move draft state, parser results, last-move highlights, user-facing
+            feedback messages, outcome state, and opponent type.
 
     Returns:
         Snapshot:
             An immutable view-model containing board glyphs, turn state,
             candidate-move highlights, move history, draft/autocompletion state,
-            promotion-popup anchor state, check state, and user-facing banners and messages.
+            promotion-picker anchor state, check state, opponent-sensitive undo
+            availability flags, and user-facing banners and messages.
 
     Behavior:
         - converts the current board into render glyphs
         - projects parser-derived candidate moves, canonical draft state, and
         autocompletions into the snapshot
         - includes the last applied move highlights and move list
-        - derives the promotion prompt anchor square from the current parse
-        result when the remaining ambiguity corresponds to a promotion choice
-        - includes current check, outcome, and error-display state
+        - derives the promotion prompt anchor square when the remaining ambiguity
+        corresponds only to a promotion-piece choice
+        - derives UI capability flags such as move confirmation, undo availability,
+        resignation availability, game-over state, and promotion-pending state
+        - includes current check, outcome, and user-facing message state
     """
     parse_result = inputs.parse_result
     check_square = game.checked_king_position()
+    move_list = _build_move_list(game)
+    promotion_prompt_position = _get_promotion_prompt_square(parse_result)
+
+    is_game_over = inputs.outcome_banner is not None
+    can_confirm_move = parse_result.status == "resolved" and not is_game_over
+    can_resign = not is_game_over
+    is_promotion_pending = promotion_prompt_position is not None
+    can_undo_fullmove = len(move_list) > 1 and inputs.opponent_type != "online"
+    can_undo_halfmove = len(move_list) > 0 and inputs.opponent_type == "local"
 
     return Snapshot(
         board_glyphs=_build_board_glyphs(game),
@@ -62,16 +75,22 @@ def build_snapshot(
         candidate_moves=set(parse_result.source_to_target_highlights),
         last_move_from=inputs.last_move_from,
         last_move_to=inputs.last_move_to,
-        move_list=_build_move_list(game),
+        move_list=move_list,
         move_draft=MoveDraftView(
             text=inputs.move_text,
             status=parse_result.status,
             canonical_text=parse_result.canonical_text,
         ),
         move_autocompletions=parse_result.matching_spellings,
-        promotion_prompt_position=_get_promotion_prompt_square(parse_result),
+        promotion_prompt_position=promotion_prompt_position,
         check_square=check_square,
-        is_opponent_checked=check_square is not None,
+        is_player_checked=check_square is not None,
+        is_game_over=is_game_over,
+        can_confirm_move=can_confirm_move,
+        can_resign=can_resign,
+        is_promotion_pending=is_promotion_pending,
+        can_undo_fullmove=can_undo_fullmove,
+        can_undo_halfmove=can_undo_halfmove,
         outcome_banner=inputs.outcome_banner,
         last_error_message=inputs.last_error_message,
         last_action_message=inputs.last_action_message,
