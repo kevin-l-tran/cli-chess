@@ -57,6 +57,11 @@ class _SessionState:
             session, such as an illegal-move or game-concluded message.
             `None` means there is no active error to display.
 
+        last_action_message (str | None):
+            The most recent user-facing action message produced by the
+            session, such as an applied-move or undone-move message.
+            `None` means there is no active action to display.
+
         outcome_banner (str | None):
             A prominent message used to display game conclusion messages.
             `None` means there is no active banner message to display.
@@ -67,7 +72,9 @@ class _SessionState:
 
     last_move_from: Square | None = None
     last_move_to: Square | None = None
+
     last_error_message: str | None = None
+    last_action_message: str | None = None
     outcome_banner: str | None = None
 
 
@@ -415,3 +422,15 @@ class GameSession:
             self._state.move_text = ""
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def _set_action_message(self, message: str | None) -> None:
+        self._state.last_action_message = message
+        self._state.last_error_message = None
+
+    def _set_error_message(self, message: str | None) -> None:
+        self._state.last_error_message = message
+        self._state.last_action_message = None
+
+    def _clear_feedback(self) -> None:
+        self._state.last_action_message = None
+        self._state.last_error_message = None
