@@ -393,6 +393,10 @@ class GameSession:
                 self.set_move_text(get_canonical(move))
                 return
 
+    def toggle_orientation(self) -> None:
+        """Invert the controller-owned board orientation override."""
+        self._state.orientation_override = not self._state.orientation_override
+
     def _bootstrap_session(
         self,
         config: SessionConfig,
