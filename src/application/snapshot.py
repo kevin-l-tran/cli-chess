@@ -35,14 +35,14 @@ def build_snapshot(
 
         inputs (SnapshotInputs):
             The session-owned UI state needed to project the current view,
-            including move draft, parse result, last-move highlights, and 
+            including move draft, parse result, last-move highlights, and
             feedback messages.
 
     Returns:
         Snapshot:
-            An immutable view-model containing board glyphs, turn state, 
-            candidate-move highlights, move history, draft/autocompletion state, 
-            promotion-popup anchor state, check state, and user-facing banners or errors.
+            An immutable view-model containing board glyphs, turn state,
+            candidate-move highlights, move history, draft/autocompletion state,
+            promotion-popup anchor state, check state, and user-facing banners and messages.
 
     Behavior:
         - converts the current board into render glyphs
