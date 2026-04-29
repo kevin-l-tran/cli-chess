@@ -433,7 +433,3 @@ class GameSession:
     def _set_error_message(self, message: str | None) -> None:
         self._state.last_error_message = message
         self._state.last_action_message = None
-
-    def _clear_feedback(self) -> None:
-        self._state.last_action_message = None
-        self._state.last_error_message = None
