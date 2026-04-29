@@ -358,6 +358,7 @@ class GameSession:
                 last_move_to=self._state.last_move_to,
                 outcome_banner=self._state.outcome_banner,
                 last_error_message=self._state.last_error_message,
+                last_action_message=self._state.last_action_message,
             ),
         )
 

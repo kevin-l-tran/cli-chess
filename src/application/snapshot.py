@@ -18,6 +18,7 @@ class SnapshotInputs:
 
     outcome_banner: str | None
     last_error_message: str | None
+    last_action_message: str | None
 
 
 def build_snapshot(
@@ -73,6 +74,7 @@ def build_snapshot(
         is_checked=check_square is not None,
         outcome_banner=inputs.outcome_banner,
         last_error_message=inputs.last_error_message,
+        last_action_message=inputs.last_action_message,
     )
 
 
