@@ -133,7 +133,14 @@ class Snapshot:
     promotion_prompt_position: Square | None
 
     check_square: Square | None
-    is_checked: bool
+
+    is_opponent_checked: bool
+    is_game_over: bool
+    can_confirm_move: bool
+    can_undo: bool
+    can_resign: bool
+    is_promotion_pending: bool
+    default_undo_scope: UndoScope
 
     outcome_banner: str | None
     last_error_message: str | None

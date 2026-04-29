@@ -648,7 +648,7 @@ def test_snapshot_projects_current_render_state() -> None:
     assert snapshot.promotion_prompt_position is None
 
     assert snapshot.check_square == sq("e8")
-    assert snapshot.is_checked is True
+    assert snapshot.is_opponent_checked is True
     assert snapshot.outcome_banner is None
     assert snapshot.last_error_message is None
     assert snapshot.last_action_message == "Move undone."

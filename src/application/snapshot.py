@@ -71,7 +71,7 @@ def build_snapshot(
         move_autocompletions=parse_result.matching_spellings,
         promotion_prompt_position=_get_promotion_prompt_square(parse_result),
         check_square=check_square,
-        is_checked=check_square is not None,
+        is_opponent_checked=check_square is not None,
         outcome_banner=inputs.outcome_banner,
         last_error_message=inputs.last_error_message,
         last_action_message=inputs.last_action_message,
