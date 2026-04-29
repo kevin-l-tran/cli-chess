@@ -1,9 +1,14 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Literal
 
 from src.application.click_draft import click_to_move_text
 from src.application.snapshot import SnapshotInputs, build_snapshot
-from src.engine.moves import Move, get_final_position, get_initial_position
+from src.engine.moves import (
+    Move,
+    get_final_position,
+    get_initial_position,
+    get_promotion,
+)
 from src.engine.game import (
     Game,
     GameConcludedError,
@@ -12,7 +17,7 @@ from src.engine.game import (
 )
 
 from .intents import CursorMove, GameUpdate
-from .move_parser import ParseResult, parse
+from .move_parser import ParseResult, get_canonical, parse
 from .session_types import (
     MoveAttemptResult,
     ResignResult,
@@ -361,12 +366,17 @@ class GameSession:
 
         self.set_move_text(
             click_to_move_text(
-                current_text=self._state.move_text,
                 parse_result=self._state.parse_result,
                 legal_moves=self._legal_moves,
                 square=square,
             )
         )
+
+    def select_promotion_piece(self, piece: Literal["Q", "R", "B", "N"]) -> None:
+        for move in self._state.parse_result.matching_moves:
+            if get_promotion(move) == piece:
+                self.set_move_text(get_canonical(move))
+                return
 
     def _bootstrap_session(
         self,
