@@ -61,6 +61,7 @@ class _SessionState:
             A prominent message used to display game conclusion messages.
             `None` means there is no active banner message to display.
     """
+
     move_text: str = ""
     parse_result: ParseResult = parse("", set())
 
@@ -85,6 +86,10 @@ class GameSession:
         self._legal_moves: set[Move] = set()
         self._bootstrap_session(config=config, game=game)
 
+    # ============================================================================
+    # Lifecycle
+    # ============================================================================
+
     def restart_game(self, config: SessionConfig | None = None) -> None:
         """
         Start a fresh game session using the current or supplied configuration.
@@ -104,6 +109,75 @@ class GameSession:
             config=self._config if config is None else config,
             game=None,
         )
+
+    # ============================================================================
+    # Draft editing
+    # ============================================================================
+
+    def set_move_text(self, text: str) -> None:
+        """Store raw draft text and re-parse it against current legal moves."""
+        self._state.move_text = text
+        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def clear_move_text(self) -> None:
+        """Clear the current draft text and reset parse state to the empty-input result."""
+        self._state.move_text = ""
+        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def click_square(self, square: Square) -> None:
+        """
+        Rewrite the move draft in response to a board-square click.
+
+        Parameters:
+            square (Square):
+                The clicked board square.
+
+        Behavior:
+            - does nothing if the game has already concluded
+            - derives the next move-draft text from the current draft,
+              parse result, legal moves, and clicked square
+            - stores that derived text through `set_move_text()`, so the
+              standard parse/update path is reused
+
+        Notes:
+            This method does not apply a move directly. Clicks only edit the
+            draft text.
+        """
+        if self._game.outcome != "":
+            return
+
+        self.set_move_text(
+            click_to_move_text(
+                parse_result=self._state.parse_result,
+                legal_moves=self._legal_moves,
+                square=square,
+            )
+        )
+
+    def select_promotion_piece(self, piece: Literal["Q", "R", "B", "N"]) -> None:
+        """
+        Resolve the current promotion draft to a specific promotion piece.
+
+        Parameters:
+            piece (Literal["Q", "R", "B", "N"]):
+                The promotion piece chosen by the user.
+
+        Behavior:
+            - scans the current parse result's matching moves for a promotion move
+            whose promotion piece matches the requested value
+            - when a match is found, rewrites the draft to that move's canonical
+            text through ``set_move_text()``
+            - reuses the normal parse/update path so the draft, highlights, and
+            promotion prompt state refresh consistently
+        """
+        for move in self._state.parse_result.matching_moves:
+            if get_promotion(move) == piece:
+                self.set_move_text(get_canonical(move))
+                return
+
+    # ============================================================================
+    # Game commands
+    # ============================================================================
 
     def confirm_move_draft(self, offer_draw: bool = False) -> MoveAttemptResult:
         """
@@ -254,6 +328,10 @@ class GameSession:
             )
             return ResignResult(True, "resigned", resign_message)
 
+    # ============================================================================
+    # Read model
+    # ============================================================================
+
     def snapshot(self) -> Snapshot:
         """
         Build an immutable render-ready view of the current session.
@@ -276,66 +354,9 @@ class GameSession:
             ),
         )
 
-    def set_move_text(self, text: str) -> None:
-        """Store raw draft text and re-parse it against current legal moves."""
-        self._state.move_text = text
-        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
-
-    def clear_move_text(self) -> None:
-        """Clear the current draft text and reset parse state to the empty-input result."""
-        self._state.move_text = ""
-        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
-
-    def click_square(self, square: Square) -> None:
-        """
-        Rewrite the move draft in response to a board-square click.
-
-        Parameters:
-            square (Square):
-                The clicked board square.
-
-        Behavior:
-            - does nothing if the game has already concluded
-            - derives the next move-draft text from the current draft,
-              parse result, legal moves, and clicked square
-            - stores that derived text through `set_move_text()`, so the
-              standard parse/update path is reused
-
-        Notes:
-            This method does not apply a move directly. Clicks only edit the
-            draft text.
-        """
-        if self._game.outcome != "":
-            return
-
-        self.set_move_text(
-            click_to_move_text(
-                parse_result=self._state.parse_result,
-                legal_moves=self._legal_moves,
-                square=square,
-            )
-        )
-
-    def select_promotion_piece(self, piece: Literal["Q", "R", "B", "N"]) -> None:
-        """
-        Resolve the current promotion draft to a specific promotion piece.
-
-        Parameters:
-            piece (Literal["Q", "R", "B", "N"]):
-                The promotion piece chosen by the user.
-
-        Behavior:
-            - scans the current parse result's matching moves for a promotion move
-            whose promotion piece matches the requested value
-            - when a match is found, rewrites the draft to that move's canonical
-            text through ``set_move_text()``
-            - reuses the normal parse/update path so the draft, highlights, and
-            promotion prompt state refresh consistently
-        """
-        for move in self._state.parse_result.matching_moves:
-            if get_promotion(move) == piece:
-                self.set_move_text(get_canonical(move))
-                return
+    # ============================================================================
+    # Private helpers
+    # ============================================================================
 
     def _bootstrap_session(
         self,
