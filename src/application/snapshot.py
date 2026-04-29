@@ -28,6 +28,36 @@ def build_snapshot(
     game: Game,
     inputs: SnapshotInputs,
 ) -> Snapshot:
+    """
+    Build a render-ready session snapshot from engine state and session inputs.
+
+    Parameters:
+        game (Game):
+            The active engine game supplying board state, side to move, move
+            history, and check information.
+
+        inputs (SnapshotInputs):
+            The session-owned UI state needed to project the current view,
+            including cursor position, move draft, parse result, orientation
+            settings, last-move highlights, and feedback messages.
+
+    Returns:
+        Snapshot:
+            An immutable view-model containing board glyphs, turn and
+            orientation state, candidate-move highlights, move history,
+            draft/autocompletion state, promotion-popup anchor state, check
+            state, and user-facing banners or errors.
+
+    Behavior:
+        - converts the current board into render glyphs
+        - derives board orientation from player side and orientation override
+        - projects parser-derived candidate moves, canonical draft state, and
+        autocompletions into the snapshot
+        - includes the last applied move highlights and move list
+        - derives the promotion prompt anchor square from the current parse
+        result when the remaining ambiguity corresponds to a promotion choice
+        - includes current check, outcome, and error-display state
+    """
     parse_result = inputs.parse_result
     check_square = game.checked_king_position()
 

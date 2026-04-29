@@ -8,6 +8,37 @@ def click_to_move_text(
     legal_moves: set[Move],
     square: Square,
 ) -> str:
+    """
+    Derive the next move-draft text from a click on a board square.
+
+    Parameters:
+        parse_result (ParseResult):
+            The current parse result for the session's draft text. Its status
+            and matching moves define the active click context.
+
+        legal_moves (set[Move]):
+            The legal moves in the current position.
+
+        square (Square):
+            The clicked board square.
+
+    Returns:
+        str:
+            The next parser-compatible draft text to store.
+
+    Behavior:
+        - if the current draft is empty, clicking a movable source square
+          starts a new source-based draft such as ``"Pe2"``
+        - if the current draft has no legal matches, clicking a movable
+          source square replaces it with a new source-based draft
+        - if the current draft already matches legal moves, clicking a legal
+          destination refines the draft to the common canonical prefix of the
+          matching destination moves
+        - otherwise, clicking a movable source square replaces the current
+          draft with a new source-based draft
+        - if the click does not correspond to a useful refinement or source
+          replacement, the draft is self-cleared by returning an empty string
+    """
     legal = sorted(legal_moves, key=get_canonical)
     matched = sorted(parse_result.matching_moves, key=get_canonical)
 

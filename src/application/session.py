@@ -373,6 +373,21 @@ class GameSession:
         )
 
     def select_promotion_piece(self, piece: Literal["Q", "R", "B", "N"]) -> None:
+        """
+        Resolve the current promotion draft to a specific promotion piece.
+
+        Parameters:
+            piece (Literal["Q", "R", "B", "N"]):
+                The promotion piece chosen by the user.
+
+        Behavior:
+            - scans the current parse result's matching moves for a promotion move
+            whose promotion piece matches the requested value
+            - when a match is found, rewrites the draft to that move's canonical
+            text through ``set_move_text()``
+            - reuses the normal parse/update path so the draft, highlights, and
+            promotion prompt state refresh consistently
+        """
         for move in self._state.parse_result.matching_moves:
             if get_promotion(move) == piece:
                 self.set_move_text(get_canonical(move))
