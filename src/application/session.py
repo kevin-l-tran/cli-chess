@@ -423,7 +423,6 @@ class GameSession:
         self._config = config
         self._game = Game() if game is None else game
         self._state = _SessionState()
-        self._refresh_position_state(clear_move_text=False)
 
         time_control = self._config.time_control
         if time_control is None:
