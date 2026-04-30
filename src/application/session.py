@@ -1,9 +1,6 @@
 from dataclasses import dataclass, field
-import time
-from typing import Callable, Literal
+from typing import Literal
 
-from src.application.click_draft import click_to_move_text
-from src.application.snapshot import SnapshotInputs, build_snapshot
 from src.engine.moves import (
     Move,
     get_final_position,
@@ -18,6 +15,9 @@ from src.engine.game import (
 )
 
 from .move_parser import ParseResult, get_canonical, parse
+from .click_draft import click_to_move_text
+from .snapshot import SnapshotInputs, build_snapshot
+from .timing import ClockState, TimeSource, system_time_ms
 from .session_types import (
     MoveAttemptResult,
     PlayerSide,
@@ -28,31 +28,6 @@ from .session_types import (
     UndoResult,
     UndoScope,
 )
-
-TimeSource = Callable[[], int]
-
-
-def _system_time_ms() -> int:
-    return time.monotonic_ns() // 1_000_000
-
-
-@dataclass(frozen=True)
-class _ClockFrame:
-    white_remaining_ms: int
-    black_remaining_ms: int
-    active_side: PlayerSide | None
-    timeout_side: PlayerSide | None
-    last_updated_ms: int | None
-
-
-@dataclass
-class _ClockState:
-    white_remaining_ms: int
-    black_remaining_ms: int
-    active_side: PlayerSide | None
-    timeout_side: PlayerSide | None
-    last_updated_ms: int | None
-    history: list[_ClockFrame] = field(default_factory=list)
 
 
 @dataclass
@@ -122,7 +97,7 @@ class GameSession:
         game: Game | None = None,
         time_source: TimeSource | None = None,
     ):
-        self._time_source = time_source or _system_time_ms
+        self._time_source = time_source or system_time_ms
         self._legal_moves: set[Move] = set()
         self._bootstrap_session(config=config, game=game)
 
@@ -432,7 +407,7 @@ class GameSession:
             if self._game.outcome == "":
                 active_side = "white" if self._game.is_white_turn else "black"
 
-            self._clock_state = _ClockState(
+            self._clock_state = ClockState(
                 white_remaining_ms=time_control.initial_seconds * 1000,
                 black_remaining_ms=time_control.initial_seconds * 1000,
                 active_side=active_side,
