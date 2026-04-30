@@ -16,7 +16,7 @@ from src.engine.game import (
 
 from .move_parser import ParseResult, get_canonical, parse
 from .click_draft import click_to_move_text
-from .snapshot import SnapshotInputs, build_snapshot
+from .snapshot import SnapshotInputs, TimingSnapshotInputs, build_snapshot
 from .timing import (
     ClockState,
     TimeSource,
@@ -396,6 +396,9 @@ class GameSession:
         if self._advance_clock_to_now():
             self._refresh_position_state(clear_move_text=False)
 
+        clock = self._clock_state
+        time_control = self._config.time_control
+
         return build_snapshot(
             self._game,
             SnapshotInputs(
@@ -407,6 +410,12 @@ class GameSession:
                 last_error_message=self._state.last_error_message,
                 last_action_message=self._state.last_action_message,
                 opponent_type=self._config.opponent,
+                timing=TimingSnapshotInputs(
+                    clock_state=clock,
+                    increment_seconds=None
+                    if time_control is None
+                    else time_control.increment_seconds,
+                ),
             ),
         )
 

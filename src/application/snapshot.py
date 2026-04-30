@@ -5,7 +5,21 @@ from src.engine.game import Game
 from src.engine.moves import get_final_position, get_initial_position, get_promotion
 
 from .move_parser import ParseResult, Square, get_canonical
-from .session_types import MoveDraftView, MoveListItem, OpponentType, Snapshot
+from .session_types import (
+    ClockView,
+    MoveDraftView,
+    MoveListItem,
+    OpponentType,
+    Snapshot,
+    TimedGameView,
+)
+from .timing import ClockState
+
+
+@dataclass(frozen=True)
+class TimingSnapshotInputs:
+    clock_state: ClockState | None
+    increment_seconds: int | None
 
 
 @dataclass(frozen=True)
@@ -20,6 +34,8 @@ class SnapshotInputs:
     last_error_message: str | None
     last_action_message: str | None
     opponent_type: OpponentType
+
+    timing: TimingSnapshotInputs | None
 
 
 def build_snapshot(
@@ -61,6 +77,7 @@ def build_snapshot(
     check_square = game.checked_king_position()
     move_list = _build_move_list(game)
     promotion_prompt_position = _get_promotion_prompt_square(parse_result)
+    timed_game = _build_timed_game(inputs.timing)
 
     is_game_over = inputs.outcome_banner is not None
     can_confirm_move = parse_result.status == "resolved" and not is_game_over
@@ -91,6 +108,7 @@ def build_snapshot(
         is_promotion_pending=is_promotion_pending,
         can_undo_fullmove=can_undo_fullmove,
         can_undo_halfmove=can_undo_halfmove,
+        timed_game=timed_game,
         outcome_banner=inputs.outcome_banner,
         last_error_message=inputs.last_error_message,
         last_action_message=inputs.last_action_message,
@@ -150,3 +168,35 @@ def _get_promotion_prompt_square(parse_result: ParseResult) -> Square | None:
         return None
 
     return next(iter(to_squares))
+
+
+def _format_clock(ms: int) -> str:
+    total_seconds = max(0, ms) // 1000
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    return f"{minutes}:{seconds:02d}"
+
+
+def _build_timed_game(timing: TimingSnapshotInputs | None) -> TimedGameView | None:
+    if timing is None or timing.clock_state is None or timing.increment_seconds is None:
+        return None
+
+    clock = timing.clock_state
+
+    return TimedGameView(
+        white=ClockView(
+            remaining_ms=clock.white_remaining_ms,
+            display_text=_format_clock(clock.white_remaining_ms),
+            is_active=clock.active_side == "white",
+            is_flagged=clock.timeout_side == "white",
+        ),
+        black=ClockView(
+            remaining_ms=clock.black_remaining_ms,
+            display_text=_format_clock(clock.black_remaining_ms),
+            is_active=clock.active_side == "black",
+            is_flagged=clock.timeout_side == "black",
+        ),
+        active_side=clock.active_side,
+        timeout_side=clock.timeout_side,
+        increment_seconds=timing.increment_seconds,
+    )
