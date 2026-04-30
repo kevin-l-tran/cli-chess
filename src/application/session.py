@@ -19,6 +19,7 @@ from .click_draft import click_to_move_text
 from .snapshot import SnapshotInputs, TimingSnapshotInputs, build_snapshot
 from .clock import ClockState, TimeSource, system_time_ms
 from .session_timing import SessionTiming
+from .session_policy import SessionCapabilities, SessionPolicy
 from .session_types import (
     MoveAttemptResult,
     PlayerSide,
@@ -214,7 +215,7 @@ class GameSession:
         self._sync_timing()
         if self._is_session_over():
             return
-        
+
         for move in self._state.parse_result.matching_moves:
             if get_promotion(move) == piece:
                 self.set_move_text(get_canonical(move))
@@ -335,13 +336,24 @@ class GameSession:
         """
         self._sync_timing()
 
-        if self._config.opponent == "online":
+        scope = SessionPolicy.resolve_undo_scope(
+            opponent=self._config.opponent,
+            requested=scope,
+        )
+        if scope is None:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Can't undo in an online game.")
             return UndoResult(False, "unavailable", "Can't undo in an online game.")
 
-        if scope is None:
-            scope = "fullmove" if self._config.opponent == "bot" else "halfmove"
+        caps = self._capabilities()
+        if scope == "halfmove" and not caps.can_undo_halfmove:
+            self._refresh_position_state(clear_move_text=False)
+            self._set_error_message("No move to undo.")
+            return UndoResult(False, "unavailable", "No move to undo.")
+        if scope == "fullmove" and not caps.can_undo_fullmove:
+            self._refresh_position_state(clear_move_text=False)
+            self._set_error_message("No move to undo.")
+            return UndoResult(False, "unavailable", "No move to undo.")
 
         try:
             if scope == "fullmove":
@@ -391,7 +403,7 @@ class GameSession:
             - returns a stable failure result
         """
         self._sync_timing()
-        if self._is_session_over():
+        if not self._capabilities().can_resign:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
             return ResignResult(False, "game_over", "Game has concluded.")
@@ -442,6 +454,13 @@ class GameSession:
 
         clock = self._clock_state
         time_control = self._config.time_control
+        is_game_over = self._is_session_over()
+        capabilities = SessionPolicy.capabilities(
+            opponent=self._config.opponent,
+            move_count=len(self._game.moves_list),
+            parse_result=self._state.parse_result,
+            is_game_over=is_game_over,
+        )
 
         return build_snapshot(
             self._game,
@@ -453,7 +472,8 @@ class GameSession:
                 outcome_banner=self._state.outcome_banner,
                 last_error_message=self._state.last_error_message,
                 last_action_message=self._state.last_action_message,
-                opponent_type=self._config.opponent,
+                is_game_over=is_game_over,
+                capabilities=capabilities,
                 timing=TimingSnapshotInputs(
                     clock_state=clock,
                     increment_seconds=None
@@ -513,7 +533,18 @@ class GameSession:
             self._refresh_position_state(clear_move_text=False)
 
     def _is_session_over(self) -> bool:
-        return self._timing.is_session_over(engine_game_over=self._game.outcome != "")
+        return SessionPolicy.is_game_over(
+            engine_game_over=self._game.outcome != "",
+            timeout_side=self._timing.timeout_side(),
+        )
+
+    def _capabilities(self) -> SessionCapabilities:
+        return SessionPolicy.capabilities(
+            opponent=self._config.opponent,
+            move_count=len(self._game.moves_list),
+            parse_result=self._state.parse_result,
+            is_game_over=self._is_session_over(),
+        )
 
     def _apply_resolved_move(
         self,

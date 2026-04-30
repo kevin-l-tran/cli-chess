@@ -5,11 +5,11 @@ from src.engine.game import Game
 from src.engine.moves import get_final_position, get_initial_position, get_promotion
 
 from .move_parser import ParseResult, Square, get_canonical
+from .session_policy import SessionCapabilities
 from .session_types import (
     ClockView,
     MoveDraftView,
     MoveListItem,
-    OpponentType,
     Snapshot,
     TimedGameView,
 )
@@ -33,7 +33,9 @@ class SnapshotInputs:
     outcome_banner: str | None
     last_error_message: str | None
     last_action_message: str | None
-    opponent_type: OpponentType
+
+    is_game_over: bool
+    capabilities: SessionCapabilities
 
     timing: TimingSnapshotInputs | None
 
@@ -76,15 +78,11 @@ def build_snapshot(
     parse_result = inputs.parse_result
     check_square = game.checked_king_position()
     move_list = _build_move_list(game)
-    promotion_prompt_position = _get_promotion_prompt_square(parse_result)
+    promotion_prompt_position = _get_promotion_prompt_position(parse_result)
     timed_game = _build_timed_game(inputs.timing)
 
-    is_game_over = inputs.outcome_banner is not None
-    can_confirm_move = parse_result.status == "resolved" and not is_game_over
-    can_resign = not is_game_over
+    caps = inputs.capabilities
     is_promotion_pending = promotion_prompt_position is not None
-    can_undo_fullmove = len(move_list) > 1 and inputs.opponent_type != "online"
-    can_undo_halfmove = len(move_list) > 0 and inputs.opponent_type == "local"
 
     return Snapshot(
         board_glyphs=_build_board_glyphs(game),
@@ -102,12 +100,12 @@ def build_snapshot(
         promotion_prompt_position=promotion_prompt_position,
         check_square=check_square,
         is_player_checked=check_square is not None,
-        is_game_over=is_game_over,
-        can_confirm_move=can_confirm_move,
-        can_resign=can_resign,
+        is_game_over=inputs.is_game_over,
+        can_confirm_move=caps.can_confirm_move,
+        can_resign=caps.can_resign,
         is_promotion_pending=is_promotion_pending,
-        can_undo_fullmove=can_undo_fullmove,
-        can_undo_halfmove=can_undo_halfmove,
+        can_undo_fullmove=caps.can_undo_fullmove,
+        can_undo_halfmove=caps.can_undo_halfmove,
         timed_game=timed_game,
         outcome_banner=inputs.outcome_banner,
         last_error_message=inputs.last_error_message,
@@ -142,34 +140,6 @@ def _build_board_glyphs(game: Game) -> list[list[str]]:
     ]
 
 
-def _get_promotion_prompt_square(parse_result: ParseResult) -> Square | None:
-    moves = parse_result.matching_moves
-
-    if parse_result.status != "ambiguous" or not moves:
-        return None
-
-    if any(get_promotion(move) is None for move in moves):
-        return None
-
-    from_squares = {get_initial_position(move) for move in moves}
-    to_squares = {get_final_position(move) for move in moves}
-    if len(from_squares) != 1 or len(to_squares) != 1:
-        return None
-
-    texts = [get_canonical(move) for move in sorted(moves, key=get_canonical)]
-    prefix = texts[0]
-    for text in texts[1:]:
-        i = 0
-        while i < len(prefix) and i < len(text) and prefix[i] == text[i]:
-            i += 1
-        prefix = prefix[:i]
-
-    if parse_result.normalized_text != prefix or not prefix.endswith("="):
-        return None
-
-    return next(iter(to_squares))
-
-
 def _format_clock(ms: int) -> str:
     total_seconds = max(0, ms) // 1000
     minutes = total_seconds // 60
@@ -200,3 +170,31 @@ def _build_timed_game(timing: TimingSnapshotInputs | None) -> TimedGameView | No
         timeout_side=clock.timeout_side,
         increment_seconds=timing.increment_seconds,
     )
+
+
+def _get_promotion_prompt_position(parse_result: ParseResult) -> Square | None:
+    moves = parse_result.matching_moves
+
+    if parse_result.status != "ambiguous" or not moves:
+        return None
+
+    if any(get_promotion(move) is None for move in moves):
+        return None
+
+    from_squares = {get_initial_position(move) for move in moves}
+    to_squares = {get_final_position(move) for move in moves}
+    if len(from_squares) != 1 or len(to_squares) != 1:
+        return None
+
+    texts = [get_canonical(move) for move in sorted(moves, key=get_canonical)]
+    prefix = texts[0]
+    for text in texts[1:]:
+        i = 0
+        while i < len(prefix) and i < len(text) and prefix[i] == text[i]:
+            i += 1
+        prefix = prefix[:i]
+
+    if parse_result.normalized_text != prefix or not prefix.endswith("="):
+        return None
+
+    return next(iter(to_squares))
