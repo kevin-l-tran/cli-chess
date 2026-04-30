@@ -32,6 +32,7 @@ from .session_types import (
     SessionPhase,
     Snapshot,
     Square,
+    TerminalState,
     UndoResult,
     UndoScope,
 )
@@ -84,7 +85,9 @@ class _SessionState:
 
     last_error_message: str | None = None
     last_action_message: str | None = None
+
     outcome_banner: str | None = None
+    terminal_override: TerminalState | None = None
 
 
 class GameSession:
@@ -379,6 +382,7 @@ class GameSession:
             self._set_error_message("Could not undo move.")
             return UndoResult(False, "error", "Could not undo move.")
         else:
+            self._state.terminal_override = None
             self._refresh_position_state(clear_move_text=True)
             self._set_action_message(success_message)
             return UndoResult(True, "undone", success_message)
@@ -424,6 +428,12 @@ class GameSession:
             self._set_error_message("Could not resign game.")
             return ResignResult(False, "error", "Could not resign game.")
         else:
+            winner = "black" if self._game.outcome == "0-1" else "white"
+            self._state.terminal_override = TerminalState(
+                winner=winner,
+                reason="resignation",
+            )
+
             self._refresh_position_state(clear_move_text=True)
 
             resign_message = (
@@ -457,9 +467,9 @@ class GameSession:
         """
         self._sync_timing()
 
+        phase = self._phase()
         clock = self._clock_state
         time_control = self._config.time_control
-        is_game_over = self._phase().is_game_over
         capabilities = self._capabilities()
 
         return SessionProjection.build(
@@ -469,10 +479,10 @@ class GameSession:
                 parse_result=self._state.parse_result,
                 last_move_from=self._state.last_move_from,
                 last_move_to=self._state.last_move_to,
-                outcome_banner=self._state.outcome_banner,
+                terminal=phase.terminal,
                 last_error_message=self._state.last_error_message,
                 last_action_message=self._state.last_action_message,
-                is_game_over=is_game_over,
+                is_game_over=phase.is_game_over,
                 capabilities=capabilities,
                 timing=TimingProjectionInputs(
                     clock_state=clock,
@@ -611,60 +621,74 @@ class GameSession:
             return SessionPhase(
                 kind="timed_out",
                 side_to_move=None,
-                winner="black",
-                terminal_reason="timeout",
+                terminal=TerminalState(winner="black", reason="timeout"),
             )
         if timeout_side == "black":
             return SessionPhase(
                 kind="timed_out",
                 side_to_move=None,
-                winner="white",
-                terminal_reason="timeout",
+                terminal=TerminalState(winner="white", reason="timeout"),
+            )
+
+        if self._state.terminal_override is not None:
+            return SessionPhase(
+                kind="concluded",
+                side_to_move=None,
+                terminal=self._state.terminal_override,
             )
 
         if self._game.outcome == "1-0":
             return SessionPhase(
                 kind="concluded",
                 side_to_move=None,
-                winner="white",
-                terminal_reason="checkmate",
+                terminal=TerminalState(winner="white", reason="checkmate"),
             )
         if self._game.outcome == "0-1":
             return SessionPhase(
                 kind="concluded",
                 side_to_move=None,
-                winner="black",
-                terminal_reason="checkmate",
+                terminal=TerminalState(winner="black", reason="checkmate"),
             )
         if self._game.outcome == "1/2-1/2":
             return SessionPhase(
                 kind="concluded",
                 side_to_move=None,
-                winner=None,
-                terminal_reason="draw",
+                terminal=TerminalState(winner=None, reason="draw"),
             )
 
         return SessionPhase(
             kind="active",
             side_to_move=side_to_move,
-            winner=None,
-            terminal_reason=None,
+            terminal=None,
         )
 
     def _banner_for_phase(self, phase: SessionPhase) -> str | None:
-        if phase.kind == "timed_out":
+        terminal = phase.terminal
+        if terminal is None:
+            return None
+
+        if terminal.reason == "timeout":
             return (
                 "Black wins on time."
-                if phase.winner == "black"
+                if terminal.winner == "black"
                 else "White wins on time."
             )
 
-        if phase.kind == "concluded":
-            if phase.terminal_reason == "draw":
-                return "Draw."
-            if phase.winner == "white":
-                return "White wins."
-            if phase.winner == "black":
-                return "Black wins."
+        if terminal.reason == "resignation":
+            return (
+                "White resigns. Black wins."
+                if terminal.winner == "black"
+                else "Black resigns. White wins."
+            )
+
+        if terminal.reason == "draw":
+            return "Draw."
+
+        if terminal.reason == "checkmate":
+            return (
+                "White wins by checkmate."
+                if terminal.winner == "white"
+                else "Black wins by checkmate."
+            )
 
         return None

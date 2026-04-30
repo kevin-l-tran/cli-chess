@@ -10,7 +10,9 @@ from .session_types import (
     ClockView,
     MoveDraftView,
     MoveListItem,
+    OutcomeView,
     Snapshot,
+    TerminalState,
     TimedGameView,
 )
 from .clock import ClockState
@@ -28,7 +30,7 @@ class SessionProjectionInputs:
     parse_result: ParseResult
     last_move_from: Square | None
     last_move_to: Square | None
-    outcome_banner: str | None
+    terminal: TerminalState | None
     last_error_message: str | None
     last_action_message: str | None
     is_game_over: bool
@@ -75,6 +77,7 @@ class SessionProjection:
         move_list = _build_move_list(game)
         promotion_prompt_position = _get_promotion_prompt_position(parse_result)
         timed_game = _build_timed_game(inputs.timing)
+        outcome = _build_outcome(inputs.terminal)
 
         caps = inputs.capabilities
         is_promotion_pending = promotion_prompt_position is not None
@@ -102,10 +105,42 @@ class SessionProjection:
             can_undo_fullmove=caps.can_undo_fullmove,
             can_undo_halfmove=caps.can_undo_halfmove,
             timed_game=timed_game,
-            outcome_banner=inputs.outcome_banner,
+            outcome=outcome,
             last_error_message=inputs.last_error_message,
             last_action_message=inputs.last_action_message,
         )
+
+
+def _build_outcome(terminal: TerminalState | None) -> OutcomeView | None:
+    if terminal is None:
+        return None
+
+    if terminal.reason == "timeout":
+        banner = (
+            "Black wins on time."
+            if terminal.winner == "black"
+            else "White wins on time."
+        )
+    elif terminal.reason == "resignation":
+        banner = (
+            "White resigns. Black wins."
+            if terminal.winner == "black"
+            else "Black resigns. White wins."
+        )
+    elif terminal.reason == "draw":
+        banner = "Draw."
+    else:
+        banner = (
+            "White wins by checkmate."
+            if terminal.winner == "white"
+            else "Black wins by checkmate."
+        )
+
+    return OutcomeView(
+        winner=terminal.winner,
+        reason=terminal.reason,
+        banner=banner,
+    )
 
 
 def _build_move_list(game: Game) -> list[MoveListItem]:
