@@ -624,6 +624,8 @@ class GameSession:
             self._set_terminal(TerminalState(winner="black", reason="checkmate"))
 
     def _phase(self) -> SessionPhase:
+        self._refresh_terminal_from_engine()
+        
         if self._terminal_state is not None:
             kind = (
                 "timed_out" if self._terminal_state.reason == "timeout" else "concluded"
