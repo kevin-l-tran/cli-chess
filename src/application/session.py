@@ -86,7 +86,6 @@ class _SessionState:
     last_error_message: str | None = None
     last_action_message: str | None = None
 
-    outcome_banner: str | None = None
     terminal_override: TerminalState | None = None
 
 
@@ -154,9 +153,6 @@ class GameSession:
             - re-parses the draft against the current cached legal-move set
             - does not apply a move or otherwise change the board position
         """
-        self._sync_timing()
-        if self._phase().is_game_over:
-            return
         self._store_move_text(text)
 
     def clear_move_text(self) -> None:
@@ -168,9 +164,6 @@ class GameSession:
             - re-parses the empty draft against the current legal moves
             - does not apply a move or otherwise change the board position
         """
-        self._sync_timing()
-        if self._phase().is_game_over:
-            return
         self._store_move_text("")
 
     def click_square(self, square: Square) -> None:
@@ -193,10 +186,6 @@ class GameSession:
             This method does not apply a move directly. Clicks only edit the
             draft text.
         """
-        self._sync_timing()
-        if self._phase().is_game_over:
-            return
-
         self._store_move_text(
             click_to_move_text(
                 parse_result=self._state.parse_result,
@@ -224,10 +213,6 @@ class GameSession:
             - reuses the normal parse/update path so the draft, highlights, and
             promotion prompt state refresh consistently
         """
-        self._sync_timing()
-        if self._phase().is_game_over:
-            return
-
         for move in self._state.parse_result.matching_moves:
             if get_promotion(move) == piece:
                 self._store_move_text(get_canonical(move))
@@ -598,7 +583,6 @@ class GameSession:
             assert phase.side_to_move
 
             self._legal_moves = self._game.get_moves()
-            self._state.outcome_banner = None
             self._timing.on_position_ready(
                 side_to_move=phase.side_to_move,
                 engine_game_over=False,
@@ -606,7 +590,6 @@ class GameSession:
         else:
             self._legal_moves = set()
             self._timing.freeze()
-            self._state.outcome_banner = self._banner_for_phase(phase)
 
         if self._game.moves_list:
             last_move, _ = self._game.moves_list[-1]
@@ -669,34 +652,3 @@ class GameSession:
             side_to_move=side_to_move,
             terminal=None,
         )
-
-    def _banner_for_phase(self, phase: SessionPhase) -> str | None:
-        terminal = phase.terminal
-        if terminal is None:
-            return None
-
-        if terminal.reason == "timeout":
-            return (
-                "Black wins on time."
-                if terminal.winner == "black"
-                else "White wins on time."
-            )
-
-        if terminal.reason == "resignation":
-            return (
-                "White resigns. Black wins."
-                if terminal.winner == "black"
-                else "Black resigns. White wins."
-            )
-
-        if terminal.reason == "draw":
-            return "Draw."
-
-        if terminal.reason == "checkmate":
-            return (
-                "White wins by checkmate."
-                if terminal.winner == "white"
-                else "Black wins by checkmate."
-            )
-
-        return None
