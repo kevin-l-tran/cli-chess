@@ -17,7 +17,13 @@ from src.engine.game import (
 from .move_parser import ParseResult, get_canonical, parse
 from .click_draft import click_to_move_text
 from .snapshot import SnapshotInputs, build_snapshot
-from .timing import ClockState, TimeSource, system_time_ms
+from .timing import (
+    ClockState,
+    TimeSource,
+    advance_clock,
+    freeze_clock,
+    system_time_ms,
+)
 from .session_types import (
     MoveAttemptResult,
     PlayerSide,
@@ -417,6 +423,24 @@ class GameSession:
 
         self._refresh_position_state(clear_move_text=False)
 
+    def _set_action_message(self, message: str | None) -> None:
+        self._state.last_action_message = message
+        self._state.last_error_message = None
+
+    def _set_error_message(self, message: str | None) -> None:
+        self._state.last_error_message = message
+        self._state.last_action_message = None
+
+    def _advance_clock_to_now(self) -> bool:
+        return advance_clock(
+            self._clock_state,
+            now_ms=self._time_source(),
+            is_game_over=self._game.outcome != "",
+        )
+
+    def _freeze_clock(self) -> None:
+        return freeze_clock(clock=self._clock_state)
+
     def _apply_resolved_move(
         self,
         move: Move,
@@ -443,15 +467,31 @@ class GameSession:
     def _refresh_position_state(self, *, clear_move_text: bool):
         if self._game.outcome != "":
             self._legal_moves = set()
+            self._freeze_clock()
             if self._game.outcome == "1-0":
                 self._state.outcome_banner = "White wins."
             elif self._game.outcome == "0-1":
                 self._state.outcome_banner = "Black wins."
             elif self._game.outcome == "1/2-1/2":
                 self._state.outcome_banner = "Draw."
+        elif (
+            self._clock_state is not None and self._clock_state.timeout_side is not None
+        ):
+            self._legal_moves = set()
+            loser = self._clock_state.timeout_side
+            self._state.outcome_banner = (
+                "Black wins on time." if loser == "white" else "White wins on time."
+            )
         else:
             self._legal_moves = self._game.get_moves()
             self._state.outcome_banner = None
+
+            if self._clock_state is not None:
+                self._clock_state.active_side = (
+                    "white" if self._game.is_white_turn else "black"
+                )
+                if self._clock_state.last_updated_ms is None:
+                    self._clock_state.last_updated_ms = self._time_source()
 
         if self._game.moves_list:
             last_move, _ = self._game.moves_list[-1]
@@ -465,11 +505,3 @@ class GameSession:
             self._state.move_text = ""
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
-
-    def _set_action_message(self, message: str | None) -> None:
-        self._state.last_action_message = message
-        self._state.last_error_message = None
-
-    def _set_error_message(self, message: str | None) -> None:
-        self._state.last_error_message = message
-        self._state.last_action_message = None

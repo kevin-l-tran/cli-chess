@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 import time
 from typing import Callable
 
-from .session_types import PlayerSide, TimeControl
+from .session_types import PlayerSide
 
 TimeSource = Callable[[], int]
 
@@ -28,24 +28,6 @@ class ClockState:
     timeout_side: PlayerSide | None
     last_updated_ms: int | None
     history: list[ClockFrame] = field(default_factory=list)
-
-
-def build_initial_clock_state(
-    time_control: TimeControl,
-    active_side: PlayerSide | None,
-    now_ms: int,
-) -> ClockState:
-    return ClockState(
-        white_remaining_ms=time_control.initial_seconds * 1000,
-        black_remaining_ms=time_control.initial_seconds * 1000,
-        active_side=active_side,
-        timeout_side=None,
-        last_updated_ms=now_ms,
-    )
-
-
-def has_timeout(clock: ClockState | None) -> bool:
-    return clock is not None and clock.timeout_side is not None
 
 
 def freeze_clock(clock: ClockState | None) -> None:
