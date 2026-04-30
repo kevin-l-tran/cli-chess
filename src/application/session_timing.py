@@ -77,7 +77,7 @@ class SessionTiming:
         clock.black_remaining_ms = frame.black_remaining_ms
         clock.active_side = frame.active_side
         clock.timeout_side = frame.timeout_side
-        clock.last_updated_ms = frame.last_updated_ms
+        clock.last_updated_ms = None
 
     def on_move_committed(self, next_side: PlayerSide) -> None:
         """
