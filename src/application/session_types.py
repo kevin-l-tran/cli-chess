@@ -190,7 +190,7 @@ class Snapshot:
     """
 
     board_glyphs: list[list[str]]
-    side_to_move: PlayerSide
+    side_to_move: PlayerSide | None
     candidate_moves: set[tuple[Square, Square]]
 
     last_move_from: Square | None

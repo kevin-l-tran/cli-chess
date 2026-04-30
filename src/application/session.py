@@ -466,6 +466,7 @@ class GameSession:
             SessionProjectionInputs(
                 move_text=self._state.move_text,
                 parse_result=self._state.parse_result,
+                side_to_move=phase.side_to_move,
                 last_move_from=self._state.last_move_from,
                 last_move_to=self._state.last_move_to,
                 terminal=phase.terminal,

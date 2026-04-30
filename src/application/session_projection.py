@@ -11,6 +11,7 @@ from .session_types import (
     MoveDraftView,
     MoveListItem,
     OutcomeView,
+    PlayerSide,
     Snapshot,
     TerminalState,
     TimedGameView,
@@ -28,6 +29,7 @@ class TimingProjectionInputs:
 class SessionProjectionInputs:
     move_text: str
     parse_result: ParseResult
+    side_to_move: PlayerSide | None
     last_move_from: Square | None
     last_move_to: Square | None
     terminal: TerminalState | None
@@ -84,7 +86,7 @@ class SessionProjection:
 
         return Snapshot(
             board_glyphs=_build_board_glyphs(game),
-            side_to_move="white" if game.is_white_turn else "black",
+            side_to_move=inputs.side_to_move,
             candidate_moves=set(parse_result.source_to_target_highlights),
             last_move_from=inputs.last_move_from,
             last_move_to=inputs.last_move_to,
