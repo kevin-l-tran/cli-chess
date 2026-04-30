@@ -301,6 +301,9 @@ class GameSession:
                 Online play does not permit undo through this controller; in that
                 case the method fails with an unavailable result regardless of scope.
 
+                For bot play, only `"fullmove"` undos are supported. `"halfmove"` 
+                undos will be rejected.
+
         Returns:
             UndoResult:
                 Stable success/failure information for the UI layer.
@@ -335,8 +338,14 @@ class GameSession:
         )
         if scope is None:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("Can't undo in an online game.")
-            return UndoResult(False, "unavailable", "Can't undo in an online game.")
+
+            if self._config.opponent == "online":
+                message = "Can't undo in an online game."
+            else:
+                message = "Halfmove undo is only available in local games."
+
+            self._set_error_message(message)
+            return UndoResult(False, "unavailable", message)
 
         caps = self._capabilities()
         if scope == "halfmove" and not caps.can_undo_halfmove:

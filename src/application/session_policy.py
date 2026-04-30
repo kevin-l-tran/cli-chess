@@ -33,9 +33,14 @@ class SessionPolicy:
     ) -> UndoScope | None:
         if opponent == "online":
             return None
-        if requested is not None:
-            return requested
-        return "fullmove" if opponent == "bot" else "halfmove"
+
+        if requested == "halfmove":
+            return "halfmove" if opponent == "local" else None
+
+        if requested == "fullmove":
+            return "fullmove"
+
+        return "halfmove" if opponent == "local" else "fullmove"
 
     @staticmethod
     def can_confirm_move(parse_result: ParseResult, is_game_over: bool) -> bool:
