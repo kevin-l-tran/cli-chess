@@ -154,8 +154,10 @@ class GameSession:
             - re-parses the draft against the current cached legal-move set
             - does not apply a move or otherwise change the board position
         """
-        self._state.move_text = text
-        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+        self._sync_timing()
+        if self._phase().is_game_over:
+            return
+        self._store_move_text(text)
 
     def clear_move_text(self) -> None:
         """
@@ -166,8 +168,10 @@ class GameSession:
             - re-parses the empty draft against the current legal moves
             - does not apply a move or otherwise change the board position
         """
-        self._state.move_text = ""
-        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+        self._sync_timing()
+        if self._phase().is_game_over:
+            return
+        self._store_move_text("")
 
     def click_square(self, square: Square) -> None:
         """
@@ -193,7 +197,7 @@ class GameSession:
         if self._phase().is_game_over:
             return
 
-        self.set_move_text(
+        self._store_move_text(
             click_to_move_text(
                 parse_result=self._state.parse_result,
                 legal_moves=self._legal_moves,
@@ -226,7 +230,7 @@ class GameSession:
 
         for move in self._state.parse_result.matching_moves:
             if get_promotion(move) == piece:
-                self.set_move_text(get_canonical(move))
+                self._store_move_text(get_canonical(move))
                 return
 
     # ============================================================================
@@ -529,6 +533,10 @@ class GameSession:
         )
 
         self._refresh_position_state(clear_move_text=False)
+
+    def _store_move_text(self, text: str) -> None:
+        self._state.move_text = text
+        self._state.parse_result = parse(text, self._legal_moves)
 
     def _set_action_message(self, message: str | None) -> None:
         self._state.last_action_message = message
