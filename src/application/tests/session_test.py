@@ -223,6 +223,19 @@ def assert_timed_game(
     assert timed.increment_seconds == increment_seconds
 
 
+def assert_outcome(
+    snapshot: session_types.Snapshot,
+    *,
+    winner: session_types.PlayerSide | None,
+    reason: session_types.TerminalReason,
+    banner: str,
+) -> None:
+    assert snapshot.outcome is not None
+    assert snapshot.outcome.winner == winner
+    assert snapshot.outcome.reason == reason
+    assert snapshot.outcome.banner == banner
+
+
 class TestConfirmMoveDraft:
     def test_applies_resolved_move_sets_action_message_and_refreshes_legal_moves(
         self,
@@ -448,7 +461,12 @@ class TestConfirmMoveDraft:
         assert game_session._state.parse_result.status == "no_match"
         assert game_session._state.parse_result.raw_text == "Pe2-e4"
         assert game_session._legal_moves == set()
-        assert game_session._state.outcome_banner == "White wins."
+        assert_outcome(
+            game_session.snapshot(),
+            winner="white",
+            reason="checkmate",
+            banner="White wins by checkmate.",
+        )
 
         assert_snapshot_flags(
             game_session.snapshot(),
@@ -544,7 +562,8 @@ class TestUndo:
 
         result = game_session.undo(scope="halfmove")
 
-        assert fake_game.undo_halfmove_calls == 1
+        assert fake_game.undo_halfmove_calls == 0
+        assert fake_game.undo_fullmove_calls == 0
         assert result == session.UndoResult(
             ok=False,
             status="unavailable",
@@ -684,7 +703,12 @@ class TestResign:
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result.status == "empty"
         assert game_session._legal_moves == set()
-        assert game_session._state.outcome_banner == "Black wins."
+        assert_outcome(
+            game_session.snapshot(),
+            winner="black",
+            reason="resignation",
+            banner="White resigns. Black wins.",
+        )
 
         assert_snapshot_flags(
             game_session.snapshot(),
@@ -726,7 +750,12 @@ class TestResign:
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result.status == "empty"
         assert game_session._legal_moves == set()
-        assert game_session._state.outcome_banner == "White wins."
+        assert_outcome(
+            game_session.snapshot(),
+            winner="white",
+            reason="resignation",
+            banner="Black resigns. White wins.",
+        )
         assert game_session._state.last_move_from == sq("e2")
         assert game_session._state.last_move_to == sq("e4")
 
@@ -769,7 +798,12 @@ class TestResign:
         assert game_session._state.parse_result.status == "no_match"
         assert game_session._state.parse_result.raw_text == "Pe2-e4"
         assert game_session._legal_moves == set()
-        assert game_session._state.outcome_banner == "White wins."
+        assert_outcome(
+            game_session.snapshot(),
+            winner="white",
+            reason="checkmate",
+            banner="White wins by checkmate.",
+        )
 
     def test_unexpected_error_returns_generic_failure_and_preserves_draft(self) -> None:
         current = make("P", "e2", "e4")
@@ -795,7 +829,7 @@ class TestResign:
         assert game_session._state.move_text == "Pe2-e4"
         assert game_session._state.parse_result == parse_result
         assert game_session._legal_moves == {current}
-        assert game_session._state.outcome_banner is None
+        assert game_session.snapshot().outcome is None
 
 
 class TestSnapshotProjection:
@@ -848,7 +882,7 @@ class TestSnapshotProjection:
         assert snapshot.promotion_prompt_position is None
 
         assert snapshot.check_square == sq("e8")
-        assert snapshot.outcome_banner is None
+        assert snapshot.outcome is None
         assert snapshot.last_error_message is None
         assert snapshot.last_action_message == "Move undone."
         assert_snapshot_flags(
@@ -974,7 +1008,7 @@ class TestLifecycle:
         assert game_session._state.last_move_to is None
         assert game_session._state.last_error_message is None
         assert game_session._state.last_action_message == "Game restarted."
-        assert game_session._state.outcome_banner is None
+        assert game_session.snapshot().outcome is None
         assert game_session._game.moves_list == []
         assert game_session._legal_moves == game_session._game.get_moves()
         assert_snapshot_flags(
@@ -1299,7 +1333,7 @@ class TestClickDrafting:
             (sq("e2"), sq("e4")),
         }
 
-    def test_game_over_is_inert(self) -> None:
+    def test_click_on_game_over_position_reparses_against_empty_legal_moves(self) -> None:
         move = make("P", "e2", "e4")
         fake_game = FakeGame(initial_moves={move}, outcome="1-0")
         game_session = make_session(fake_game)
@@ -1309,8 +1343,14 @@ class TestClickDrafting:
 
         game_session.click_square(sq("e2"))
 
-        assert game_session._state.move_text == "Pe2-e4"
-        assert game_session._state.parse_result == move_parser.parse("Pe2-e4", set())
+        assert game_session._state.move_text == ""
+        assert game_session._state.parse_result == move_parser.parse("", set())
+        assert_outcome(
+            game_session.snapshot(),
+            winner="white",
+            reason="checkmate",
+            banner="White wins by checkmate.",
+        )
 
     def test_dead_end_click_self_clears_draft(self) -> None:
         move_a = make("P", "e2", "e4")
@@ -1614,7 +1654,12 @@ class TestTimingCommands:
             status="game_over",
             message="Game has concluded.",
         )
-        assert snapshot.outcome_banner == "Black wins on time."
+        assert_outcome(
+            snapshot,
+            winner="black",
+            reason="timeout",
+            banner="Black wins on time.",
+        )
         assert_snapshot_flags(
             snapshot,
             is_game_over=True,
@@ -1668,7 +1713,12 @@ class TestTimingCommands:
 
         fake_clock.advance(6_000)
         timeout_snapshot = game_session.snapshot()
-        assert timeout_snapshot.outcome_banner == "White wins on time."
+        assert_outcome(
+            timeout_snapshot,
+            winner="white",
+            reason="timeout",
+            banner="White wins on time.",
+        )
         assert_snapshot_flags(
             timeout_snapshot,
             is_game_over=True,
@@ -1696,7 +1746,7 @@ class TestTimingCommands:
             can_resign=True,
             is_promotion_pending=False,
         )
-        assert restored.outcome_banner is None
+        assert restored.outcome is None
         assert_timed_game(
             restored,
             white_remaining_ms=4_000,

@@ -612,6 +612,9 @@ class GameSession:
         self._terminal_state = None
 
     def _refresh_terminal_from_engine(self) -> None:
+        if self._terminal_state is not None:
+            return
+
         if self._game.outcome == "":
             return
         if self._game.outcome == "1/2-1/2":
