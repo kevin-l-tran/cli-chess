@@ -41,40 +41,34 @@ from .session_types import (
 @dataclass
 class _SessionState:
     """
-    Private mutable working state for a `GameSession`.
+    Private mutable state owned by `GameSession`.
 
-    This object stores UI-adjacent and controller-owned session data that is
-    used to build an immutable render-ready snapshot.
+    This structure stores controller-owned working state that is projected into the
+    immutable `Snapshot` read model. It includes the current move draft and parse
+    result, last-move highlight squares, and the latest user-facing action or error
+    message.
 
     Attributes:
         move_text (str):
-            The current raw move text being edited by the user, such as
-            `"Nf3"` or `"Pe2-e4"` depending on the accepted input format.
+            The raw move text currently being edited by the user.
 
         parse_result (ParseResult):
-            The most recent parse result for `move_text`.
+            The most recent parse result for `move_text` against the cached legal
+            move set.
 
         last_move_from (Square | None):
-            The origin square of the most recently applied move, if any. Used
-            for last-move highlighting in the UI.
+            Origin square of the most recently applied move, if any.
 
         last_move_to (Square | None):
-            The destination square of the most recently applied move, if any.
-            Used together with `last_move_from` for move highlighting.
+            Destination square of the most recently applied move, if any.
 
         last_error_message (str | None):
-            The most recent user-facing failure message produced by the
-            session, such as an illegal-move or game-concluded message.
-            `None` means there is no active error to display.
+            The most recent user-facing failure message, or `None` when no error is
+            active.
 
         last_action_message (str | None):
-            The most recent user-facing action message produced by the
-            session, such as an applied-move or undone-move message.
-            `None` means there is no active action to display.
-
-        outcome_banner (str | None):
-            A prominent message used to display game conclusion messages.
-            `None` means there is no active banner message to display.
+            The most recent user-facing success or action message, or `None` when no
+            action message is active.
     """
 
     move_text: str = ""
@@ -91,11 +85,14 @@ class GameSession:
     """
     Application-layer controller for a single chess session.
 
-    A `GameSession` owns:
-    - the active engine `Game`
-    - session configuration
-    - mutable UI-adjacent working state
-    - a cached legal-move set for the current position
+    A `GameSession` owns the active engine `Game`, session configuration, timing
+    coordinator, cached legal moves, terminal state, and UI-adjacent working state
+    such as the current move draft and feedback messages.
+
+    Its public API accepts session-level intents from the presentation layer
+    (move-text edits, square clicks, move confirmation, undo, resignation, and
+    snapshot reads) and translates them into engine operations plus immutable
+    render-ready `Snapshot` values.
     """
 
     def __init__(
@@ -168,23 +165,22 @@ class GameSession:
 
     def click_square(self, square: Square) -> None:
         """
-        Rewrite the move draft in response to a board-square click.
+        Rewrite the current move draft in response to a board-square click.
 
         Parameters:
             square (Square):
                 The clicked board square.
 
         Behavior:
-            - synchronizes session-owned timing before processing the click
-            - does nothing if the game has already concluded
-            - derives the next move-draft text from the current draft,
-              parse result, legal moves, and clicked square
-            - stores that derived text through `set_move_text()`, so the
-              standard parse/update path is reused
+            - derives the next move-draft text from the current parse result, cached
+            legal moves, and clicked square through `click_to_move_text()`
+            - stores the derived text as the new session-owned draft
+            - re-parses the stored draft against the current cached legal moves
+            - does not apply a move or otherwise change the board position
 
         Notes:
-            This method does not apply a move directly. Clicks only edit the
-            draft text.
+            This method only edits draft text. It does not synchronize timing or apply
+            a terminal-state guard on its own.
         """
         self._store_move_text(
             click_to_move_text(
@@ -200,18 +196,18 @@ class GameSession:
 
         Parameters:
             piece (Literal["Q", "R", "B", "N"]):
-                The promotion piece chosen by the user.
+                The promotion piece to select.
 
         Behavior:
-            - synchronizes session-owned timing before processing the selection
-            - does nothing when the session has already ended due to engine outcome
-            or timeout
-            - scans the current parse result's matching moves for a promotion move
-            whose promotion piece matches the requested value
-            - when a match is found, rewrites the draft to that move's canonical
-            text through `set_move_text()`
-            - reuses the normal parse/update path so the draft, highlights, and
-            promotion prompt state refresh consistently
+            - scans the current parse result's matching moves for a promotion move whose
+            promotion piece matches `piece`
+            - when a match is found, rewrites the draft to that move's canonical text
+            - reuses the normal draft storage and parse-update path
+            - leaves session state unchanged when no matching promotion move exists
+
+        Notes:
+            This method only rewrites the move draft. It does not apply a move,
+            synchronize timing, or enforce terminal-state guards on its own.
         """
         for move in self._state.parse_result.matching_moves:
             if get_promotion(move) == piece:
@@ -438,18 +434,20 @@ class GameSession:
 
         Returns:
             Snapshot:
-                A presentation-friendly snapshot containing board glyphs, turn
-                information, highlights, move history, draft-input state, check
-                state, render-ready timing data, opponent-sensitive action
-                availability flags, and user-facing feedback messages.
+                A presentation-friendly snapshot containing board glyphs, side-to-move
+                state, candidate and last-move highlights, move history, move-draft
+                state, promotion-prompt state, check state, capability flags, optional
+                clock state, terminal outcome data, and the latest user-facing feedback
+                messages.
 
         Behavior:
-            - synchronizes session-owned timing before projection so the active
-            clock reflects elapsed time at read time
-            - projects engine state and session-owned application state through
-            `build_snapshot()`
-            - returns a UI-ready read model rather than exposing mutable session or
-            engine internals
+            - synchronizes session-owned timing before projection so the active clock
+            reflects elapsed time at read time
+            - derives the current session phase and capability flags
+            - projects engine state and controller-owned application state through
+            `SessionProjection.build()`
+            - returns a UI-ready read model rather than exposing mutable engine or
+            session internals
         """
         self._sync_timing()
 
@@ -625,7 +623,7 @@ class GameSession:
 
     def _phase(self) -> SessionPhase:
         self._refresh_terminal_from_engine()
-        
+
         if self._terminal_state is not None:
             kind = (
                 "timed_out" if self._terminal_state.reason == "timeout" else "concluded"
@@ -633,7 +631,7 @@ class GameSession:
             return SessionPhase(
                 kind=kind, side_to_move=None, terminal=self._terminal_state
             )
-        
+
         return SessionPhase(
             kind="active",
             side_to_move="white" if self._game.is_white_turn else "black",

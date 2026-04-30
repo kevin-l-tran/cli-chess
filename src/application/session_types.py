@@ -24,12 +24,37 @@ TerminalReason = Literal["draw", "timeout", "checkmate", "resignation"]
 
 @dataclass(frozen=True)
 class TerminalState:
+    """
+    Application-level terminal outcome for a session.
+
+    Attributes:
+        winner (PlayerSide | None):
+            Winning side, or `None` for a draw.
+
+        reason (TerminalReason):
+            Reason the session ended.
+    """
+
     winner: PlayerSide | None
     reason: TerminalReason
 
 
 @dataclass(frozen=True)
 class SessionPhase:
+    """
+    Application-level phase of a session.
+
+    Attributes:
+        kind (SessionPhaseKind):
+            High-level phase classification for the session.
+
+        side_to_move (PlayerSide | None):
+            Side to move while the session is active, or `None` when terminal.
+
+        terminal (TerminalState | None):
+            Terminal outcome data when the session has ended.
+    """
+
     kind: SessionPhaseKind
     side_to_move: PlayerSide | None
     terminal: TerminalState | None = None
@@ -41,6 +66,17 @@ class SessionPhase:
 
 @dataclass(frozen=True)
 class TimeControl:
+    """
+    Chess-clock configuration for a session.
+
+    Attributes:
+        initial_seconds (int):
+            Starting time for each side.
+
+        increment_seconds (int):
+            Time added to the mover's clock after each committed move.
+    """
+
     initial_seconds: int
     increment_seconds: int = 0
 
@@ -52,20 +88,18 @@ class SessionConfig:
 
     Attributes:
         player_side (PlayerSide):
-            Which side the human player is considered to control. This can be
-            used for turn ownership, board orientation, and future AI or network
-            behavior.
+            The side associated with the local player for session-level policy or
+            presentation concerns.
 
         opponent (OpponentType):
-            The type of opponent for the session.
+            The opponent mode for the session.
 
             - "local": two players share the same client
             - "bot": a local human plays against an engine-controlled opponent
-            - "online": a local human plays a remote opponent; some local-only
-            controls such as undo may be unavailable
+            - "online": a local human plays a remote opponent
 
         time_control (TimeControl | None):
-            Optional chess clock settings for the session. None means untimed.
+            Optional chess-clock settings for the session. `None` means untimed.
     """
 
     player_side: PlayerSide
@@ -117,76 +151,71 @@ class Snapshot:
 
     Attributes:
         board_glyphs (list[list[str]]):
-            8x8 matrix of piece/empty-square glyphs in board order for rendering.
+            8x8 matrix of piece and empty-square glyphs in board-render order.
 
-        side_to_move (PlayerSide):
-            The side whose turn it is in the current position.
+        side_to_move (PlayerSide | None):
+            The side to move in the current position, or `None` when the session is
+            terminal.
 
         candidate_moves (set[tuple[Square, Square]]):
-            The set of `(initial position, final position)` tuples that should be
-            highlighted as parser-matched candidate moves.
+            `(from_square, to_square)` pairs highlighted from the current parse
+            result.
 
         last_move_from (Square | None):
-            Origin square of the most recently applied move, if available.
+            Origin square of the most recently applied move, if any.
 
         last_move_to (Square | None):
-            Destination square of the most recently applied move, if available.
+            Destination square of the most recently applied move, if any.
 
         move_list (list[MoveListItem]):
-            Render-friendly move history entries for the sidebar or move panel.
+            Render-friendly move history entries.
 
         move_draft (MoveDraftView):
-            Render-friendly object containing the player's draft text, its parse
-            status, and the canonical move text when the draft uniquely resolves.
+            The current move-input text plus its parse state.
 
         move_autocompletions (list[str]):
-            Autocomplete-ready move strings that share the same prefix as the
-            current draft text.
+            Matching move spellings for the current draft prefix.
 
         promotion_prompt_position (Square | None):
-            The destination square of the promoting pawn. Used to anchor the
-            promotion picker when the remaining ambiguity is only the promotion
-            piece choice.
+            Anchor square for the promotion picker when the current ambiguity is only
+            the promotion piece.
 
         check_square (Square | None):
-            Square of the current player's king when that side is in check, if any.
+            Square of the checked king for the side to move, if any.
 
         is_player_checked (bool):
             Whether the side to move is currently in check.
 
         is_game_over (bool):
-            Whether the game has concluded.
+            Whether the session is terminal.
 
         can_confirm_move (bool):
-            Whether the current draft uniquely resolves to a legal move and can be
-            confirmed.
+            Whether the current draft can be confirmed as a move.
 
         can_undo_fullmove (bool):
-            Whether a fullmove undo is currently available. A fullmove undo removes
-            two plies as a turn pair.
+            Whether a fullmove undo is available.
 
         can_undo_halfmove (bool):
-            Whether a halfmove undo is currently available. A halfmove undo removes
-            one ply.
+            Whether a halfmove undo is available.
 
         can_resign (bool):
-            Whether resigning is currently available.
+            Whether resignation is currently available.
 
         is_promotion_pending (bool):
-            Whether the current draft is waiting for the user to choose a
-            promotion piece.
+            Whether the current draft is waiting on a promotion-piece choice.
 
-        outcome_banner (str | None):
-            Final game result text to display prominently when the game has ended,
-            such as resignation or draw.
+        timed_game (TimedGameView | None):
+            Render-ready clock state for timed games, or `None` for untimed games.
+
+        outcome (OutcomeView | None):
+            Terminal outcome data for concluded sessions, or `None` while the game is
+            still active.
 
         last_error_message (str | None):
-            Most recent user-facing action failure message. None when there is no
-            active error to show.
+            Most recent user-facing failure message, if any.
 
         last_action_message (str | None):
-            Most recent user-facing success or action message. None when there is
-            no active action message to show.
+            Most recent user-facing success or action message, if any.
     """
 
     board_glyphs: list[list[str]]
@@ -220,6 +249,20 @@ class Snapshot:
 
 @dataclass(frozen=True)
 class MoveAttemptResult:
+    """
+    Stable result returned by `GameSession.confirm_move_draft()`.
+
+    Attributes:
+        ok (bool):
+            Whether the move was successfully applied.
+
+        status (MoveAttemptStatus):
+            Machine-friendly outcome code for the attempt.
+
+        message (str | None):
+            User-facing feedback associated with the result.
+    """
+
     ok: bool
     status: MoveAttemptStatus
     message: str | None
@@ -227,6 +270,20 @@ class MoveAttemptResult:
 
 @dataclass(frozen=True)
 class UndoResult:
+    """
+    Stable result returned by `GameSession.undo()`.
+
+    Attributes:
+        ok (bool):
+            Whether undo succeeded.
+
+        status (UndoStatus):
+            Machine-friendly outcome code for the attempt.
+
+        message (str | None):
+            User-facing feedback associated with the result.
+    """
+
     ok: bool
     status: UndoStatus
     message: str | None
@@ -234,6 +291,20 @@ class UndoResult:
 
 @dataclass(frozen=True)
 class ResignResult:
+    """
+    Stable result returned by `GameSession.resign()`.
+
+    Attributes:
+        ok (bool):
+            Whether resignation succeeded.
+
+        status (ResignStatus):
+            Machine-friendly outcome code for the attempt.
+
+        message (str | None):
+            User-facing feedback associated with the result.
+    """
+
     ok: bool
     status: ResignStatus
     message: str | None

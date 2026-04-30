@@ -7,12 +7,13 @@ from .clock import ClockFrame, ClockState, TimeSource, advance_clock, freeze_clo
 @dataclass
 class SessionTiming:
     """
-    Timing coordinator for a `GameSession`.
+    Session-owned timing coordinator for a chess clock.
 
-    This helper centralizes session-level timing policy on top of `ClockState`,
-    including clock synchronization, timeout detection, increment handling, and
-    timing-history save/restore for undo.
+    `SessionTiming` wraps mutable `ClockState` with application-level timing policy,
+    including synchronization to the current time source, timeout detection,
+    increment handling, clock freezing, and timing-history save/restore for undo.
     """
+
     clock_state: ClockState | None
     time_control: TimeControl | None
     time_source: TimeSource

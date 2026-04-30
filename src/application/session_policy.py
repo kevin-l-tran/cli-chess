@@ -5,6 +5,13 @@ from .session_types import OpponentType, UndoScope
 
 @dataclass(frozen=True)
 class SessionCapabilities:
+    """
+    UI-facing action availability flags derived for the current session state.
+
+    Each field indicates whether the corresponding action should currently be
+    offered by the presentation layer.
+    """
+
     can_confirm_move: bool
     can_undo_halfmove: bool
     can_undo_fullmove: bool
@@ -12,6 +19,13 @@ class SessionCapabilities:
 
 
 class SessionPolicy:
+    """
+    Pure policy helpers for session-level action availability.
+
+    `SessionPolicy` derives default undo scope and UI capability flags from
+    opponent mode, move count, parse state, and whether the session is terminal.
+    """
+
     @staticmethod
     def resolve_undo_scope(
         opponent: OpponentType,

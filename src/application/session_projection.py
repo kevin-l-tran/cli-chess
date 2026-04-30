@@ -41,6 +41,13 @@ class SessionProjectionInputs:
 
 
 class SessionProjection:
+    """
+    Projection helpers for building immutable `Snapshot` read models.
+
+    This namespace converts engine state plus controller-owned session state into
+    presentation-friendly values for the UI layer.
+    """
+
     @staticmethod
     def build(game: Game, inputs: SessionProjectionInputs) -> Snapshot:
         """
@@ -48,31 +55,31 @@ class SessionProjection:
 
         Parameters:
             game (Game):
-                The active engine game supplying board state, side to move, move
-                history, and check information.
+                The active engine game supplying board state, move history, and check
+                information.
 
             inputs (SessionProjectionInputs):
-                Session-owned UI state needed to project the current view, including
-                move draft state, parser results, last-move highlights, user-facing
-                feedback messages, outcome state, and opponent type.
+                Controller-owned state needed to project the current view, including the
+                current move draft and parse result, last-move highlights, terminal
+                state, capability flags, user-facing feedback messages, and optional
+                timing inputs.
 
         Returns:
             Snapshot:
-                An immutable view-model containing board glyphs, turn state,
-                candidate-move highlights, move history, draft/autocompletion state,
-                promotion-picker anchor state, check state, opponent-sensitive undo
-                availability flags, and user-facing banners and messages.
+                An immutable view-model containing board glyphs, side-to-move state,
+                candidate-move highlights, move history, draft and autocompletion data,
+                promotion-picker anchor state, check state, capability flags, optional
+                timed-game data, terminal outcome data, and user-facing messages.
 
         Behavior:
-            - converts the current board into render glyphs
-            - projects parser-derived candidate moves, canonical draft state, and
-            autocompletions into the snapshot
-            - includes the last applied move highlights and move list
-            - derives the promotion prompt anchor square when the remaining ambiguity
-            corresponds only to a promotion-piece choice
-            - derives UI capability flags such as move confirmation, undo availability,
-            resignation availability, game-over state, and promotion-pending state
-            - includes current check, outcome, and user-facing message state
+            - converts the board into render glyphs
+            - projects parser-derived candidate moves, move-draft state, and
+            autocompletions
+            - includes last-move highlights and move history
+            - derives a promotion prompt anchor when the remaining ambiguity is only the
+            promotion-piece choice
+            - projects capability flags, optional clock state, terminal outcome state,
+            and the latest feedback messages
         """
         parse_result = inputs.parse_result
         check_square = game.checked_king_position()

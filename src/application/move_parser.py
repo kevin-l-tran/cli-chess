@@ -15,32 +15,34 @@ from .session_types import ParseStatus, Square
 @dataclass(frozen=True)
 class ParseResult:
     """
-    Represents the parse results of an arbitrary move string.
+    Result of matching a move-input prefix against the current legal move set.
 
     Attributes:
         raw_text (str):
-            The raw text being parsed.
+            Original text supplied by the user.
 
         normalized_text (str):
-            The raw text after being normalized according to the move string specifications.
+            `raw_text` after trimming surrounding whitespace and removing internal
+            spaces.
 
         status (ParseStatus):
-            The status of the parse. Parsing can resolve to `empty`, `no_match`, `ambiguous`, or `resolved`.
+            Parse status for the current input: `"empty"`, `"no_match"`,
+            `"ambiguous"`, or `"resolved"`.
 
         matching_moves (list[Move]):
-            A list of moves that match the normalized text according to the move string specifications.
+            Legal moves whose accepted spellings start with `normalized_text`.
 
         matching_spellings (list[str]):
-            A list of move strings that match the normalized text according to the move string specifications.
+            Accepted spellings that match the current input prefix.
 
         source_to_target_highlights (list[tuple[Square, Square]]):
-            A list of `(Square, Square)` tuples representing the `(source square, destination square)` of each matched move.
+            `(from_square, to_square)` pairs for all matching moves.
 
         resolved_move (Move | None):
-            The unique move that the normalized text resolves to, if any.
+            The uniquely resolved legal move, if the parse status is `"resolved"`.
 
         canonical_text (str | None):
-            The canonical text representation, according to the move string specifications, of the resolved move, if it exists.
+            Canonical move text for `resolved_move`, if one unique move is resolved.
     """
 
     raw_text: str
@@ -229,7 +231,26 @@ def _collect_matches(
 
 
 def parse(text: str, legal_moves: set[Move]) -> ParseResult:
-    """Takes a text string and converts it into a ParseResult"""
+    """
+    Parse arbitrary move-input text against the current legal move set.
+
+    Parameters:
+        text (str):
+            Raw move-input text entered by the user.
+
+        legal_moves (set[Move]):
+            Legal moves available in the current position.
+
+    Returns:
+        ParseResult:
+            A structured parse result containing normalized input, matching moves and
+            spellings, highlight pairs, and either a uniquely resolved move or a
+            parse status describing why the input is not yet resolvable.
+
+    Notes:
+        Empty input is treated as an inert special case and returns a result with
+        status `"empty"`.
+    """
     normalized, matching_moves, matching_spellings = _collect_matches(text, legal_moves)
 
     # Deliberate special case: keep empty input inert.
