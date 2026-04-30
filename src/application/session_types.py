@@ -20,12 +20,14 @@ UndoScope = Literal["halfmove", "fullmove"]
 ResignStatus = Literal["resigned", "game_over", "error"]
 SessionPhaseKind = Literal["active", "concluded", "timed_out"]
 TerminalReason = Literal["draw", "timeout", "checkmate", "resignation"]
+DrawDetail = Literal["stalemate", "threefold", "fifty_move", "agreed"]
 
 
 @dataclass(frozen=True)
 class TerminalState:
     winner: PlayerSide | None
     reason: TerminalReason
+    draw_detail: DrawDetail | None = None
 
 
 @dataclass(frozen=True)

@@ -86,8 +86,6 @@ class _SessionState:
     last_error_message: str | None = None
     last_action_message: str | None = None
 
-    terminal_override: TerminalState | None = None
-
 
 class GameSession:
     """
@@ -108,6 +106,7 @@ class GameSession:
     ):
         self._time_source = time_source or system_time_ms
         self._legal_moves: set[Move] = set()
+        self._terminal_state: TerminalState | None = None
         self._bootstrap_session(config=config, game=game)
 
     # ============================================================================
@@ -130,6 +129,7 @@ class GameSession:
             - refreshes cached legal moves and other derived position state
             - records a user-facing restart message
         """
+        self._clear_terminal()
         self._bootstrap_session(
             config=self._config if config is None else config,
             game=None,
@@ -371,7 +371,7 @@ class GameSession:
             self._set_error_message("Could not undo move.")
             return UndoResult(False, "error", "Could not undo move.")
         else:
-            self._state.terminal_override = None
+            self._clear_terminal()
             self._refresh_position_state(clear_move_text=True)
             self._set_action_message(success_message)
             return UndoResult(True, "undone", success_message)
@@ -418,10 +418,7 @@ class GameSession:
             return ResignResult(False, "error", "Could not resign game.")
         else:
             winner = "black" if self._game.outcome == "0-1" else "white"
-            self._state.terminal_override = TerminalState(
-                winner=winner,
-                reason="resignation",
-            )
+            self._set_terminal(TerminalState(winner=winner, reason="resignation"))
 
             self._refresh_position_state(clear_move_text=True)
 
@@ -495,6 +492,7 @@ class GameSession:
         self._config = config
         self._game = Game() if game is None else game
         self._state = _SessionState()
+        self._terminal_state = None
 
         time_control = self._config.time_control
         if time_control is None:
@@ -534,6 +532,9 @@ class GameSession:
 
     def _sync_timing(self) -> None:
         if self._timing.sync(engine_game_over=self._game.outcome != ""):
+            loser = self._timing.timeout_side()
+            winner = "black" if loser == "white" else "white"
+            self._set_terminal(TerminalState(winner=winner, reason="timeout"))
             self._refresh_position_state(clear_move_text=False)
 
     def _capabilities(self) -> SessionCapabilities:
@@ -570,6 +571,7 @@ class GameSession:
             next_side = "white" if self._game.is_white_turn else "black"
             self._timing.on_move_committed(next_side=next_side)
 
+            self._refresh_terminal_from_engine()
             self._refresh_position_state(clear_move_text=True)
 
             action_message = f"Played {get_canonical(move)}."
@@ -605,51 +607,33 @@ class GameSession:
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
 
-    def _phase(self) -> SessionPhase:
-        timeout_side = self._timing.timeout_side()
-        side_to_move: PlayerSide = "white" if self._game.is_white_turn else "black"
+    def _set_terminal(self, terminal: TerminalState) -> None:
+        self._terminal_state = terminal
 
-        if timeout_side == "white":
-            return SessionPhase(
-                kind="timed_out",
-                side_to_move=None,
-                terminal=TerminalState(winner="black", reason="timeout"),
-            )
-        if timeout_side == "black":
-            return SessionPhase(
-                kind="timed_out",
-                side_to_move=None,
-                terminal=TerminalState(winner="white", reason="timeout"),
-            )
+    def _clear_terminal(self) -> None:
+        self._terminal_state = None
 
-        if self._state.terminal_override is not None:
-            return SessionPhase(
-                kind="concluded",
-                side_to_move=None,
-                terminal=self._state.terminal_override,
-            )
-
-        if self._game.outcome == "1-0":
-            return SessionPhase(
-                kind="concluded",
-                side_to_move=None,
-                terminal=TerminalState(winner="white", reason="checkmate"),
-            )
-        if self._game.outcome == "0-1":
-            return SessionPhase(
-                kind="concluded",
-                side_to_move=None,
-                terminal=TerminalState(winner="black", reason="checkmate"),
-            )
+    def _refresh_terminal_from_engine(self) -> None:
+        if self._game.outcome == "":
+            return
         if self._game.outcome == "1/2-1/2":
-            return SessionPhase(
-                kind="concluded",
-                side_to_move=None,
-                terminal=TerminalState(winner=None, reason="draw"),
-            )
+            self._set_terminal(TerminalState(winner=None, reason="draw"))
+        elif self._game.outcome == "1-0":
+            self._set_terminal(TerminalState(winner="white", reason="checkmate"))
+        elif self._game.outcome == "0-1":
+            self._set_terminal(TerminalState(winner="black", reason="checkmate"))
 
+    def _phase(self) -> SessionPhase:
+        if self._terminal_state is not None:
+            kind = (
+                "timed_out" if self._terminal_state.reason == "timeout" else "concluded"
+            )
+            return SessionPhase(
+                kind=kind, side_to_move=None, terminal=self._terminal_state
+            )
+        
         return SessionPhase(
             kind="active",
-            side_to_move=side_to_move,
+            side_to_move="white" if self._game.is_white_turn else "black",
             terminal=None,
         )
