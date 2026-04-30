@@ -16,10 +16,10 @@ from src.engine.game import (
 
 from .move_parser import ParseResult, get_canonical, parse
 from .click_draft import click_to_move_text
-from .snapshot import SnapshotInputs, TimingSnapshotInputs, build_snapshot
 from .clock import ClockState, TimeSource, system_time_ms
 from .session_timing import SessionTiming
 from .session_policy import SessionCapabilities, SessionPolicy
+from .snapshot import SessionProjection, SessionProjectionInputs, TimingProjectionInputs
 from .session_types import (
     MoveAttemptResult,
     PlayerSide,
@@ -183,7 +183,7 @@ class GameSession:
             draft text.
         """
         self._sync_timing()
-        if self._is_session_over():
+        if self._phase().is_game_over:
             return
 
         self.set_move_text(
@@ -214,7 +214,7 @@ class GameSession:
             promotion prompt state refresh consistently
         """
         self._sync_timing()
-        if self._is_session_over():
+        if self._phase().is_game_over:
             return
 
         for move in self._state.parse_result.matching_moves:
@@ -261,7 +261,7 @@ class GameSession:
             - does not modify the board position unless move application succeeds
         """
         self._sync_timing()
-        if self._is_session_over():
+        if self._phase().is_game_over:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
             return MoveAttemptResult(False, "game_over", "Game has concluded.")
@@ -455,17 +455,12 @@ class GameSession:
 
         clock = self._clock_state
         time_control = self._config.time_control
-        is_game_over = self._is_session_over()
-        capabilities = SessionPolicy.capabilities(
-            opponent=self._config.opponent,
-            move_count=len(self._game.moves_list),
-            parse_result=self._state.parse_result,
-            is_game_over=is_game_over,
-        )
+        is_game_over = self._phase().is_game_over
+        capabilities = self._capabilities()
 
-        return build_snapshot(
+        return SessionProjection.build(
             self._game,
-            SnapshotInputs(
+            SessionProjectionInputs(
                 move_text=self._state.move_text,
                 parse_result=self._state.parse_result,
                 last_move_from=self._state.last_move_from,
@@ -475,7 +470,7 @@ class GameSession:
                 last_action_message=self._state.last_action_message,
                 is_game_over=is_game_over,
                 capabilities=capabilities,
-                timing=TimingSnapshotInputs(
+                timing=TimingProjectionInputs(
                     clock_state=clock,
                     increment_seconds=None
                     if time_control is None
@@ -533,18 +528,12 @@ class GameSession:
         if self._timing.sync(engine_game_over=self._game.outcome != ""):
             self._refresh_position_state(clear_move_text=False)
 
-    def _is_session_over(self) -> bool:
-        return SessionPolicy.is_game_over(
-            engine_game_over=self._game.outcome != "",
-            timeout_side=self._timing.timeout_side(),
-        )
-
     def _capabilities(self) -> SessionCapabilities:
         return SessionPolicy.capabilities(
             opponent=self._config.opponent,
             move_count=len(self._game.moves_list),
             parse_result=self._state.parse_result,
-            is_game_over=self._is_session_over(),
+            is_game_over=self._phase().is_game_over,
         )
 
     def _apply_resolved_move(
@@ -581,31 +570,21 @@ class GameSession:
             return MoveAttemptResult(True, "applied", action_message)
 
     def _refresh_position_state(self, clear_move_text: bool):
-        timeout_side = self._timing.timeout_side()
+        phase = self._phase()
 
-        if self._game.outcome != "":
-            self._legal_moves = set()
-            self._timing.freeze()
-            if self._game.outcome == "1-0":
-                self._state.outcome_banner = "White wins."
-            elif self._game.outcome == "0-1":
-                self._state.outcome_banner = "Black wins."
-            elif self._game.outcome == "1/2-1/2":
-                self._state.outcome_banner = "Draw."
-        elif timeout_side is not None:
-            self._legal_moves = set()
-            self._state.outcome_banner = (
-                "Black wins on time."
-                if timeout_side == "white"
-                else "White wins on time."
-            )
-        else:
+        if phase.kind == "active":
+            assert phase.side_to_move
+
             self._legal_moves = self._game.get_moves()
             self._state.outcome_banner = None
             self._timing.on_position_ready(
-                side_to_move="white" if self._game.is_white_turn else "black",
+                side_to_move=phase.side_to_move,
                 engine_game_over=False,
             )
+        else:
+            self._legal_moves = set()
+            self._timing.freeze()
+            self._state.outcome_banner = self._banner_for_phase(phase)
 
         if self._game.moves_list:
             last_move, _ = self._game.moves_list[-1]
@@ -667,3 +646,21 @@ class GameSession:
             winner=None,
             terminal_reason=None,
         )
+
+    def _banner_for_phase(self, phase: SessionPhase) -> str | None:
+        if phase.kind == "timed_out":
+            return (
+                "Black wins on time."
+                if phase.winner == "black"
+                else "White wins on time."
+            )
+
+        if phase.kind == "concluded":
+            if phase.terminal_reason == "draw":
+                return "Draw."
+            if phase.winner == "white":
+                return "White wins."
+            if phase.winner == "black":
+                return "Black wins."
+
+        return None

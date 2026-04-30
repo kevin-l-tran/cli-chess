@@ -42,12 +42,6 @@ class SessionTiming:
             return None
         return self.clock_state.timeout_side
 
-    def is_session_over(self, engine_game_over: bool) -> bool:
-        """
-        Return whether timing or engine state ends the session.
-        """
-        return engine_game_over or self.timeout_side() is not None
-
     def freeze(self) -> None:
         """Freeze the clock so no side is currently running."""
         freeze_clock(self.clock_state)

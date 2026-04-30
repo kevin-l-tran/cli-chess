@@ -21,7 +21,7 @@ UndoStatus = Literal["undone", "unavailable", "error"]
 UndoScope = Literal["halfmove", "fullmove"]
 ResignStatus = Literal["resigned", "game_over", "error"]
 SessionPhaseKind = Literal["active", "concluded", "timed_out"]
-TerminalReason = Literal["draw", "timeout", "resignation", "checkmate"]
+TerminalReason = Literal["draw", "timeout", "checkmate"]
 
 
 @dataclass(frozen=True)

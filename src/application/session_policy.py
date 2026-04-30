@@ -13,10 +13,6 @@ class SessionCapabilities:
 
 class SessionPolicy:
     @staticmethod
-    def is_game_over(engine_game_over: bool, timeout_side: str | None) -> bool:
-        return engine_game_over or timeout_side is not None
-
-    @staticmethod
     def resolve_undo_scope(
         opponent: OpponentType,
         requested: UndoScope | None,
