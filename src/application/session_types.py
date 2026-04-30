@@ -70,6 +70,23 @@ class MoveDraftView:
 
 
 @dataclass(frozen=True)
+class ClockView:
+    remaining_ms: int
+    display_text: str
+    is_active: bool
+    is_flagged: bool
+
+
+@dataclass(frozen=True)
+class TimedGameView:
+    white: ClockView
+    black: ClockView
+    active_side: PlayerSide | None
+    timeout_side: PlayerSide | None
+    increment_seconds: int
+
+
+@dataclass(frozen=True)
 class Snapshot:
     """
     Render-ready view of the current session state.
@@ -169,6 +186,8 @@ class Snapshot:
     can_undo_halfmove: bool
     can_resign: bool
     is_promotion_pending: bool
+
+    timed_game: TimedGameView | None
 
     outcome_banner: str | None
     last_error_message: str | None
