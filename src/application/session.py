@@ -165,7 +165,10 @@ class GameSession:
             This method does not apply a move directly. Clicks only edit the
             draft text.
         """
-        if self._game.outcome != "":
+        clock = self._clock_state
+        if self._game.outcome != "" or (
+            clock is not None and clock.timeout_side is not None
+        ):
             return
 
         self.set_move_text(
@@ -229,13 +232,19 @@ class GameSession:
             - stores a user-facing error message
             - does not modify the board position unless move application succeeds
         """
-        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
-        parse_result = self._state.parse_result
+        if self._advance_clock_to_now():
+            self._refresh_position_state(clear_move_text=False)
 
-        if self._game.outcome != "":
+        clock = self._clock_state
+        if self._game.outcome != "" or (
+            clock is not None and clock.timeout_side is not None
+        ):
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
             return MoveAttemptResult(False, "game_over", "Game has concluded.")
+
+        self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+        parse_result = self._state.parse_result
 
         if parse_result.status == "empty":
             self._set_error_message("Enter a move first.")
@@ -295,6 +304,9 @@ class GameSession:
             - stores a user-facing failure message
             - returns a stable failure result
         """
+        if self._advance_clock_to_now():
+            self._refresh_position_state(clear_move_text=False)
+
         if self._config.opponent == "online":
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Can't undo in an online game.")
@@ -344,6 +356,9 @@ class GameSession:
             - stores a user-facing failure message
             - returns a stable failure result
         """
+        if self._advance_clock_to_now():
+            self._refresh_position_state(clear_move_text=False)
+
         try:
             self._game.resign()
         except GameConcludedError:
@@ -378,6 +393,9 @@ class GameSession:
                 opponent-sensitive action availability flags, and user-facing feedback
                 messages.
         """
+        if self._advance_clock_to_now():
+            self._refresh_position_state(clear_move_text=False)
+
         return build_snapshot(
             self._game,
             SnapshotInputs(
@@ -464,7 +482,7 @@ class GameSession:
             self._set_action_message(action_message)
             return MoveAttemptResult(True, "applied", action_message)
 
-    def _refresh_position_state(self, *, clear_move_text: bool):
+    def _refresh_position_state(self, clear_move_text: bool):
         if self._game.outcome != "":
             self._legal_moves = set()
             self._freeze_clock()
