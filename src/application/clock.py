@@ -24,7 +24,6 @@ class ClockFrame:
     black_remaining_ms: int
     active_side: PlayerSide | None
     timeout_side: PlayerSide | None
-    last_updated_ms: int | None
 
 
 @dataclass

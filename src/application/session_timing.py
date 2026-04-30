@@ -58,7 +58,6 @@ class SessionTiming:
                 black_remaining_ms=clock.black_remaining_ms,
                 active_side=clock.active_side,
                 timeout_side=clock.timeout_side,
-                last_updated_ms=clock.last_updated_ms,
             )
         )
 
