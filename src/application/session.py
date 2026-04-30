@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import time
 from typing import Callable, Literal
 
 from src.application.click_draft import click_to_move_text
@@ -29,6 +30,10 @@ from .session_types import (
 )
 
 TimeSource = Callable[[], int]
+
+
+def _system_time_ms() -> int:
+    return time.monotonic_ns() // 1_000_000
 
 
 @dataclass(frozen=True)
@@ -111,7 +116,13 @@ class GameSession:
     - a cached legal-move set for the current position
     """
 
-    def __init__(self, config: SessionConfig, game: Game | None = None):
+    def __init__(
+        self,
+        config: SessionConfig,
+        game: Game | None = None,
+        time_source: TimeSource | None = None,
+    ):
+        self._time_source = time_source or _system_time_ms
         self._legal_moves: set[Move] = set()
         self._bootstrap_session(config=config, game=game)
 
@@ -412,6 +423,24 @@ class GameSession:
         self._config = config
         self._game = Game() if game is None else game
         self._state = _SessionState()
+        self._refresh_position_state(clear_move_text=False)
+
+        time_control = self._config.time_control
+        if time_control is None:
+            self._clock_state = None
+        else:
+            active_side: PlayerSide | None = None
+            if self._game.outcome == "":
+                active_side = "white" if self._game.is_white_turn else "black"
+
+            self._clock_state = _ClockState(
+                white_remaining_ms=time_control.initial_seconds * 1000,
+                black_remaining_ms=time_control.initial_seconds * 1000,
+                active_side=active_side,
+                timeout_side=None,
+                last_updated_ms=self._time_source(),
+            )
+
         self._refresh_position_state(clear_move_text=False)
 
     def _apply_resolved_move(
