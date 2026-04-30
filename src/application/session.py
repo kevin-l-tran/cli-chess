@@ -18,6 +18,7 @@ from .move_parser import ParseResult, get_canonical, parse
 from .click_draft import click_to_move_text
 from .snapshot import SnapshotInputs, TimingSnapshotInputs, build_snapshot
 from .timing import (
+    ClockFrame,
     ClockState,
     TimeSource,
     advance_clock,
@@ -468,11 +469,27 @@ class GameSession:
     def _freeze_clock(self) -> None:
         return freeze_clock(clock=self._clock_state)
 
+    def _push_clock_frame(self) -> None:
+        clock = self._clock_state
+        if clock is None:
+            return
+        clock.history.append(
+            ClockFrame(
+                white_remaining_ms=clock.white_remaining_ms,
+                black_remaining_ms=clock.black_remaining_ms,
+                active_side=clock.active_side,
+                timeout_side=clock.timeout_side,
+                last_updated_ms=clock.last_updated_ms,
+            )
+        )
+
     def _apply_resolved_move(
         self,
         move: Move,
         offer_draw: bool = False,
     ) -> MoveAttemptResult:
+        self._push_clock_frame()
+
         try:
             self._game.make_move(move, draw_offered=offer_draw)
         except IllegalMoveError:
