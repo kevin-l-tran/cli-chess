@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Literal
 
 from src.engine.moves import (
     Move,
@@ -10,10 +9,7 @@ from src.engine.moves import (
     get_piece,
     get_promotion,
 )
-
-
-Square = tuple[int, int]
-ParseStatus = Literal["empty", "no_match", "ambiguous", "resolved"]
+from .session_types import ParseStatus, Square
 
 
 @dataclass(frozen=True)

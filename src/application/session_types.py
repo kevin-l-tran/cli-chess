@@ -1,11 +1,9 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from .move_parser import ParseStatus
-
 
 Square = tuple[int, int]
-
+ParseStatus = Literal["empty", "no_match", "ambiguous", "resolved"]
 PlayerSide = Literal["white", "black"]
 OpponentType = Literal["local", "bot", "online"]
 MoveAttemptStatus = Literal[
