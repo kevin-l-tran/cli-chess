@@ -25,6 +25,7 @@ from .session_types import (
     PlayerSide,
     ResignResult,
     SessionConfig,
+    SessionPhase,
     Snapshot,
     Square,
     UndoResult,
@@ -618,3 +619,51 @@ class GameSession:
             self._state.move_text = ""
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
+
+    def _phase(self) -> SessionPhase:
+        timeout_side = self._timing.timeout_side()
+        side_to_move: PlayerSide = "white" if self._game.is_white_turn else "black"
+
+        if timeout_side == "white":
+            return SessionPhase(
+                kind="timed_out",
+                side_to_move=None,
+                winner="black",
+                terminal_reason="timeout",
+            )
+        if timeout_side == "black":
+            return SessionPhase(
+                kind="timed_out",
+                side_to_move=None,
+                winner="white",
+                terminal_reason="timeout",
+            )
+
+        if self._game.outcome == "1-0":
+            return SessionPhase(
+                kind="concluded",
+                side_to_move=None,
+                winner="white",
+                terminal_reason="checkmate",
+            )
+        if self._game.outcome == "0-1":
+            return SessionPhase(
+                kind="concluded",
+                side_to_move=None,
+                winner="black",
+                terminal_reason="checkmate",
+            )
+        if self._game.outcome == "1/2-1/2":
+            return SessionPhase(
+                kind="concluded",
+                side_to_move=None,
+                winner=None,
+                terminal_reason="draw",
+            )
+
+        return SessionPhase(
+            kind="active",
+            side_to_move=side_to_move,
+            winner=None,
+            terminal_reason=None,
+        )

@@ -20,6 +20,20 @@ MoveAttemptStatus = Literal[
 UndoStatus = Literal["undone", "unavailable", "error"]
 UndoScope = Literal["halfmove", "fullmove"]
 ResignStatus = Literal["resigned", "game_over", "error"]
+SessionPhaseKind = Literal["active", "concluded", "timed_out"]
+TerminalReason = Literal["draw", "timeout", "resignation", "checkmate"]
+
+
+@dataclass(frozen=True)
+class SessionPhase:
+    kind: SessionPhaseKind
+    side_to_move: PlayerSide | None
+    winner: PlayerSide | None
+    terminal_reason: TerminalReason | None = None
+
+    @property
+    def is_game_over(self) -> bool:
+        return self.kind in ("concluded", "timed_out")
 
 
 @dataclass(frozen=True)
