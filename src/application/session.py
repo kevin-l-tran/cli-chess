@@ -19,7 +19,7 @@ from .click_draft import click_to_move_text
 from .clock import ClockState, TimeSource, system_time_ms
 from .session_timing import SessionTiming
 from .session_policy import SessionCapabilities, SessionPolicy
-from .snapshot import SessionProjection, SessionProjectionInputs, TimingProjectionInputs
+from .session_projection import SessionProjection, SessionProjectionInputs, TimingProjectionInputs
 from .session_types import (
     MoveAttemptResult,
     PlayerSide,
