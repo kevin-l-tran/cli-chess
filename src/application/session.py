@@ -118,8 +118,9 @@ class GameSession:
         Behavior:
             - rebuilds the backing engine `Game`
             - resets controller-owned working state such as draft input,
-              parse state, highlights, and feedback
+            parse state, highlights, feedback, and timing state
             - refreshes cached legal moves and other derived position state
+            - records a user-facing restart message
         """
         self._bootstrap_session(
             config=self._config if config is None else config,
@@ -132,12 +133,30 @@ class GameSession:
     # ============================================================================
 
     def set_move_text(self, text: str) -> None:
-        """Store raw draft text and re-parse it against current legal moves."""
+        """
+        Store raw move-input text and re-parse it against the current legal moves.
+
+        Parameters:
+            text (str):
+                The raw move text entered by the user.
+
+        Behavior:
+            - updates the session-owned move draft
+            - re-parses the draft against the current cached legal-move set
+            - does not apply a move or otherwise change the board position
+        """
         self._state.move_text = text
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
 
     def clear_move_text(self) -> None:
-        """Clear the current draft text and reset parse state to the empty-input result."""
+        """
+        Clear the current move-input draft and reset parse state.
+
+        Behavior:
+            - replaces the current draft text with the empty string
+            - re-parses the empty draft against the current legal moves
+            - does not apply a move or otherwise change the board position
+        """
         self._state.move_text = ""
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
 
@@ -150,6 +169,7 @@ class GameSession:
                 The clicked board square.
 
         Behavior:
+            - synchronizes session-owned timing before processing the click
             - does nothing if the game has already concluded
             - derives the next move-draft text from the current draft,
               parse result, legal moves, and clicked square
@@ -181,10 +201,13 @@ class GameSession:
                 The promotion piece chosen by the user.
 
         Behavior:
+            - synchronizes session-owned timing before processing the selection
+            - does nothing when the session has already ended due to engine outcome
+            or timeout
             - scans the current parse result's matching moves for a promotion move
             whose promotion piece matches the requested value
             - when a match is found, rewrites the draft to that move's canonical
-            text through ``set_move_text()``
+            text through `set_move_text()`
             - reuses the normal parse/update path so the draft, highlights, and
             promotion prompt state refresh consistently
         """
@@ -214,18 +237,24 @@ class GameSession:
                 Stable success/failure information suitable for the UI layer.
 
         Success behavior:
+            - synchronizes session-owned timing before validating the draft
             - re-parses the current move draft against current legal moves
             - confirms that the draft uniquely resolves to a legal move
             - applies the resolved move through the engine
+            - updates session-owned timing state, including increment and active-side
+            switching for timed sessions
             - refreshes cached legal moves and derived position state
             - updates last-move highlight squares
             - clears the move draft and resets parse state
             - clears any active error message
 
         Failure behavior:
-            - returns stable feedback for game-concluded, empty, ambiguous,
-            no-match, and unexpected-resolution cases
-            - preserves the current draft text for correction
+            - rejects attempts when the session has already ended due to engine
+            conclusion or timeout
+            - returns stable feedback for empty, ambiguous, no-match, illegal, and
+            unexpected-resolution cases
+            - preserves the current draft text for correction unless move
+            application succeeds
             - stores a user-facing error message
             - does not modify the board position unless move application succeeds
         """
@@ -282,9 +311,17 @@ class GameSession:
             UndoResult:
                 Stable success/failure information for the UI layer.
 
+        Policy:
+            Undo remains available even after the game has ended, provided undo is
+            allowed for the current opponent mode and there is move history to undo.
+            This allows the UI to step backward from terminal positions such as
+            checkmate, stalemate, resignation, or timeout.
+
         Success behavior:
+            - synchronizes session-owned timing before undo is attempted
             - calls the engine undo operation for the resolved scope
-            - refreshes cached legal moves and last-move highlight state
+            - restores prior session-owned timing state for timed sessions
+            - refreshes cached legal moves, timing state, and last-move highlights
             - clears the current move-text draft and parse state
             - clears any active error message
 
@@ -338,13 +375,16 @@ class GameSession:
                 Stable success/failure information suitable for the UI layer.
 
         Success behavior:
+            - synchronizes session-owned timing before resignation is attempted
             - resigns the current game through the engine
-            - refreshes cached legal moves and last-move highlight state
+            - refreshes cached legal moves, timing state, and last-move highlights
             - clears the current move-text draft and parse state
             - clears any active error message
             - returns a user-facing resignation message
 
         Failure behavior:
+            - rejects attempts when the session has already ended due to engine
+            conclusion or timeout
             - leaves the current move-text draft intact
             - refreshes session-owned position state
             - stores a user-facing failure message
@@ -386,9 +426,17 @@ class GameSession:
         Returns:
             Snapshot:
                 A presentation-friendly snapshot containing board glyphs, turn
-                information, highlights, move history, draft-input state, check state,
-                opponent-sensitive action availability flags, and user-facing feedback
-                messages.
+                information, highlights, move history, draft-input state, check
+                state, render-ready timing data, opponent-sensitive action
+                availability flags, and user-facing feedback messages.
+
+        Behavior:
+            - synchronizes session-owned timing before projection so the active
+            clock reflects elapsed time at read time
+            - projects engine state and session-owned application state through
+            `build_snapshot()`
+            - returns a UI-ready read model rather than exposing mutable session or
+            engine internals
         """
         self._sync_timing()
 

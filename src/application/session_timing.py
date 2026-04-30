@@ -6,11 +6,26 @@ from .clock import ClockFrame, ClockState, TimeSource, advance_clock, freeze_clo
 
 @dataclass
 class SessionTiming:
+    """
+    Timing coordinator for a `GameSession`.
+
+    This helper centralizes session-level timing policy on top of `ClockState`,
+    including clock synchronization, timeout detection, increment handling, and
+    timing-history save/restore for undo.
+    """
     clock_state: ClockState | None
     time_control: TimeControl | None
     time_source: TimeSource
 
     def sync(self, engine_game_over: bool) -> bool:
+        """
+        Synchronize the session clock to the current time source.
+
+        Returns:
+            bool:
+                `True` when synchronization newly causes a timeout, otherwise
+                `False`.
+        """
         return advance_clock(
             self.clock_state,
             now_ms=self.time_source(),
@@ -18,20 +33,27 @@ class SessionTiming:
         )
 
     def is_timed(self) -> bool:
+        """Return whether the session is using a chess clock."""
         return self.clock_state is not None
 
     def timeout_side(self) -> PlayerSide | None:
+        """Return the side that has lost due to time, if any."""
         if self.clock_state is None:
             return None
         return self.clock_state.timeout_side
 
-    def is_session_over(self, *, engine_game_over: bool) -> bool:
+    def is_session_over(self, engine_game_over: bool) -> bool:
+        """
+        Return whether timing or engine state ends the session.
+        """
         return engine_game_over or self.timeout_side() is not None
 
     def freeze(self) -> None:
+        """Freeze the clock so no side is currently running."""
         freeze_clock(self.clock_state)
 
     def push_frame(self) -> None:
+        """Save the current timing state for later undo restoration."""
         clock = self.clock_state
         if clock is None:
             return
@@ -46,6 +68,7 @@ class SessionTiming:
         )
 
     def pop_frame(self) -> None:
+        """Restore the most recently saved timing state, if available."""
         clock = self.clock_state
         if clock is None or not clock.history:
             return
@@ -57,6 +80,13 @@ class SessionTiming:
         clock.last_updated_ms = frame.last_updated_ms
 
     def on_move_committed(self, next_side: PlayerSide) -> None:
+        """
+        Update timing state after a move has been successfully committed.
+
+        This applies increment for the side that just moved, switches the active
+        clock to `next_side`, clears any timeout marker, and starts the next clock
+        from the current time source.
+        """
         clock = self.clock_state
         tc = self.time_control
         if clock is None or tc is None:
@@ -76,6 +106,13 @@ class SessionTiming:
     def on_position_ready(
         self, side_to_move: PlayerSide, engine_game_over: bool
     ) -> None:
+        """
+        Reconcile timing state with the current position after session refresh.
+
+        This activates the clock for `side_to_move` when the session is still live,
+        or freezes timing when the engine is already in a terminal state or a side
+        has timed out.
+        """
         clock = self.clock_state
         if clock is None:
             return
