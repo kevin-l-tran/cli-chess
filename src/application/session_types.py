@@ -1,11 +1,10 @@
-from dataclasses import dataclass, field
-from typing import Callable, Literal
+from dataclasses import dataclass
+from typing import Literal
 
 from .move_parser import ParseStatus
 
 
 Square = tuple[int, int]
-TimeSource = Callable[[], int]
 
 PlayerSide = Literal["white", "black"]
 OpponentType = Literal["local", "bot", "online"]
@@ -55,25 +54,6 @@ class SessionConfig:
     player_side: PlayerSide
     opponent: OpponentType = "local"
     time_control: TimeControl | None = None
-
-
-@dataclass(frozen=True)
-class _ClockFrame:
-    white_remaining_ms: int
-    black_remaining_ms: int
-    active_side: PlayerSide | None
-    timeout_side: PlayerSide | None
-    last_updated_ms: int | None
-
-
-@dataclass
-class _ClockState:
-    white_remaining_ms: int
-    black_remaining_ms: int
-    active_side: PlayerSide | None
-    timeout_side: PlayerSide | None
-    last_updated_ms: int | None
-    history: list[_ClockFrame] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

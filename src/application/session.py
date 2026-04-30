@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Callable, Literal
 
 from src.application.click_draft import click_to_move_text
 from src.application.snapshot import SnapshotInputs, build_snapshot
@@ -19,6 +19,7 @@ from src.engine.game import (
 from .move_parser import ParseResult, get_canonical, parse
 from .session_types import (
     MoveAttemptResult,
+    PlayerSide,
     ResignResult,
     SessionConfig,
     Snapshot,
@@ -26,6 +27,27 @@ from .session_types import (
     UndoResult,
     UndoScope,
 )
+
+TimeSource = Callable[[], int]
+
+
+@dataclass(frozen=True)
+class _ClockFrame:
+    white_remaining_ms: int
+    black_remaining_ms: int
+    active_side: PlayerSide | None
+    timeout_side: PlayerSide | None
+    last_updated_ms: int | None
+
+
+@dataclass
+class _ClockState:
+    white_remaining_ms: int
+    black_remaining_ms: int
+    active_side: PlayerSide | None
+    timeout_side: PlayerSide | None
+    last_updated_ms: int | None
+    history: list[_ClockFrame] = field(default_factory=list)
 
 
 @dataclass
