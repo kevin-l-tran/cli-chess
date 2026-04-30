@@ -17,14 +17,8 @@ from src.engine.game import (
 from .move_parser import ParseResult, get_canonical, parse
 from .click_draft import click_to_move_text
 from .snapshot import SnapshotInputs, TimingSnapshotInputs, build_snapshot
-from .timing import (
-    ClockFrame,
-    ClockState,
-    TimeSource,
-    advance_clock,
-    freeze_clock,
-    system_time_ms,
-)
+from .clock import ClockState, TimeSource, system_time_ms
+from .session_timing import SessionTiming
 from .session_types import (
     MoveAttemptResult,
     PlayerSide,
@@ -166,10 +160,8 @@ class GameSession:
             This method does not apply a move directly. Clicks only edit the
             draft text.
         """
-        clock = self._clock_state
-        if self._game.outcome != "" or (
-            clock is not None and clock.timeout_side is not None
-        ):
+        self._sync_timing()
+        if self._is_session_over():
             return
 
         self.set_move_text(
@@ -196,6 +188,10 @@ class GameSession:
             - reuses the normal parse/update path so the draft, highlights, and
             promotion prompt state refresh consistently
         """
+        self._sync_timing()
+        if self._is_session_over():
+            return
+        
         for move in self._state.parse_result.matching_moves:
             if get_promotion(move) == piece:
                 self.set_move_text(get_canonical(move))
@@ -233,13 +229,8 @@ class GameSession:
             - stores a user-facing error message
             - does not modify the board position unless move application succeeds
         """
-        if self._advance_clock_to_now():
-            self._refresh_position_state(clear_move_text=False)
-
-        clock = self._clock_state
-        if self._game.outcome != "" or (
-            clock is not None and clock.timeout_side is not None
-        ):
+        self._sync_timing()
+        if self._is_session_over():
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
             return MoveAttemptResult(False, "game_over", "Game has concluded.")
@@ -305,8 +296,7 @@ class GameSession:
             - stores a user-facing failure message
             - returns a stable failure result
         """
-        if self._advance_clock_to_now():
-            self._refresh_position_state(clear_move_text=False)
+        self._sync_timing()
 
         if self._config.opponent == "online":
             self._refresh_position_state(clear_move_text=False)
@@ -319,9 +309,12 @@ class GameSession:
         try:
             if scope == "fullmove":
                 self._game.undo_fullmove()
+                self._timing.pop_frame()
+                self._timing.pop_frame()
                 success_message = "Turn undone."
             else:
                 self._game.undo_halfmove()
+                self._timing.pop_frame()
                 success_message = "Move undone."
         except NoMoveToUndoError:
             self._refresh_position_state(clear_move_text=False)
@@ -357,8 +350,11 @@ class GameSession:
             - stores a user-facing failure message
             - returns a stable failure result
         """
-        if self._advance_clock_to_now():
+        self._sync_timing()
+        if self._is_session_over():
             self._refresh_position_state(clear_move_text=False)
+            self._set_error_message("Game has concluded.")
+            return ResignResult(False, "game_over", "Game has concluded.")
 
         try:
             self._game.resign()
@@ -394,8 +390,7 @@ class GameSession:
                 opponent-sensitive action availability flags, and user-facing feedback
                 messages.
         """
-        if self._advance_clock_to_now():
-            self._refresh_position_state(clear_move_text=False)
+        self._sync_timing()
 
         clock = self._clock_state
         time_control = self._config.time_control
@@ -449,6 +444,12 @@ class GameSession:
                 last_updated_ms=self._time_source(),
             )
 
+        self._timing = SessionTiming(
+            clock_state=self._clock_state,
+            time_control=self._config.time_control,
+            time_source=self._time_source,
+        )
+
         self._refresh_position_state(clear_move_text=False)
 
     def _set_action_message(self, message: str | None) -> None:
@@ -459,83 +460,72 @@ class GameSession:
         self._state.last_error_message = message
         self._state.last_action_message = None
 
-    def _advance_clock_to_now(self) -> bool:
-        return advance_clock(
-            self._clock_state,
-            now_ms=self._time_source(),
-            is_game_over=self._game.outcome != "",
-        )
+    def _sync_timing(self) -> None:
+        if self._timing.sync(engine_game_over=self._game.outcome != ""):
+            self._refresh_position_state(clear_move_text=False)
 
-    def _freeze_clock(self) -> None:
-        return freeze_clock(clock=self._clock_state)
-
-    def _push_clock_frame(self) -> None:
-        clock = self._clock_state
-        if clock is None:
-            return
-        clock.history.append(
-            ClockFrame(
-                white_remaining_ms=clock.white_remaining_ms,
-                black_remaining_ms=clock.black_remaining_ms,
-                active_side=clock.active_side,
-                timeout_side=clock.timeout_side,
-                last_updated_ms=clock.last_updated_ms,
-            )
-        )
+    def _is_session_over(self) -> bool:
+        return self._timing.is_session_over(engine_game_over=self._game.outcome != "")
 
     def _apply_resolved_move(
         self,
         move: Move,
         offer_draw: bool = False,
     ) -> MoveAttemptResult:
-        self._push_clock_frame()
+        self._timing.push_frame()
 
         try:
             self._game.make_move(move, draw_offered=offer_draw)
         except IllegalMoveError:
+            self._timing.pop_frame()
             self._set_error_message("Could not apply illegal move.")
             return MoveAttemptResult(False, "illegal", "Could not apply illegal move.")
         except GameConcludedError:
+            self._timing.pop_frame()
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
             return MoveAttemptResult(False, "game_over", "Game has concluded.")
         except Exception:
+            self._timing.pop_frame()
             self._set_error_message("Could not apply move.")
             return MoveAttemptResult(False, "error", "Could not apply move.")
         else:
+            next_side = "white" if self._game.is_white_turn else "black"
+            self._timing.on_move_committed(next_side=next_side)
+
             self._refresh_position_state(clear_move_text=True)
+
             action_message = f"Played {get_canonical(move)}."
             self._set_action_message(action_message)
+
             return MoveAttemptResult(True, "applied", action_message)
 
     def _refresh_position_state(self, clear_move_text: bool):
+        timeout_side = self._timing.timeout_side()
+
         if self._game.outcome != "":
             self._legal_moves = set()
-            self._freeze_clock()
+            self._timing.freeze()
             if self._game.outcome == "1-0":
                 self._state.outcome_banner = "White wins."
             elif self._game.outcome == "0-1":
                 self._state.outcome_banner = "Black wins."
             elif self._game.outcome == "1/2-1/2":
                 self._state.outcome_banner = "Draw."
-        elif (
-            self._clock_state is not None and self._clock_state.timeout_side is not None
-        ):
+        elif timeout_side is not None:
             self._legal_moves = set()
-            loser = self._clock_state.timeout_side
             self._state.outcome_banner = (
-                "Black wins on time." if loser == "white" else "White wins on time."
+                "Black wins on time."
+                if timeout_side == "white"
+                else "White wins on time."
             )
         else:
             self._legal_moves = self._game.get_moves()
             self._state.outcome_banner = None
-
-            if self._clock_state is not None:
-                self._clock_state.active_side = (
-                    "white" if self._game.is_white_turn else "black"
-                )
-                if self._clock_state.last_updated_ms is None:
-                    self._clock_state.last_updated_ms = self._time_source()
+            self._timing.on_position_ready(
+                side_to_move="white" if self._game.is_white_turn else "black",
+                engine_game_over=False,
+            )
 
         if self._game.moves_list:
             last_move, _ = self._game.moves_list[-1]

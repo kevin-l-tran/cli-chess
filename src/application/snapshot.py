@@ -13,7 +13,7 @@ from .session_types import (
     Snapshot,
     TimedGameView,
 )
-from .timing import ClockState
+from .clock import ClockState
 
 
 @dataclass(frozen=True)
