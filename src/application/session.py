@@ -25,6 +25,8 @@ from .session_projection import (
     TimingProjectionInputs,
 )
 from .session_types import (
+    FeedbackKind,
+    FeedbackView,
     MoveAttemptResult,
     PlayerSide,
     ResignResult,
@@ -62,13 +64,8 @@ class _SessionState:
         last_move_to (Square | None):
             Destination square of the most recently applied move, if any.
 
-        last_error_message (str | None):
-            The most recent user-facing failure message, or `None` when no error is
-            active.
-
-        last_action_message (str | None):
-            The most recent user-facing success or action message, or `None` when no
-            action message is active.
+        feedback (FeedbackView | None):
+            Most recent user-facing action or failure message, if any.
     """
 
     move_text: str = ""
@@ -77,8 +74,7 @@ class _SessionState:
     last_move_from: Square | None = None
     last_move_to: Square | None = None
 
-    last_error_message: str | None = None
-    last_action_message: str | None = None
+    feedback: FeedbackView | None = None
 
 
 class GameSession:
@@ -131,7 +127,7 @@ class GameSession:
             config=self._config if config is None else config,
             game=None,
         )
-        self._set_action_message("Game restarted.")
+        self._set_feedback("action", "Game restarted.")
 
     # ============================================================================
     # Draft editing
@@ -228,7 +224,7 @@ class GameSession:
 
         Returns:
             MoveAttemptResult:
-                Stable success/failure information suitable for the UI layer.
+                Stable machine-friendly success/failure information for the UI layer.
 
         Success behavior:
             - synchronizes session-owned timing before validating the draft
@@ -240,42 +236,44 @@ class GameSession:
             - refreshes cached legal moves and derived position state
             - updates last-move highlight squares
             - clears the move draft and resets parse state
-            - clears any active error message
+            - stores user-facing success feedback in session state for projection
+            through `snapshot()`
 
         Failure behavior:
             - rejects attempts when the session has already ended due to engine
             conclusion or timeout
-            - returns stable feedback for empty, ambiguous, no-match, illegal, and
-            unexpected-resolution cases
+            - returns stable status codes for empty, ambiguous, no-match, illegal,
+            and unexpected-resolution cases
             - preserves the current draft text for correction unless move
             application succeeds
-            - stores a user-facing error message
+            - stores user-facing failure feedback in session state for projection
+            through `snapshot()`
             - does not modify the board position unless move application succeeds
         """
         self._sync_timing()
         if self._phase().is_game_over:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("Game has concluded.")
+            self._set_feedback("error", "Game has concluded.")
             return MoveAttemptResult(False, "game_over")
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
         parse_result = self._state.parse_result
 
         if parse_result.status == "empty":
-            self._set_error_message("Enter a move first.")
+            self._set_feedback("error", "Enter a move first.")
             return MoveAttemptResult(False, "empty")
 
         if parse_result.status == "ambiguous":
-            self._set_error_message("Move is ambiguous.")
+            self._set_feedback("error", "Move is ambiguous.")
             return MoveAttemptResult(False, "ambiguous")
 
         if parse_result.status == "no_match":
-            self._set_error_message("No legal move matches the current draft.")
+            self._set_feedback("error", "No legal move matches the current draft.")
             return MoveAttemptResult(False, "no_match")
 
         move = parse_result.resolved_move
         if move is None:
-            self._set_error_message("Could not resolve move.")
+            self._set_feedback("error", "Could not resolve move.")
             return MoveAttemptResult(False, "error")
 
         return self._apply_resolved_move(move, offer_draw=offer_draw)
@@ -302,7 +300,7 @@ class GameSession:
 
         Returns:
             UndoResult:
-                Stable success/failure information for the UI layer.
+                Stable machine-friendly success/failure information for the UI layer.
 
         Policy:
             Undo remains available even after the game has ended, provided undo is
@@ -316,14 +314,16 @@ class GameSession:
             - restores prior session-owned timing state for timed sessions
             - refreshes cached legal moves, timing state, and last-move highlights
             - clears the current move-text draft and parse state
-            - clears any active error message
+            - stores user-facing success feedback in session state for projection
+            through `snapshot()`
 
         Failure behavior:
             - returns `"unavailable"` when undo is not allowed for the current
             session mode or when there is no move to undo
             - leaves the current move-text draft intact
             - refreshes session-owned position state
-            - stores a user-facing failure message
+            - stores user-facing failure feedback in session state for projection
+            through `snapshot()`
             - returns a stable failure result
         """
         self._sync_timing()
@@ -340,17 +340,17 @@ class GameSession:
             else:
                 message = "Halfmove undo is only available in local games."
 
-            self._set_error_message(message)
+            self._set_feedback("error", message)
             return UndoResult(False, "unavailable")
 
         caps = self._capabilities()
         if scope == "halfmove" and not caps.can_undo_halfmove:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("No move to undo.")
+            self._set_feedback("error", "No move to undo.")
             return UndoResult(False, "unavailable")
         if scope == "fullmove" and not caps.can_undo_fullmove:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("No move to undo.")
+            self._set_feedback("error", "No move to undo.")
             return UndoResult(False, "unavailable")
 
         try:
@@ -365,16 +365,16 @@ class GameSession:
                 success_message = "Move undone."
         except NoMoveToUndoError:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("No move to undo.")
+            self._set_feedback("error", "No move to undo.")
             return UndoResult(False, "unavailable")
         except Exception:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("Could not undo move.")
+            self._set_feedback("error", "Could not undo move.")
             return UndoResult(False, "error")
         else:
             self._clear_terminal()
             self._refresh_position_state(clear_move_text=True)
-            self._set_action_message(success_message)
+            self._set_feedback("action", success_message)
             return UndoResult(True, "undone")
 
     def resign(self) -> ResignResult:
@@ -383,39 +383,42 @@ class GameSession:
 
         Returns:
             ResignResult:
-                Stable success/failure information suitable for the UI layer.
+                Stable machine-friendly success/failure information suitable for the
+                UI layer.
 
         Success behavior:
             - synchronizes session-owned timing before resignation is attempted
             - resigns the current game through the engine
+            - records an application-level terminal resignation outcome
             - refreshes cached legal moves, timing state, and last-move highlights
             - clears the current move-text draft and parse state
-            - clears any active error message
-            - returns a user-facing resignation message
+            - stores user-facing resignation feedback in session state for
+            projection through `snapshot()`
 
         Failure behavior:
             - rejects attempts when the session has already ended due to engine
             conclusion or timeout
             - leaves the current move-text draft intact
             - refreshes session-owned position state
-            - stores a user-facing failure message
+            - stores user-facing failure feedback in session state for projection
+            through `snapshot()`
             - returns a stable failure result
         """
         self._sync_timing()
         if not self._capabilities().can_resign:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("Game has concluded.")
+            self._set_feedback("error", "Game has concluded.")
             return ResignResult(False, "game_over")
 
         try:
             self._game.resign()
         except GameConcludedError:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("Game has concluded.")
+            self._set_feedback("error", "Game has concluded.")
             return ResignResult(False, "game_over")
         except Exception:
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("Could not resign game.")
+            self._set_feedback("error", "Could not resign game.")
             return ResignResult(False, "error")
         else:
             winner = "black" if self._game.outcome == "0-1" else "white"
@@ -426,7 +429,7 @@ class GameSession:
             resign_message = (
                 "White resigns." if self._game.outcome == "0-1" else "Black resigns."
             )
-            self._set_action_message(resign_message)
+            self._set_feedback("action", resign_message)
             return ResignResult(True, "resigned")
 
     # ============================================================================
@@ -442,8 +445,8 @@ class GameSession:
                 A presentation-friendly snapshot containing board glyphs, side-to-move
                 state, candidate and last-move highlights, move history, move-draft
                 state, promotion-prompt state, check state, capability flags, optional
-                clock state, terminal outcome data, and the latest user-facing feedback
-                messages.
+                clock state, terminal outcome data, and the latest structured
+                user-facing feedback, if any.
 
         Behavior:
             - synchronizes session-owned timing before projection so the active clock
@@ -470,8 +473,7 @@ class GameSession:
                 last_move_from=self._state.last_move_from,
                 last_move_to=self._state.last_move_to,
                 terminal=phase.terminal,
-                last_error_message=self._state.last_error_message,
-                last_action_message=self._state.last_action_message,
+                feedback=self._state.feedback,
                 is_game_over=phase.is_game_over,
                 capabilities=capabilities,
                 timing=TimingProjectionInputs(
@@ -525,13 +527,8 @@ class GameSession:
         self._state.move_text = text
         self._state.parse_result = parse(text, self._legal_moves)
 
-    def _set_action_message(self, message: str | None) -> None:
-        self._state.last_action_message = message
-        self._state.last_error_message = None
-
-    def _set_error_message(self, message: str | None) -> None:
-        self._state.last_error_message = message
-        self._state.last_action_message = None
+    def _set_feedback(self, kind: FeedbackKind, text: str) -> None:
+        self._state.feedback = FeedbackView(kind, text)
 
     def _sync_timing(self) -> None:
         if self._timing.sync(engine_game_over=self._game.outcome != ""):
@@ -559,16 +556,16 @@ class GameSession:
             self._game.make_move(move, draw_offered=offer_draw)
         except IllegalMoveError:
             self._timing.pop_frame()
-            self._set_error_message("Could not apply illegal move.")
+            self._set_feedback("error", "Could not apply illegal move.")
             return MoveAttemptResult(False, "illegal")
         except GameConcludedError:
             self._timing.pop_frame()
             self._refresh_position_state(clear_move_text=False)
-            self._set_error_message("Game has concluded.")
+            self._set_feedback("error", "Game has concluded.")
             return MoveAttemptResult(False, "game_over")
         except Exception:
             self._timing.pop_frame()
-            self._set_error_message("Could not apply move.")
+            self._set_feedback("error", "Could not apply move.")
             return MoveAttemptResult(False, "error")
         else:
             next_side = "white" if self._game.is_white_turn else "black"
@@ -578,7 +575,7 @@ class GameSession:
             self._refresh_position_state(clear_move_text=True)
 
             action_message = f"Played {get_canonical(move)}."
-            self._set_action_message(action_message)
+            self._set_feedback("action", action_message)
 
             return MoveAttemptResult(True, "applied")
 

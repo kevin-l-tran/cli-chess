@@ -20,6 +20,7 @@ UndoScope = Literal["halfmove", "fullmove"]
 ResignStatus = Literal["resigned", "game_over", "error"]
 SessionPhaseKind = Literal["active", "concluded", "timed_out"]
 TerminalReason = Literal["draw", "timeout", "checkmate", "resignation"]
+FeedbackKind = Literal["error", "action"]
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,12 @@ class OutcomeView:
 
 
 @dataclass(frozen=True)
+class FeedbackView:
+    kind: FeedbackKind
+    text: str
+
+
+@dataclass(frozen=True)
 class Snapshot:
     """
     Render-ready view of the current session state.
@@ -211,11 +218,8 @@ class Snapshot:
             Terminal outcome data for concluded sessions, or `None` while the game is
             still active.
 
-        last_error_message (str | None):
-            Most recent user-facing failure message, if any.
-
-        last_action_message (str | None):
-            Most recent user-facing success or action message, if any.
+        feedback (FeedbackView | None):
+            Most recent user-facing action or failure message, if any.
     """
 
     board_glyphs: list[list[str]]
@@ -243,8 +247,7 @@ class Snapshot:
     timed_game: TimedGameView | None
 
     outcome: OutcomeView | None
-    last_error_message: str | None
-    last_action_message: str | None
+    feedback: FeedbackView | None
 
 
 @dataclass(frozen=True)
@@ -258,9 +261,6 @@ class MoveAttemptResult:
 
         status (MoveAttemptStatus):
             Machine-friendly outcome code for the attempt.
-
-        message (str | None):
-            User-facing feedback associated with the result.
     """
 
     ok: bool
@@ -278,9 +278,6 @@ class UndoResult:
 
         status (UndoStatus):
             Machine-friendly outcome code for the attempt.
-
-        message (str | None):
-            User-facing feedback associated with the result.
     """
 
     ok: bool
@@ -298,9 +295,6 @@ class ResignResult:
 
         status (ResignStatus):
             Machine-friendly outcome code for the attempt.
-
-        message (str | None):
-            User-facing feedback associated with the result.
     """
 
     ok: bool

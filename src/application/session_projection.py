@@ -8,6 +8,7 @@ from .move_parser import ParseResult, get_canonical
 from .session_policy import SessionCapabilities
 from .session_types import (
     ClockView,
+    FeedbackView,
     MoveDraftView,
     MoveListItem,
     OutcomeView,
@@ -34,8 +35,7 @@ class SessionProjectionInputs:
     last_move_from: Square | None
     last_move_to: Square | None
     terminal: TerminalState | None
-    last_error_message: str | None
-    last_action_message: str | None
+    feedback: FeedbackView | None
     is_game_over: bool
     capabilities: SessionCapabilities
     timing: TimingProjectionInputs | None
@@ -116,8 +116,7 @@ class SessionProjection:
             can_undo_halfmove=caps.can_undo_halfmove,
             timed_game=timed_game,
             outcome=outcome,
-            last_error_message=inputs.last_error_message,
-            last_action_message=inputs.last_action_message,
+            feedback=inputs.feedback,
         )
 
 

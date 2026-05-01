@@ -236,6 +236,16 @@ def assert_outcome(
     assert snapshot.outcome.banner == banner
 
 
+def assert_feedback(
+    feedback: session_types.FeedbackView | None,
+    *,
+    kind: session_types.FeedbackKind,
+    text: str,
+) -> None:
+    assert feedback == session_types.FeedbackView(kind=kind, text=text)
+
+
+
 class TestConfirmMoveDraft:
     def test_applies_resolved_move_sets_action_message_and_refreshes_legal_moves(
         self,
@@ -247,7 +257,7 @@ class TestConfirmMoveDraft:
 
         game_session._state.move_text = "Pe2-e4"
         game_session._state.parse_result = move_parser.parse("Pe2-e4", {move})
-        game_session._state.last_error_message = "old error"
+        game_session._state.feedback = session_types.FeedbackView(kind="error", text="old error")
 
         result = game_session.confirm_move_draft(offer_draw=True)
 
@@ -255,21 +265,18 @@ class TestConfirmMoveDraft:
         assert result == session.MoveAttemptResult(
             ok=True,
             status="applied",
-            message="Played Pe2-e4.",
         )
 
         assert game_session._state.last_move_from == sq("e2")
         assert game_session._state.last_move_to == sq("e4")
-        assert game_session._state.last_error_message is None
-        assert game_session._state.last_action_message == "Played Pe2-e4."
+        assert_feedback(game_session._state.feedback, kind="action", text="Played Pe2-e4.")
 
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result.status == "empty"
         assert game_session._legal_moves == {reply}
 
         snapshot = game_session.snapshot()
-        assert snapshot.last_error_message is None
-        assert snapshot.last_action_message == "Played Pe2-e4."
+        assert_feedback(snapshot.feedback, kind="action", text="Played Pe2-e4.")
         assert_snapshot_flags(
             snapshot,
             is_game_over=False,
@@ -287,7 +294,7 @@ class TestConfirmMoveDraft:
 
         game_session._state.move_text = ""
         game_session._state.parse_result = move_parser.parse("", {move})
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
         game_session._state.last_move_from = sq("a2")
         game_session._state.last_move_to = sq("a4")
 
@@ -297,10 +304,8 @@ class TestConfirmMoveDraft:
         assert result == session.MoveAttemptResult(
             ok=False,
             status="empty",
-            message="Enter a move first.",
         )
-        assert game_session._state.last_error_message == "Enter a move first."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="Enter a move first.")
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result == move_parser.parse("", {move})
         assert game_session._state.last_move_from == sq("a2")
@@ -329,7 +334,7 @@ class TestConfirmMoveDraft:
 
         game_session._state.move_text = "Pe"
         game_session._state.parse_result = parse_result
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
         game_session._state.last_move_from = sq("a2")
         game_session._state.last_move_to = sq("a4")
 
@@ -339,10 +344,8 @@ class TestConfirmMoveDraft:
         assert result == session.MoveAttemptResult(
             ok=False,
             status="ambiguous",
-            message="Move is ambiguous.",
         )
-        assert game_session._state.last_error_message == "Move is ambiguous."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="Move is ambiguous.")
         assert game_session._state.move_text == "Pe"
         assert game_session._state.parse_result == parse_result
         assert game_session._state.last_move_from == sq("a2")
@@ -369,7 +372,7 @@ class TestConfirmMoveDraft:
 
         game_session._state.move_text = "zzzz"
         game_session._state.parse_result = parse_result
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
         game_session._state.last_move_from = sq("a2")
         game_session._state.last_move_to = sq("a4")
 
@@ -379,13 +382,12 @@ class TestConfirmMoveDraft:
         assert result == session.MoveAttemptResult(
             ok=False,
             status="no_match",
-            message="No legal move matches the current draft.",
         )
-        assert (
-            game_session._state.last_error_message
-            == "No legal move matches the current draft."
+        assert_feedback(
+            game_session._state.feedback,
+            kind="error",
+            text="No legal move matches the current draft.",
         )
-        assert game_session._state.last_action_message is None
         assert game_session._state.move_text == "zzzz"
         assert game_session._state.parse_result == parse_result
         assert game_session._state.last_move_from == sq("a2")
@@ -403,7 +405,7 @@ class TestConfirmMoveDraft:
 
         game_session._state.move_text = "Pe2-e4"
         game_session._state.parse_result = parse_result
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
         game_session._state.last_move_from = sq("a2")
         game_session._state.last_move_to = sq("a4")
 
@@ -413,11 +415,9 @@ class TestConfirmMoveDraft:
         assert result == session.MoveAttemptResult(
             ok=False,
             status="illegal",
-            message="Could not apply illegal move.",
         )
 
-        assert game_session._state.last_error_message == "Could not apply illegal move."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="Could not apply illegal move.")
 
         assert game_session._state.move_text == "Pe2-e4"
         assert game_session._state.parse_result == parse_result
@@ -445,7 +445,7 @@ class TestConfirmMoveDraft:
 
         game_session._state.move_text = "Pe2-e4"
         game_session._state.parse_result = parse_result
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
 
         result = game_session.confirm_move_draft()
 
@@ -453,10 +453,8 @@ class TestConfirmMoveDraft:
         assert result == session.MoveAttemptResult(
             ok=False,
             status="game_over",
-            message="Game has concluded.",
         )
-        assert game_session._state.last_error_message == "Game has concluded."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="Game has concluded.")
         assert game_session._state.move_text == "Pe2-e4"
         assert game_session._state.parse_result.status == "no_match"
         assert game_session._state.parse_result.raw_text == "Pe2-e4"
@@ -486,7 +484,7 @@ class TestConfirmMoveDraft:
 
         game_session._state.move_text = "Pe2-e4"
         game_session._state.parse_result = parse_result
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
 
         result = game_session.confirm_move_draft()
 
@@ -494,10 +492,8 @@ class TestConfirmMoveDraft:
         assert result == session.MoveAttemptResult(
             ok=False,
             status="error",
-            message="Could not apply move.",
         )
-        assert game_session._state.last_error_message == "Could not apply move."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="Could not apply move.")
         assert game_session._state.move_text == "Pe2-e4"
         assert game_session._state.parse_result == parse_result
 
@@ -517,7 +513,7 @@ class TestUndo:
 
         game_session._state.move_text = "Ng1-f3"
         game_session._state.parse_result = move_parser.parse("Ng1-f3", {current})
-        game_session._state.last_error_message = "old error"
+        game_session._state.feedback = session_types.FeedbackView(kind="error", text="old error")
 
         result = game_session.undo(scope="halfmove")
 
@@ -526,11 +522,9 @@ class TestUndo:
         assert result == session.UndoResult(
             ok=True,
             status="undone",
-            message="Move undone.",
         )
 
-        assert game_session._state.last_error_message is None
-        assert game_session._state.last_action_message == "Move undone."
+        assert_feedback(game_session._state.feedback, kind="action", text="Move undone.")
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result.status == "empty"
         assert game_session._legal_moves == {after_first}
@@ -556,7 +550,7 @@ class TestUndo:
 
         game_session._state.move_text = "Pe2-e4"
         game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
         game_session._state.last_move_from = sq("a2")
         game_session._state.last_move_to = sq("a4")
 
@@ -567,11 +561,9 @@ class TestUndo:
         assert result == session.UndoResult(
             ok=False,
             status="unavailable",
-            message="No move to undo.",
         )
 
-        assert game_session._state.last_error_message == "No move to undo."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="No move to undo.")
         assert game_session._state.move_text == "Pe2-e4"
         assert game_session._state.parse_result == move_parser.parse(
             "Pe2-e4", {current}
@@ -592,7 +584,7 @@ class TestUndo:
 
         game_session._state.move_text = "Pe7-e5"
         game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
 
         result = game_session.undo(scope="halfmove")
 
@@ -600,10 +592,8 @@ class TestUndo:
         assert result == session.UndoResult(
             ok=False,
             status="error",
-            message="Could not undo move.",
         )
-        assert game_session._state.last_error_message == "Could not undo move."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="Could not undo move.")
         assert game_session._state.move_text == "Pe7-e5"
         assert game_session._state.parse_result == move_parser.parse(
             "Pe7-e5", {current}
@@ -630,9 +620,8 @@ class TestUndo:
         assert result == session.UndoResult(
             ok=True,
             status="undone",
-            message="Turn undone.",
         )
-        assert game_session._state.last_action_message == "Turn undone."
+        assert_feedback(game_session._state.feedback, kind="action", text="Turn undone.")
         assert game_session._legal_moves == {restored}
         assert game_session._state.last_move_from is None
         assert game_session._state.last_move_to is None
@@ -660,11 +649,11 @@ class TestUndo:
         assert result == session.UndoResult(
             ok=False,
             status="unavailable",
-            message="Can't undo in an online game.",
         )
-        assert (
-            game_session.snapshot().last_error_message
-            == "Can't undo in an online game."
+        assert_feedback(
+            game_session.snapshot().feedback,
+            kind="error",
+            text="Can't undo in an online game.",
         )
         assert_snapshot_flags(
             game_session.snapshot(),
@@ -687,7 +676,7 @@ class TestResign:
 
         game_session._state.move_text = "Pe2-e4"
         game_session._state.parse_result = move_parser.parse("Pe2-e4", {current})
-        game_session._state.last_error_message = "old error"
+        game_session._state.feedback = session_types.FeedbackView(kind="error", text="old error")
 
         result = game_session.resign()
 
@@ -695,11 +684,9 @@ class TestResign:
         assert result == session.ResignResult(
             ok=True,
             status="resigned",
-            message="White resigns.",
         )
 
-        assert game_session._state.last_error_message is None
-        assert game_session._state.last_action_message == "White resigns."
+        assert_feedback(game_session._state.feedback, kind="action", text="White resigns.")
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result.status == "empty"
         assert game_session._legal_moves == set()
@@ -734,7 +721,7 @@ class TestResign:
 
         game_session._state.move_text = "Pe7-e5"
         game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
-        game_session._state.last_error_message = "old error"
+        game_session._state.feedback = session_types.FeedbackView(kind="error", text="old error")
 
         result = game_session.resign()
 
@@ -742,11 +729,9 @@ class TestResign:
         assert result == session.ResignResult(
             ok=True,
             status="resigned",
-            message="Black resigns.",
         )
 
-        assert game_session._state.last_error_message is None
-        assert game_session._state.last_action_message == "Black resigns."
+        assert_feedback(game_session._state.feedback, kind="action", text="Black resigns.")
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result.status == "empty"
         assert game_session._legal_moves == set()
@@ -781,7 +766,7 @@ class TestResign:
 
         game_session._state.move_text = "Pe2-e4"
         game_session._state.parse_result = parse_result
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
 
         result = game_session.resign()
 
@@ -789,11 +774,9 @@ class TestResign:
         assert result == session.ResignResult(
             ok=False,
             status="game_over",
-            message="Game has concluded.",
         )
 
-        assert game_session._state.last_error_message == "Game has concluded."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="Game has concluded.")
         assert game_session._state.move_text == "Pe2-e4"
         assert game_session._state.parse_result.status == "no_match"
         assert game_session._state.parse_result.raw_text == "Pe2-e4"
@@ -813,7 +796,7 @@ class TestResign:
 
         game_session._state.move_text = "Pe2-e4"
         game_session._state.parse_result = parse_result
-        game_session._state.last_action_message = "old action"
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="old action")
 
         result = game_session.resign()
 
@@ -821,11 +804,9 @@ class TestResign:
         assert result == session.ResignResult(
             ok=False,
             status="error",
-            message="Could not resign game.",
         )
 
-        assert game_session._state.last_error_message == "Could not resign game."
-        assert game_session._state.last_action_message is None
+        assert_feedback(game_session._state.feedback, kind="error", text="Could not resign game.")
         assert game_session._state.move_text == "Pe2-e4"
         assert game_session._state.parse_result == parse_result
         assert game_session._legal_moves == {current}
@@ -855,7 +836,7 @@ class TestSnapshotProjection:
 
         game_session._state.move_text = ""
         game_session._state.parse_result = parse_result
-        game_session._state.last_action_message = "Move undone."
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="Move undone.")
 
         snapshot = game_session.snapshot()
 
@@ -883,8 +864,7 @@ class TestSnapshotProjection:
 
         assert snapshot.check_square == sq("e8")
         assert snapshot.outcome is None
-        assert snapshot.last_error_message is None
-        assert snapshot.last_action_message == "Move undone."
+        assert_feedback(snapshot.feedback, kind="action", text="Move undone.")
         assert_snapshot_flags(
             snapshot,
             is_game_over=False,
@@ -995,7 +975,7 @@ class TestLifecycle:
 
         game_session._state.move_text = "Pe7-e5"
         game_session._state.parse_result = move_parser.parse("Pe7-e5", {current})
-        game_session._state.last_error_message = "old error"
+        game_session._state.feedback = session_types.FeedbackView(kind="error", text="old error")
 
         old_game = game_session._game
         game_session.restart_game()
@@ -1006,8 +986,7 @@ class TestLifecycle:
         assert game_session._state.parse_result.status == "empty"
         assert game_session._state.last_move_from is None
         assert game_session._state.last_move_to is None
-        assert game_session._state.last_error_message is None
-        assert game_session._state.last_action_message == "Game restarted."
+        assert_feedback(game_session._state.feedback, kind="action", text="Game restarted.")
         assert game_session.snapshot().outcome is None
         assert game_session._game.moves_list == []
         assert game_session._legal_moves == game_session._game.get_moves()
@@ -1038,7 +1017,7 @@ class TestLifecycle:
         assert game_session._config == replacement
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result.status == "empty"
-        assert game_session._state.last_action_message == "Game restarted."
+        assert_feedback(game_session._state.feedback, kind="action", text="Game restarted.")
         assert game_session._legal_moves == game_session._game.get_moves()
 
 
@@ -1052,15 +1031,15 @@ class TestDraftEditing:
         fake_game = FakeGame(initial_moves=legal_moves)
         game_session = make_session(fake_game)
 
-        game_session._state.last_action_message = "Move undone."
+        game_session._state.feedback = session_types.FeedbackView(kind="action", text="Move undone.")
         game_session.set_move_text("Pe")
-        assert game_session.snapshot().last_action_message == "Move undone."
+        assert_feedback(game_session.snapshot().feedback, kind="action", text="Move undone.")
 
         game_session.clear_move_text()
-        assert game_session.snapshot().last_action_message == "Move undone."
+        assert_feedback(game_session.snapshot().feedback, kind="action", text="Move undone.")
 
         game_session.click_square(sq("e2"))
-        assert game_session.snapshot().last_action_message == "Move undone."
+        assert_feedback(game_session.snapshot().feedback, kind="action", text="Move undone.")
 
     def test_set_move_text_empty_reparses_to_empty_snapshot_state(self) -> None:
         move = make("P", "e2", "e4")
@@ -1616,7 +1595,6 @@ class TestTimingCommands:
         assert result == session.MoveAttemptResult(
             ok=True,
             status="applied",
-            message="Played Pe2-e4.",
         )
         assert_timed_game(
             snapshot,
@@ -1652,7 +1630,6 @@ class TestTimingCommands:
         assert result == session.MoveAttemptResult(
             ok=False,
             status="game_over",
-            message="Game has concluded.",
         )
         assert_outcome(
             snapshot,
@@ -1735,7 +1712,6 @@ class TestTimingCommands:
         assert result == session.UndoResult(
             ok=True,
             status="undone",
-            message="Move undone.",
         )
         assert_snapshot_flags(
             restored,

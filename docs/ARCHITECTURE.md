@@ -48,7 +48,7 @@ Owns:
 - Move-draft state and parsing results
 - Last-move highlight state
 - Promotion-selection flow
-- User-facing feedback such as error messages and outcome banners
+- Structured user-facing feedback state for the latest action or failure
 - Construction of immutable render snapshots for the UI
 
 Does **not** own:
@@ -142,10 +142,12 @@ The engine remains the innermost layer. The UI and adapters stay outside the app
 - current parse result for that draft
 - cached legal moves for the current position
 - last move source and destination for highlighting
-- user-facing error message
-- outcome banner
+- latest structured feedback message, if any
+- terminal outcome state
 
 This state is mutable internally, but it is exposed to the UI through immutable result objects and snapshots.
+
+Command result objects remain machine-friendly and status-oriented. User-facing feedback text is projected through `snapshot()`.
 
 ### Snapshot contract
 
@@ -160,8 +162,8 @@ This state is mutable internally, but it is exposed to the UI through immutable 
 - move autocompletions
 - promotion prompt anchor square
 - check information
-- outcome banner
-- last error message
+- outcome data
+- structured user-facing feedback, if any
 
 Notably, the snapshot no longer includes presentation-only state like board orientation or cursor position.
 
@@ -205,7 +207,7 @@ The application does not treat a click as a direct move by default. A click edit
 These actions follow the same pattern:
 
 1. The UI calls an explicit session method such as `undo()`, `resign()`, or `restart_game()`.
-2. The application updates engine state and refreshes derived session state.
+2. The application updates engine state, refreshes derived session state, and records any latest user-facing feedback in session state.
 3. The UI pulls a new snapshot and re-renders.
 
 ## Design principles
