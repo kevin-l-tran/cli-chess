@@ -265,7 +265,6 @@ class MoveAttemptResult:
 
     ok: bool
     status: MoveAttemptStatus
-    message: str | None
 
 
 @dataclass(frozen=True)
@@ -286,7 +285,6 @@ class UndoResult:
 
     ok: bool
     status: UndoStatus
-    message: str | None
 
 
 @dataclass(frozen=True)
@@ -307,4 +305,3 @@ class ResignResult:
 
     ok: bool
     status: ResignStatus
-    message: str | None

@@ -256,31 +256,27 @@ class GameSession:
         if self._phase().is_game_over:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
-            return MoveAttemptResult(False, "game_over", "Game has concluded.")
+            return MoveAttemptResult(False, "game_over")
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
         parse_result = self._state.parse_result
 
         if parse_result.status == "empty":
             self._set_error_message("Enter a move first.")
-            return MoveAttemptResult(False, "empty", "Enter a move first.")
+            return MoveAttemptResult(False, "empty")
 
         if parse_result.status == "ambiguous":
             self._set_error_message("Move is ambiguous.")
-            return MoveAttemptResult(False, "ambiguous", "Move is ambiguous.")
+            return MoveAttemptResult(False, "ambiguous")
 
         if parse_result.status == "no_match":
             self._set_error_message("No legal move matches the current draft.")
-            return MoveAttemptResult(
-                False,
-                "no_match",
-                "No legal move matches the current draft.",
-            )
+            return MoveAttemptResult(False, "no_match")
 
         move = parse_result.resolved_move
         if move is None:
             self._set_error_message("Could not resolve move.")
-            return MoveAttemptResult(False, "error", "Could not resolve move.")
+            return MoveAttemptResult(False, "error")
 
         return self._apply_resolved_move(move, offer_draw=offer_draw)
 
@@ -301,7 +297,7 @@ class GameSession:
                 Online play does not permit undo through this controller; in that
                 case the method fails with an unavailable result regardless of scope.
 
-                For bot play, only `"fullmove"` undos are supported. `"halfmove"` 
+                For bot play, only `"fullmove"` undos are supported. `"halfmove"`
                 undos will be rejected.
 
         Returns:
@@ -345,17 +341,17 @@ class GameSession:
                 message = "Halfmove undo is only available in local games."
 
             self._set_error_message(message)
-            return UndoResult(False, "unavailable", message)
+            return UndoResult(False, "unavailable")
 
         caps = self._capabilities()
         if scope == "halfmove" and not caps.can_undo_halfmove:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("No move to undo.")
-            return UndoResult(False, "unavailable", "No move to undo.")
+            return UndoResult(False, "unavailable")
         if scope == "fullmove" and not caps.can_undo_fullmove:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("No move to undo.")
-            return UndoResult(False, "unavailable", "No move to undo.")
+            return UndoResult(False, "unavailable")
 
         try:
             if scope == "fullmove":
@@ -370,16 +366,16 @@ class GameSession:
         except NoMoveToUndoError:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("No move to undo.")
-            return UndoResult(False, "unavailable", "No move to undo.")
+            return UndoResult(False, "unavailable")
         except Exception:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Could not undo move.")
-            return UndoResult(False, "error", "Could not undo move.")
+            return UndoResult(False, "error")
         else:
             self._clear_terminal()
             self._refresh_position_state(clear_move_text=True)
             self._set_action_message(success_message)
-            return UndoResult(True, "undone", success_message)
+            return UndoResult(True, "undone")
 
     def resign(self) -> ResignResult:
         """
@@ -409,18 +405,18 @@ class GameSession:
         if not self._capabilities().can_resign:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
-            return ResignResult(False, "game_over", "Game has concluded.")
+            return ResignResult(False, "game_over")
 
         try:
             self._game.resign()
         except GameConcludedError:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
-            return ResignResult(False, "game_over", "Game has concluded.")
+            return ResignResult(False, "game_over")
         except Exception:
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Could not resign game.")
-            return ResignResult(False, "error", "Could not resign game.")
+            return ResignResult(False, "error")
         else:
             winner = "black" if self._game.outcome == "0-1" else "white"
             self._set_terminal(TerminalState(winner=winner, reason="resignation"))
@@ -431,7 +427,7 @@ class GameSession:
                 "White resigns." if self._game.outcome == "0-1" else "Black resigns."
             )
             self._set_action_message(resign_message)
-            return ResignResult(True, "resigned", resign_message)
+            return ResignResult(True, "resigned")
 
     # ============================================================================
     # Read model
@@ -564,16 +560,16 @@ class GameSession:
         except IllegalMoveError:
             self._timing.pop_frame()
             self._set_error_message("Could not apply illegal move.")
-            return MoveAttemptResult(False, "illegal", "Could not apply illegal move.")
+            return MoveAttemptResult(False, "illegal")
         except GameConcludedError:
             self._timing.pop_frame()
             self._refresh_position_state(clear_move_text=False)
             self._set_error_message("Game has concluded.")
-            return MoveAttemptResult(False, "game_over", "Game has concluded.")
+            return MoveAttemptResult(False, "game_over")
         except Exception:
             self._timing.pop_frame()
             self._set_error_message("Could not apply move.")
-            return MoveAttemptResult(False, "error", "Could not apply move.")
+            return MoveAttemptResult(False, "error")
         else:
             next_side = "white" if self._game.is_white_turn else "black"
             self._timing.on_move_committed(next_side=next_side)
@@ -584,7 +580,7 @@ class GameSession:
             action_message = f"Played {get_canonical(move)}."
             self._set_action_message(action_message)
 
-            return MoveAttemptResult(True, "applied", action_message)
+            return MoveAttemptResult(True, "applied")
 
     def _refresh_position_state(self, clear_move_text: bool):
         phase = self._phase()
