@@ -25,6 +25,7 @@ from .session_projection import (
     TimingProjectionInputs,
 )
 from .session_types import (
+    DrawActionResult,
     FeedbackKind,
     FeedbackView,
     MoveAttemptResult,
@@ -281,6 +282,9 @@ class GameSession:
             return MoveAttemptResult(False, "error")
 
         return self._apply_resolved_move(move, offer_draw=offer_draw)
+    
+    def handle_draw_offer(self, accept: bool) -> DrawActionResult:
+        return NotImplemented
 
     def undo(self, scope: UndoScope | None = None) -> UndoResult:
         """

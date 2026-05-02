@@ -15,6 +15,13 @@ MoveAttemptStatus = Literal[
     "game_over",
     "error",
 ]
+DrawActionStatus = Literal[
+    "accepted",
+    "declined",
+    "unavailable",
+    "game_over",
+    "error",
+]
 UndoStatus = Literal["undone", "unavailable", "error"]
 UndoScope = Literal["halfmove", "fullmove"]
 ResignStatus = Literal["resigned", "game_over", "error"]
@@ -299,3 +306,20 @@ class ResignResult:
 
     ok: bool
     status: ResignStatus
+
+
+@dataclass(frozen=True)
+class DrawActionResult:
+    """
+    Stable result returned by `GameSession.handle_draw_offer()`.
+
+    Attributes:
+        ok (bool):
+            Whether the draw offer handle succeeded.
+
+        status (DrawActionStatus):
+            Machine-friendly outcome code for the attempt.
+    """
+
+    ok: bool
+    status: DrawActionStatus
