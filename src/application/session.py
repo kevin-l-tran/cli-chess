@@ -64,6 +64,9 @@ class _SessionState:
         last_move_to (Square | None):
             Destination square of the most recently applied move, if any.
 
+        pending_draw_offer (PlayerSide | None):
+            The player side that initiated a draw offer, if any.
+
         feedback (FeedbackView | None):
             Most recent user-facing action or failure message, if any.
     """
@@ -74,6 +77,7 @@ class _SessionState:
     last_move_from: Square | None = None
     last_move_to: Square | None = None
 
+    pending_draw_offer: PlayerSide | None = None
     feedback: FeedbackView | None = None
 
 
