@@ -283,7 +283,10 @@ class GameSession:
 
         return self._apply_resolved_move(move, offer_draw=offer_draw)
     
-    def handle_draw_offer(self, accept: bool) -> DrawActionResult:
+    def accept_draw_offer(self) -> DrawActionResult:
+        return NotImplemented
+    
+    def decline_draw_offer(self) -> DrawActionResult:
         return NotImplemented
 
     def undo(self, scope: UndoScope | None = None) -> UndoResult:
