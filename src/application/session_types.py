@@ -205,7 +205,9 @@ class Snapshot:
             the promotion piece.
 
         draw_offered_by (PlayerSide | None):
-            The player offering the draw, if any.
+            The side that offered a currently pending draw on the latest committed move, or
+            `None` if there is no pending offer. A subsequent move implicitly declines the
+            offer.
 
         check_square (Square | None):
             Square of the checked king for the side to move, if any.

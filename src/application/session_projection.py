@@ -60,17 +60,18 @@ class SessionProjection:
                 information.
 
             inputs (SessionProjectionInputs):
-                Controller-owned state needed to project the current view, including the
-                current move draft and parse result, last-move highlights, terminal
-                state, capability flags, user-facing feedback messages, and optional
-                timing inputs.
+                Controller-owned and derived session state needed to project the current
+                view, including the current move draft and parse result, last-move
+                highlights, pending draw-offer state, terminal state, capability flags,
+                user-facing feedback messages, and optional timing inputs.
 
         Returns:
             Snapshot:
                 An immutable view-model containing board glyphs, side-to-move state,
                 candidate-move highlights, move history, draft and autocompletion data,
-                promotion-picker anchor state, check state, capability flags, optional
-                timed-game data, terminal outcome data, and user-facing messages.
+                promotion-picker anchor state, pending draw-offer state, check state,
+                capability flags, optional timed-game data, terminal outcome data, and
+                user-facing messages.
 
         Behavior:
             - converts the board into render glyphs
@@ -81,6 +82,7 @@ class SessionProjection:
             promotion-piece choice
             - projects capability flags, optional clock state, terminal outcome state,
             and the latest feedback messages
+            - projects pending draw-offer state and draw-offer availability
         """
         parse_result = inputs.parse_result
         check_square = game.checked_king_position()

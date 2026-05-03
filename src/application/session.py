@@ -89,9 +89,9 @@ class GameSession:
     such as the current move draft and feedback messages.
 
     Its public API accepts session-level intents from the presentation layer
-    (move-text edits, square clicks, move confirmation, undo, resignation, and
-    snapshot reads) and translates them into engine operations plus immutable
-    render-ready `Snapshot` values.
+    (move-text edits, square clicks, move confirmation, draw-offer acceptance,
+    undo, resignation, and snapshot reads) and translates them into engine
+    operations plus immutable render-ready `Snapshot` values.
     """
 
     def __init__(
@@ -242,6 +242,13 @@ class GameSession:
             - stores user-facing success feedback in session state for projection
             through `snapshot()`
 
+        Draw-offer behavior:
+            - when `offer_draw=True`, the committed move includes a draw offer if draw
+            offers are currently available
+            - a pending draw offer from the previous move is implicitly declined when the
+            receiving player successfully confirms a non-offer move
+            - draw-offer availability is controlled by session policy
+
         Failure behavior:
             - rejects attempts when the session has already ended due to engine
             conclusion or timeout
@@ -289,6 +296,26 @@ class GameSession:
         return self._apply_resolved_move(move, offer_draw=offer_draw)
 
     def accept_draw_offer(self) -> DrawActionResult:
+        """
+        Accept the currently pending draw offer, if one exists.
+
+        Returns:
+            DrawActionResult:
+                Stable machine-friendly success/failure information for the UI layer.
+
+        Success behavior:
+            - synchronizes session-owned timing
+            - asks the engine to accept the draw offer attached to the latest move
+            - records a terminal drawn outcome
+            - refreshes cached legal moves, timing state, and highlights
+            - clears the current move draft
+            - stores user-facing acceptance feedback
+
+        Failure behavior:
+            - returns `"game_over"` if the session has already concluded
+            - returns `"unavailable"` if there is no pending draw offer
+            - returns `"error"` for unexpected failures
+        """
         self._sync_timing()
         phase = self._phase()
 
@@ -490,10 +517,10 @@ class GameSession:
 
         Returns:
             Snapshot:
-                A presentation-friendly snapshot containing board glyphs, side-to-move
-                state, candidate and last-move highlights, move history, move-draft
-                state, promotion-prompt state, check state, capability flags, optional
-                clock state, terminal outcome data, and the latest structured
+                A presentation-friendly snapshot containing board glyphs, side-to-move state,
+                candidate and last-move highlights, move history, move-draft state,
+                promotion-prompt state, pending draw-offer state, check state, capability flags,
+                optional clock state, terminal outcome data, and the latest structured
                 user-facing feedback, if any.
 
         Behavior:

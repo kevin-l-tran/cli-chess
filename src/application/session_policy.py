@@ -13,7 +13,8 @@ class SessionPolicy:
     Pure policy helpers for session-level UI availability and simple default choices.
 
     This module does not mutate session state, call the engine, set feedback, or
-    return command failure statuses.
+    return command failure statuses. Inputs should be precomputed session facts, such
+    as current phase, move count, parse status, and pending draw-offer side.
     """
 
     @staticmethod
