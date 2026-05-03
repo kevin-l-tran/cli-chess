@@ -5,7 +5,6 @@ from src.engine.game import Game
 from src.engine.moves import get_final_position, get_initial_position, get_promotion
 
 from .move_parser import ParseResult, get_canonical
-from .session_policy import SessionCapabilities
 from .session_types import (
     ClockView,
     FeedbackView,
@@ -13,6 +12,8 @@ from .session_types import (
     MoveListItem,
     OutcomeView,
     PlayerSide,
+    SessionAvailability,
+    SessionPhase,
     Snapshot,
     TerminalState,
     TimedGameView,
@@ -31,13 +32,12 @@ class TimingProjectionInputs:
 class SessionProjectionInputs:
     move_text: str
     parse_result: ParseResult
-    side_to_move: PlayerSide | None
     last_move_from: Square | None
     last_move_to: Square | None
-    terminal: TerminalState | None
+    draw_offered_by: PlayerSide | None
     feedback: FeedbackView | None
-    is_game_over: bool
-    capabilities: SessionCapabilities
+    phase: SessionPhase
+    availability: SessionAvailability
     timing: TimingProjectionInputs | None
 
 
@@ -60,17 +60,18 @@ class SessionProjection:
                 information.
 
             inputs (SessionProjectionInputs):
-                Controller-owned state needed to project the current view, including the
-                current move draft and parse result, last-move highlights, terminal
-                state, capability flags, user-facing feedback messages, and optional
-                timing inputs.
+                Controller-owned and derived session state needed to project the current
+                view, including the current move draft and parse result, last-move
+                highlights, pending draw-offer state, terminal state, capability flags,
+                user-facing feedback messages, and optional timing inputs.
 
         Returns:
             Snapshot:
                 An immutable view-model containing board glyphs, side-to-move state,
                 candidate-move highlights, move history, draft and autocompletion data,
-                promotion-picker anchor state, check state, capability flags, optional
-                timed-game data, terminal outcome data, and user-facing messages.
+                promotion-picker anchor state, pending draw-offer state, check state,
+                capability flags, optional timed-game data, terminal outcome data, and
+                user-facing messages.
 
         Behavior:
             - converts the board into render glyphs
@@ -81,20 +82,21 @@ class SessionProjection:
             promotion-piece choice
             - projects capability flags, optional clock state, terminal outcome state,
             and the latest feedback messages
+            - projects pending draw-offer state and draw-offer availability
         """
         parse_result = inputs.parse_result
         check_square = game.checked_king_position()
         move_list = _build_move_list(game)
         promotion_prompt_position = _get_promotion_prompt_position(parse_result)
         timed_game = _build_timed_game(inputs.timing)
-        outcome = _build_outcome(inputs.terminal)
+        outcome = _build_outcome(inputs.phase.terminal)
 
-        caps = inputs.capabilities
+        availabilities = inputs.availability
         is_promotion_pending = promotion_prompt_position is not None
 
         return Snapshot(
             board_glyphs=_build_board_glyphs(game),
-            side_to_move=inputs.side_to_move,
+            side_to_move=inputs.phase.side_to_move,
             candidate_moves=set(parse_result.source_to_target_highlights),
             last_move_from=inputs.last_move_from,
             last_move_to=inputs.last_move_to,
@@ -106,14 +108,16 @@ class SessionProjection:
             ),
             move_autocompletions=parse_result.matching_spellings,
             promotion_prompt_position=promotion_prompt_position,
+            draw_offered_by=inputs.draw_offered_by,
             check_square=check_square,
             is_player_checked=check_square is not None,
-            is_game_over=inputs.is_game_over,
-            can_confirm_move=caps.can_confirm_move,
-            can_resign=caps.can_resign,
+            is_game_over=inputs.phase.is_game_over,
+            can_confirm_move=availabilities.can_confirm_move,
+            can_offer_draw=availabilities.can_offer_draw,
+            can_resign=availabilities.can_resign,
             is_promotion_pending=is_promotion_pending,
-            can_undo_fullmove=caps.can_undo_fullmove,
-            can_undo_halfmove=caps.can_undo_halfmove,
+            can_undo_fullmove=availabilities.can_undo_fullmove,
+            can_undo_halfmove=availabilities.can_undo_halfmove,
             timed_game=timed_game,
             outcome=outcome,
             feedback=inputs.feedback,

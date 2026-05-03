@@ -38,6 +38,8 @@ class FakeGame(game.Game):
     - undo_halfmove()
     - undo_fullmove()
     - resign()
+    - accept_draw()
+    - pending_draw_offer_side_is_white()
     - checked_king_position()
     - board.piece_at(...)
 
@@ -59,6 +61,8 @@ class FakeGame(game.Game):
         outcome: str = "",
         resign_error: Exception | None = None,
         resign_outcome: str = "0-1",
+        accept_draw_error: Exception | None = None,
+        pending_draw_offer_side_is_white: bool | None = None,
         is_white_turn: bool = True,
         next_is_white_turn: bool | None = None,
         undo_halfmove_is_white_turn: bool | None = None,
@@ -81,6 +85,8 @@ class FakeGame(game.Game):
         self.outcome = outcome
         self._resign_error = resign_error
         self._resign_outcome = resign_outcome
+        self._accept_draw_error = accept_draw_error
+        self._pending_draw_offer_side_is_white = pending_draw_offer_side_is_white
         self.is_white_turn = is_white_turn
         self._next_is_white_turn = next_is_white_turn
         self._undo_halfmove_is_white_turn = undo_halfmove_is_white_turn
@@ -94,6 +100,7 @@ class FakeGame(game.Game):
         self.undo_halfmove_calls = 0
         self.undo_fullmove_calls = 0
         self.resign_calls = 0
+        self.accept_draw_calls = 0
 
     def get_moves(self) -> set[Move]:
         return set(self._moves)
@@ -104,6 +111,7 @@ class FakeGame(game.Game):
         if self._error is not None:
             raise self._error
 
+        self._pending_draw_offer_side_is_white = self.is_white_turn if draw_offered else None
         self._moves = set(self._next_moves)
         self.moves_list.append((move, None))
         self.is_white_turn = (
@@ -122,6 +130,7 @@ class FakeGame(game.Game):
             raise game.NoMoveToUndoError()
 
         self.moves_list.pop()
+        self._pending_draw_offer_side_is_white = None
         self._moves = set(self._undo_halfmove_moves)
         self.is_white_turn = (
             (not self.is_white_turn)
@@ -140,6 +149,7 @@ class FakeGame(game.Game):
 
         self.moves_list.pop()
         self.moves_list.pop()
+        self._pending_draw_offer_side_is_white = None
         self._moves = set(self._undo_fullmove_moves)
         if self._undo_fullmove_is_white_turn is not None:
             self.is_white_turn = self._undo_fullmove_is_white_turn
@@ -152,6 +162,33 @@ class FakeGame(game.Game):
 
         self.outcome = self._resign_outcome
         self._moves = set()
+
+    def accept_draw(self) -> None:
+        self.accept_draw_calls += 1
+
+        if self._accept_draw_error is not None:
+            raise self._accept_draw_error
+
+        if self.outcome != "":
+            raise game.GameConcludedError(self.outcome)
+
+        if self._pending_draw_offer_side_is_white is None:
+            raise game.NoDrawOfferError(None)
+
+        self.outcome = "1/2-1/2"
+        self._moves = set()
+
+    def pending_draw_offer_side_is_white(self) -> bool | None:
+        if self.outcome != "":
+            return None
+
+        if not self.moves_list:
+            return None
+
+        return self._pending_draw_offer_side_is_white
+
+    def pending_draw_offer_by_white(self) -> bool | None:
+        return self.pending_draw_offer_side_is_white()
 
     def checked_king_position(self) -> tuple[int, int] | None:
         return self._checked_king_square
@@ -181,6 +218,7 @@ def assert_snapshot_flags(
     can_undo_fullmove: bool,
     can_resign: bool,
     is_promotion_pending: bool,
+    can_offer_draw: bool | None = None,
     is_player_checked: bool | None = None,
 ) -> None:
     assert snapshot.is_game_over is is_game_over
@@ -189,6 +227,8 @@ def assert_snapshot_flags(
     assert snapshot.can_undo_fullmove is can_undo_fullmove
     assert snapshot.can_resign is can_resign
     assert snapshot.is_promotion_pending is is_promotion_pending
+    if can_offer_draw is not None:
+        assert snapshot.can_offer_draw is can_offer_draw
     if is_player_checked is not None:
         assert snapshot.is_player_checked is is_player_checked
 
@@ -269,14 +309,19 @@ class TestConfirmMoveDraft:
 
         assert game_session._state.last_move_from == sq("e2")
         assert game_session._state.last_move_to == sq("e4")
-        assert_feedback(game_session._state.feedback, kind="action", text="Played Pe2-e4.")
+        assert_feedback(
+            game_session._state.feedback,
+            kind="action",
+            text="Played Pe2-e4. Draw offered.",
+        )
 
         assert game_session._state.move_text == ""
         assert game_session._state.parse_result.status == "empty"
         assert game_session._legal_moves == {reply}
 
         snapshot = game_session.snapshot()
-        assert_feedback(snapshot.feedback, kind="action", text="Played Pe2-e4.")
+        assert snapshot.draw_offered_by == "white"
+        assert_feedback(snapshot.feedback, kind="action", text="Played Pe2-e4. Draw offered.")
         assert_snapshot_flags(
             snapshot,
             is_game_over=False,
@@ -285,6 +330,7 @@ class TestConfirmMoveDraft:
             can_undo_fullmove=False,
             can_resign=True,
             is_promotion_pending=False,
+            can_offer_draw=False,
         )
 
     def test_empty_failure_sets_error_and_clears_stale_action(self) -> None:
@@ -496,6 +542,253 @@ class TestConfirmMoveDraft:
         assert_feedback(game_session._state.feedback, kind="error", text="Could not apply move.")
         assert game_session._state.move_text == "Pe2-e4"
         assert game_session._state.parse_result == parse_result
+
+
+class TestDrawOffers:
+    def test_snapshot_exposes_pending_draw_offer_from_latest_move(self) -> None:
+        offer = make("P", "e2", "e4")
+        reply = make("P", "e7", "e5")
+        fake_game = FakeGame(initial_moves={offer}, next_moves={reply})
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("Pe2-e4")
+        result = game_session.confirm_move_draft(offer_draw=True)
+
+        snapshot = game_session.snapshot()
+
+        assert result == session.MoveAttemptResult(ok=True, status="applied")
+        assert fake_game.make_move_calls == [(offer, True)]
+        assert snapshot.draw_offered_by == "white"
+        assert snapshot.side_to_move == "black"
+        assert_feedback(
+            snapshot.feedback,
+            kind="action",
+            text="Played Pe2-e4. Draw offered.",
+        )
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=True,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+            can_offer_draw=False,
+        )
+
+    def test_confirming_non_offer_move_implicitly_declines_pending_draw_offer(
+        self,
+    ) -> None:
+        offer = make("P", "e2", "e4")
+        reply = make("P", "e7", "e5")
+        fake_game = FakeGame(initial_moves={offer}, next_moves={reply})
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("Pe2-e4")
+        offered = game_session.confirm_move_draft(offer_draw=True)
+        assert offered.ok is True
+        assert game_session.snapshot().draw_offered_by == "white"
+
+        game_session.set_move_text("Pe7-e5")
+        declined = game_session.confirm_move_draft()
+        snapshot = game_session.snapshot()
+
+        assert declined == session.MoveAttemptResult(ok=True, status="applied")
+        assert fake_game.make_move_calls == [(offer, True), (reply, False)]
+        assert snapshot.draw_offered_by is None
+        assert snapshot.side_to_move == "white"
+        assert_feedback(snapshot.feedback, kind="action", text="Played Pe7-e5.")
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=True,
+            can_undo_fullmove=True,
+            can_resign=True,
+            is_promotion_pending=False,
+            can_offer_draw=True,
+        )
+
+    def test_cannot_make_counter_offer_while_draw_offer_is_pending(self) -> None:
+        offer = make("P", "e2", "e4")
+        reply = make("P", "e7", "e5")
+        fake_game = FakeGame(initial_moves={offer}, next_moves={reply})
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("Pe2-e4")
+        offered = game_session.confirm_move_draft(offer_draw=True)
+        assert offered.ok is True
+
+        game_session.set_move_text("Pe7-e5")
+        result = game_session.confirm_move_draft(offer_draw=True)
+        snapshot = game_session.snapshot()
+
+        assert result == session.MoveAttemptResult(ok=False, status="error")
+        assert fake_game.make_move_calls == [(offer, True)]
+        assert snapshot.draw_offered_by == "white"
+        assert_feedback(
+            snapshot.feedback,
+            kind="error",
+            text="Draw offers are not available.",
+        )
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=True,
+            can_undo_halfmove=True,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+            can_offer_draw=False,
+        )
+
+    def test_accept_draw_offer_concludes_session_as_draw(self) -> None:
+        offer = make("P", "e2", "e4")
+        reply = make("P", "e7", "e5")
+        fake_game = FakeGame(initial_moves={offer}, next_moves={reply})
+        game_session = make_session(fake_game)
+
+        game_session.set_move_text("Pe2-e4")
+        offered = game_session.confirm_move_draft(offer_draw=True)
+        assert offered.ok is True
+
+        result = game_session.accept_draw_offer()
+        snapshot = game_session.snapshot()
+
+        assert fake_game.accept_draw_calls == 1
+        assert result == session.DrawActionResult(ok=True, status="accepted")
+        assert snapshot.draw_offered_by is None
+        assert_outcome(snapshot, winner=None, reason="draw", banner="Draw.")
+        assert_feedback(snapshot.feedback, kind="action", text="Draw offer accepted.")
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=True,
+            can_confirm_move=False,
+            can_undo_halfmove=True,
+            can_undo_fullmove=False,
+            can_resign=False,
+            is_promotion_pending=False,
+            can_offer_draw=False,
+        )
+
+    def test_accept_draw_offer_without_pending_offer_returns_unavailable(self) -> None:
+        move = make("P", "e2", "e4")
+        fake_game = FakeGame(initial_moves={move})
+        game_session = make_session(fake_game)
+
+        result = game_session.accept_draw_offer()
+        snapshot = game_session.snapshot()
+
+        assert fake_game.accept_draw_calls == 0
+        assert result == session.DrawActionResult(ok=False, status="unavailable")
+        assert snapshot.draw_offered_by is None
+        assert_feedback(
+            snapshot.feedback,
+            kind="error",
+            text="No draw offer is available.",
+        )
+        assert_snapshot_flags(
+            snapshot,
+            is_game_over=False,
+            can_confirm_move=False,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+            can_offer_draw=True,
+        )
+
+    def test_accept_draw_offer_maps_engine_no_offer_to_unavailable(self) -> None:
+        previous = make("P", "e2", "e4")
+        current = make("P", "e7", "e5")
+        fake_game = FakeGame(
+            initial_moves={current},
+            history=[(previous, None)],
+            pending_draw_offer_side_is_white=True,
+            is_white_turn=False,
+            accept_draw_error=game.NoDrawOfferError(None),
+        )
+        game_session = make_session(fake_game)
+
+        result = game_session.accept_draw_offer()
+        snapshot = game_session.snapshot()
+
+        assert fake_game.accept_draw_calls == 1
+        assert result == session.DrawActionResult(ok=False, status="unavailable")
+        assert_feedback(
+            snapshot.feedback,
+            kind="error",
+            text="No draw offer is available.",
+        )
+
+    def test_accept_draw_offer_after_game_over_returns_game_over(self) -> None:
+        previous = make("P", "e2", "e4")
+        current = make("P", "e7", "e5")
+        fake_game = FakeGame(
+            initial_moves={current},
+            history=[(previous, None)],
+            pending_draw_offer_side_is_white=True,
+            outcome="1-0",
+        )
+        game_session = make_session(fake_game)
+
+        result = game_session.accept_draw_offer()
+        snapshot = game_session.snapshot()
+
+        assert fake_game.accept_draw_calls == 0
+        assert result == session.DrawActionResult(ok=False, status="game_over")
+        assert snapshot.draw_offered_by is None
+        assert_feedback(snapshot.feedback, kind="error", text="Game has concluded.")
+        assert_outcome(
+            snapshot,
+            winner="white",
+            reason="checkmate",
+            banner="White wins by checkmate.",
+        )
+
+    def test_draw_offers_are_unavailable_for_bot_and_online_sessions(self) -> None:
+        move = make("P", "e2", "e4")
+
+        bot_session = make_session(FakeGame(initial_moves={move}), opponent="bot")
+        bot_session.set_move_text("Pe2-e4")
+        bot_result = bot_session.confirm_move_draft(offer_draw=True)
+
+        online_session = make_session(FakeGame(initial_moves={move}), opponent="online")
+        online_session.set_move_text("Pe2-e4")
+        online_result = online_session.confirm_move_draft(offer_draw=True)
+
+        assert bot_result == session.MoveAttemptResult(ok=False, status="error")
+        assert online_result == session.MoveAttemptResult(ok=False, status="error")
+        assert_feedback(
+            bot_session.snapshot().feedback,
+            kind="error",
+            text="Draw offers are not available.",
+        )
+        assert_feedback(
+            online_session.snapshot().feedback,
+            kind="error",
+            text="Draw offers are not available.",
+        )
+        assert_snapshot_flags(
+            bot_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=True,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+            can_offer_draw=False,
+        )
+        assert_snapshot_flags(
+            online_session.snapshot(),
+            is_game_over=False,
+            can_confirm_move=True,
+            can_undo_halfmove=False,
+            can_undo_fullmove=False,
+            can_resign=True,
+            is_promotion_pending=False,
+            can_offer_draw=False,
+        )
 
 
 class TestUndo:

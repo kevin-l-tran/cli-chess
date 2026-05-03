@@ -15,6 +15,7 @@ MoveAttemptStatus = Literal[
     "game_over",
     "error",
 ]
+DrawActionStatus = Literal["accepted", "unavailable", "game_over", "error"]
 UndoStatus = Literal["undone", "unavailable", "error"]
 UndoScope = Literal["halfmove", "fullmove"]
 ResignStatus = Literal["resigned", "game_over", "error"]
@@ -63,6 +64,22 @@ class SessionPhase:
     @property
     def is_game_over(self) -> bool:
         return self.kind in ("concluded", "timed_out")
+
+
+@dataclass(frozen=True)
+class SessionAvailability:
+    """
+    UI-facing action availability flags derived for the current session state.
+
+    Each field indicates whether the corresponding action should currently be
+    offered by the presentation layer.
+    """
+
+    can_confirm_move: bool
+    can_undo_halfmove: bool
+    can_undo_fullmove: bool
+    can_resign: bool
+    can_offer_draw: bool
 
 
 @dataclass(frozen=True)
@@ -187,6 +204,11 @@ class Snapshot:
             Anchor square for the promotion picker when the current ambiguity is only
             the promotion piece.
 
+        draw_offered_by (PlayerSide | None):
+            The side that offered a currently pending draw on the latest committed move, or
+            `None` if there is no pending offer. A subsequent move implicitly declines the
+            offer.
+
         check_square (Square | None):
             Square of the checked king for the side to move, if any.
 
@@ -198,6 +220,9 @@ class Snapshot:
 
         can_confirm_move (bool):
             Whether the current draft can be confirmed as a move.
+
+        can_offer_draw (bool):
+            Whether the player can offer a draw.
 
         can_undo_fullmove (bool):
             Whether a fullmove undo is available.
@@ -233,12 +258,14 @@ class Snapshot:
     move_draft: MoveDraftView
     move_autocompletions: list[str]
     promotion_prompt_position: Square | None
+    draw_offered_by: PlayerSide | None
 
     check_square: Square | None
 
     is_player_checked: bool
     is_game_over: bool
     can_confirm_move: bool
+    can_offer_draw: bool
     can_undo_fullmove: bool
     can_undo_halfmove: bool
     can_resign: bool
@@ -299,3 +326,20 @@ class ResignResult:
 
     ok: bool
     status: ResignStatus
+
+
+@dataclass(frozen=True)
+class DrawActionResult:
+    """
+    Stable result returned by `GameSession.accept_draw_offer()`.
+
+    Attributes:
+        ok (bool):
+            Whether the draw offer acceptance succeeded.
+
+        status (DrawActionStatus):
+            Machine-friendly outcome code for the attempt.
+    """
+
+    ok: bool
+    status: DrawActionStatus

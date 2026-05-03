@@ -1,29 +1,20 @@
-from dataclasses import dataclass
-from .move_parser import ParseResult
-from .session_types import OpponentType, UndoScope
-
-
-@dataclass(frozen=True)
-class SessionCapabilities:
-    """
-    UI-facing action availability flags derived for the current session state.
-
-    Each field indicates whether the corresponding action should currently be
-    offered by the presentation layer.
-    """
-
-    can_confirm_move: bool
-    can_undo_halfmove: bool
-    can_undo_fullmove: bool
-    can_resign: bool
+from .session_types import (
+    OpponentType,
+    ParseStatus,
+    PlayerSide,
+    SessionAvailability,
+    SessionPhase,
+    UndoScope,
+)
 
 
 class SessionPolicy:
     """
-    Pure policy helpers for session-level action availability.
+    Pure policy helpers for session-level UI availability and simple default choices.
 
-    `SessionPolicy` derives default undo scope and UI capability flags from
-    opponent mode, move count, parse state, and whether the session is terminal.
+    This module does not mutate session state, call the engine, set feedback, or
+    return command failure statuses. Inputs should be precomputed session facts, such
+    as current phase, move count, parse status, and pending draw-offer side.
     """
 
     @staticmethod
@@ -43,12 +34,12 @@ class SessionPolicy:
         return "halfmove" if opponent == "local" else "fullmove"
 
     @staticmethod
-    def can_confirm_move(parse_result: ParseResult, is_game_over: bool) -> bool:
-        return parse_result.status == "resolved" and not is_game_over
+    def can_confirm_move(parse_status: ParseStatus, phase: SessionPhase) -> bool:
+        return parse_status == "resolved" and not phase.is_game_over
 
     @staticmethod
-    def can_resign(is_game_over: bool) -> bool:
-        return not is_game_over
+    def can_resign(phase: SessionPhase) -> bool:
+        return not phase.is_game_over
 
     @staticmethod
     def can_undo_halfmove(opponent: OpponentType, move_count: int) -> bool:
@@ -59,24 +50,40 @@ class SessionPolicy:
         return opponent != "online" and move_count > 1
 
     @staticmethod
-    def capabilities(
+    def can_offer_draw(
+        opponent: OpponentType,
+        phase: SessionPhase,
+        draw_offered_by: PlayerSide | None,
+    ) -> bool:
+        return (
+            opponent == "local" and not phase.is_game_over and draw_offered_by is None
+        )
+
+    @staticmethod
+    def availability(
         opponent: OpponentType,
         move_count: int,
-        parse_result: ParseResult,
-        is_game_over: bool,
-    ) -> SessionCapabilities:
-        return SessionCapabilities(
+        parse_status: ParseStatus,
+        phase: SessionPhase,
+        draw_offered_by: PlayerSide | None,
+    ) -> SessionAvailability:
+        return SessionAvailability(
             can_confirm_move=SessionPolicy.can_confirm_move(
-                parse_result,
-                is_game_over=is_game_over,
+                parse_status,
+                phase,
+            ),
+            can_offer_draw=SessionPolicy.can_offer_draw(
+                opponent,
+                phase,
+                draw_offered_by,
             ),
             can_undo_halfmove=SessionPolicy.can_undo_halfmove(
                 opponent,
-                move_count=move_count,
+                move_count,
             ),
             can_undo_fullmove=SessionPolicy.can_undo_fullmove(
                 opponent,
-                move_count=move_count,
+                move_count,
             ),
-            can_resign=SessionPolicy.can_resign(is_game_over=is_game_over),
+            can_resign=SessionPolicy.can_resign(phase),
         )
