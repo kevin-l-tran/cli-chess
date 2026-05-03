@@ -98,14 +98,17 @@ class Game:
             self.outcome = "1-0" if not self.is_white_turn else "0-1"
 
     def accept_draw(self) -> None:
+        if self.outcome != "":
+            raise GameConcludedError(self.outcome)
+
         if not self.moves_list:
-            return None
-        
+            raise NoDrawOfferError(None)
+
         _, evaluation = self.moves_list[-1]
         if not is_draw_offer(evaluation):
             raise NoDrawOfferError(evaluation)
-        else:
-            self.outcome = "1/2-1/2"
+
+        self.outcome = "1/2-1/2"
 
     def pending_draw_offer_by_white(self) -> bool | None:
         if self.outcome != "":
