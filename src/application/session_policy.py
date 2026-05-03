@@ -48,6 +48,10 @@ class SessionPolicy:
         return opponent != "online" and move_count > 1
 
     @staticmethod
+    def can_offer_draw(opponent: OpponentType) -> bool:
+        return opponent != "bot"
+
+    @staticmethod
     def availability(
         opponent: OpponentType,
         move_count: int,
@@ -68,4 +72,5 @@ class SessionPolicy:
                 move_count=move_count,
             ),
             can_resign=SessionPolicy.can_resign(phase=phase),
+            can_offer_draw=SessionPolicy.can_offer_draw(opponent=opponent),
         )

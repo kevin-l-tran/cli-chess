@@ -85,6 +85,7 @@ class SessionAvailability:
     can_undo_halfmove: bool
     can_undo_fullmove: bool
     can_resign: bool
+    can_offer_draw: bool
 
 
 @dataclass(frozen=True)
