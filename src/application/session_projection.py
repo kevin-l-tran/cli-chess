@@ -5,7 +5,6 @@ from src.engine.game import Game
 from src.engine.moves import get_final_position, get_initial_position, get_promotion
 
 from .move_parser import ParseResult, get_canonical
-from .session_policy import SessionCapabilities
 from .session_types import (
     ClockView,
     FeedbackView,
@@ -13,6 +12,7 @@ from .session_types import (
     MoveListItem,
     OutcomeView,
     PlayerSide,
+    SessionCapabilities,
     Snapshot,
     TerminalState,
     TimedGameView,

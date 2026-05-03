@@ -73,6 +73,21 @@ class SessionPhase:
 
 
 @dataclass(frozen=True)
+class SessionCapabilities:
+    """
+    UI-facing action availability flags derived for the current session state.
+
+    Each field indicates whether the corresponding action should currently be
+    offered by the presentation layer.
+    """
+
+    can_confirm_move: bool
+    can_undo_halfmove: bool
+    can_undo_fullmove: bool
+    can_resign: bool
+
+
+@dataclass(frozen=True)
 class TimeControl:
     """
     Chess-clock configuration for a session.

@@ -18,7 +18,7 @@ from .move_parser import ParseResult, get_canonical, parse
 from .click_draft import click_to_move_text
 from .clock import ClockState, TimeSource, system_time_ms
 from .session_timing import SessionTiming
-from .session_policy import SessionCapabilities, SessionPolicy
+from .session_policy import SessionPolicy
 from .session_projection import (
     SessionProjection,
     SessionProjectionInputs,
@@ -31,6 +31,7 @@ from .session_types import (
     MoveAttemptResult,
     PlayerSide,
     ResignResult,
+    SessionCapabilities,
     SessionConfig,
     SessionPhase,
     Snapshot,

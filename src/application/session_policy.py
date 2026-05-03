@@ -1,21 +1,5 @@
-from dataclasses import dataclass
 from .move_parser import ParseResult
-from .session_types import OpponentType, UndoScope
-
-
-@dataclass(frozen=True)
-class SessionCapabilities:
-    """
-    UI-facing action availability flags derived for the current session state.
-
-    Each field indicates whether the corresponding action should currently be
-    offered by the presentation layer.
-    """
-
-    can_confirm_move: bool
-    can_undo_halfmove: bool
-    can_undo_fullmove: bool
-    can_resign: bool
+from .session_types import OpponentType, SessionCapabilities, UndoScope
 
 
 class SessionPolicy:
