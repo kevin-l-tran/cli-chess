@@ -11,6 +11,7 @@ from .session_types import (
     MoveDraftView,
     MoveListItem,
     OutcomeView,
+    PlayerSide,
     SessionAvailability,
     SessionPhase,
     Snapshot,
@@ -33,6 +34,7 @@ class SessionProjectionInputs:
     parse_result: ParseResult
     last_move_from: Square | None
     last_move_to: Square | None
+    draw_offered_by: PlayerSide | None
     feedback: FeedbackView | None
     phase: SessionPhase
     availability: SessionAvailability
@@ -104,10 +106,12 @@ class SessionProjection:
             ),
             move_autocompletions=parse_result.matching_spellings,
             promotion_prompt_position=promotion_prompt_position,
+            draw_offered_by=inputs.draw_offered_by,
             check_square=check_square,
             is_player_checked=check_square is not None,
             is_game_over=inputs.phase.is_game_over,
             can_confirm_move=availabilities.can_confirm_move,
+            can_offer_draw=availabilities.can_offer_draw,
             can_resign=availabilities.can_resign,
             is_promotion_pending=is_promotion_pending,
             can_undo_fullmove=availabilities.can_undo_fullmove,

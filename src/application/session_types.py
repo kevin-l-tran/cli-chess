@@ -210,6 +210,9 @@ class Snapshot:
             Anchor square for the promotion picker when the current ambiguity is only
             the promotion piece.
 
+        draw_offered_by (PlayerSide | None):
+            The player offering the draw, if any.
+
         check_square (Square | None):
             Square of the checked king for the side to move, if any.
 
@@ -221,6 +224,9 @@ class Snapshot:
 
         can_confirm_move (bool):
             Whether the current draft can be confirmed as a move.
+
+        can_offer_draw (bool):
+            Whether the player can offer a draw.
 
         can_undo_fullmove (bool):
             Whether a fullmove undo is available.
@@ -256,12 +262,14 @@ class Snapshot:
     move_draft: MoveDraftView
     move_autocompletions: list[str]
     promotion_prompt_position: Square | None
+    draw_offered_by: PlayerSide | None
 
     check_square: Square | None
 
     is_player_checked: bool
     is_game_over: bool
     can_confirm_move: bool
+    can_offer_draw: bool
     can_undo_fullmove: bool
     can_undo_halfmove: bool
     can_resign: bool

@@ -487,6 +487,7 @@ class GameSession:
                 parse_result=self._state.parse_result,
                 last_move_from=self._state.last_move_from,
                 last_move_to=self._state.last_move_to,
+                draw_offered_by=self._get_draw_offered_by(),
                 feedback=self._state.feedback,
                 phase=phase,
                 availability=availability,
@@ -551,6 +552,13 @@ class GameSession:
             self._set_terminal(TerminalState(winner=winner, reason="timeout"))
             self._refresh_position_state(clear_move_text=False)
 
+    def _get_draw_offered_by(self) -> PlayerSide | None:
+        white_draw_offer = self._game.pending_draw_offer_by_white()
+        if white_draw_offer is None:
+            return None
+        else:
+            return "white" if white_draw_offer else "black"
+
     def _availability(self, phase: SessionPhase | None = None) -> SessionAvailability:
         phase = self._phase() if phase is None else phase
 
@@ -559,6 +567,7 @@ class GameSession:
             move_count=len(self._game.moves_list),
             parse_status=self._state.parse_result.status,
             phase=phase,
+            draw_offered_by=self._get_draw_offered_by(),
         )
 
     def _apply_resolved_move(
