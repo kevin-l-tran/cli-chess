@@ -110,7 +110,7 @@ class Game:
 
         self.outcome = "1/2-1/2"
 
-    def pending_draw_offer_by_white(self) -> bool | None:
+    def pending_draw_offer_side_is_white(self) -> bool | None:
         if self.outcome != "":
             return None
 

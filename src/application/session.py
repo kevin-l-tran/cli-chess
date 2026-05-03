@@ -11,6 +11,7 @@ from src.engine.game import (
     Game,
     GameConcludedError,
     IllegalMoveError,
+    NoDrawOfferError,
     NoMoveToUndoError,
 )
 
@@ -66,9 +67,6 @@ class _SessionState:
         last_move_to (Square | None):
             Destination square of the most recently applied move, if any.
 
-        pending_draw_offer (PlayerSide | None):
-            The player side that initiated a draw offer, if any.
-
         feedback (FeedbackView | None):
             Most recent user-facing action or failure message, if any.
     """
@@ -79,7 +77,6 @@ class _SessionState:
     last_move_from: Square | None = None
     last_move_to: Square | None = None
 
-    pending_draw_offer: PlayerSide | None = None
     feedback: FeedbackView | None = None
 
 
@@ -257,10 +254,17 @@ class GameSession:
             - does not modify the board position unless move application succeeds
         """
         self._sync_timing()
-        if self._phase().is_game_over:
+        phase = self._phase()
+
+        if phase.is_game_over:
             self._refresh_position_state(clear_move_text=False)
             self._set_feedback("error", "Game has concluded.")
             return MoveAttemptResult(False, "game_over")
+
+        if offer_draw and not self._availability(phase).can_offer_draw:
+            self._refresh_position_state(clear_move_text=False)
+            self._set_feedback("error", "Draw offers are not available.")
+            return MoveAttemptResult(False, "error")
 
         self._state.parse_result = parse(self._state.move_text, self._legal_moves)
         parse_result = self._state.parse_result
@@ -285,10 +289,38 @@ class GameSession:
         return self._apply_resolved_move(move, offer_draw=offer_draw)
 
     def accept_draw_offer(self) -> DrawActionResult:
-        return NotImplemented
+        self._sync_timing()
+        phase = self._phase()
 
-    def decline_draw_offer(self) -> DrawActionResult:
-        return NotImplemented
+        if phase.is_game_over:
+            self._refresh_position_state(clear_move_text=False)
+            self._set_feedback("error", "Game has concluded.")
+            return DrawActionResult(False, "game_over")
+
+        if self._get_draw_offered_by() is None:
+            self._refresh_position_state(clear_move_text=False)
+            self._set_feedback("error", "No draw offer is available.")
+            return DrawActionResult(False, "unavailable")
+
+        try:
+            self._game.accept_draw()
+        except NoDrawOfferError:
+            self._refresh_position_state(clear_move_text=False)
+            self._set_feedback("error", "No draw offer is available.")
+            return DrawActionResult(False, "unavailable")
+        except GameConcludedError:
+            self._refresh_position_state(clear_move_text=False)
+            self._set_feedback("error", "Game has concluded.")
+            return DrawActionResult(False, "game_over")
+        except Exception:
+            self._refresh_position_state(clear_move_text=False)
+            self._set_feedback("error", "Could not accept draw offer.")
+            return DrawActionResult(False, "error")
+
+        self._set_terminal(TerminalState(winner=None, reason="draw"))
+        self._refresh_position_state(clear_move_text=True)
+        self._set_feedback("action", "Draw offer accepted.")
+        return DrawActionResult(True, "accepted")
 
     def undo(self, scope: UndoScope | None = None) -> UndoResult:
         """
@@ -553,7 +585,7 @@ class GameSession:
             self._refresh_position_state(clear_move_text=False)
 
     def _get_draw_offered_by(self) -> PlayerSide | None:
-        white_draw_offer = self._game.pending_draw_offer_by_white()
+        white_draw_offer = self._game.pending_draw_offer_side_is_white()
         if white_draw_offer is None:
             return None
         else:
@@ -600,6 +632,8 @@ class GameSession:
             self._refresh_position_state(clear_move_text=True)
 
             action_message = f"Played {get_canonical(move)}."
+            if offer_draw and not self._phase().is_game_over:
+                action_message += " Draw offered."
             self._set_feedback("action", action_message)
 
             return MoveAttemptResult(True, "applied")
