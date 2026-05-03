@@ -11,8 +11,8 @@ from .session_types import (
     MoveDraftView,
     MoveListItem,
     OutcomeView,
-    PlayerSide,
-    SessionCapabilities,
+    SessionAvailability,
+    SessionPhase,
     Snapshot,
     TerminalState,
     TimedGameView,
@@ -31,13 +31,11 @@ class TimingProjectionInputs:
 class SessionProjectionInputs:
     move_text: str
     parse_result: ParseResult
-    side_to_move: PlayerSide | None
     last_move_from: Square | None
     last_move_to: Square | None
-    terminal: TerminalState | None
     feedback: FeedbackView | None
-    is_game_over: bool
-    capabilities: SessionCapabilities
+    phase: SessionPhase
+    availability: SessionAvailability
     timing: TimingProjectionInputs | None
 
 
@@ -87,14 +85,14 @@ class SessionProjection:
         move_list = _build_move_list(game)
         promotion_prompt_position = _get_promotion_prompt_position(parse_result)
         timed_game = _build_timed_game(inputs.timing)
-        outcome = _build_outcome(inputs.terminal)
+        outcome = _build_outcome(inputs.phase.terminal)
 
-        caps = inputs.capabilities
+        availabilities = inputs.availability
         is_promotion_pending = promotion_prompt_position is not None
 
         return Snapshot(
             board_glyphs=_build_board_glyphs(game),
-            side_to_move=inputs.side_to_move,
+            side_to_move=inputs.phase.side_to_move,
             candidate_moves=set(parse_result.source_to_target_highlights),
             last_move_from=inputs.last_move_from,
             last_move_to=inputs.last_move_to,
@@ -108,12 +106,12 @@ class SessionProjection:
             promotion_prompt_position=promotion_prompt_position,
             check_square=check_square,
             is_player_checked=check_square is not None,
-            is_game_over=inputs.is_game_over,
-            can_confirm_move=caps.can_confirm_move,
-            can_resign=caps.can_resign,
+            is_game_over=inputs.phase.is_game_over,
+            can_confirm_move=availabilities.can_confirm_move,
+            can_resign=availabilities.can_resign,
             is_promotion_pending=is_promotion_pending,
-            can_undo_fullmove=caps.can_undo_fullmove,
-            can_undo_halfmove=caps.can_undo_halfmove,
+            can_undo_fullmove=availabilities.can_undo_fullmove,
+            can_undo_halfmove=availabilities.can_undo_halfmove,
             timed_game=timed_game,
             outcome=outcome,
             feedback=inputs.feedback,

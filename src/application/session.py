@@ -31,7 +31,7 @@ from .session_types import (
     MoveAttemptResult,
     PlayerSide,
     ResignResult,
-    SessionCapabilities,
+    SessionAvailability,
     SessionConfig,
     SessionPhase,
     Snapshot,
@@ -283,10 +283,10 @@ class GameSession:
             return MoveAttemptResult(False, "error")
 
         return self._apply_resolved_move(move, offer_draw=offer_draw)
-    
+
     def accept_draw_offer(self) -> DrawActionResult:
         return NotImplemented
-    
+
     def decline_draw_offer(self) -> DrawActionResult:
         return NotImplemented
 
@@ -355,12 +355,14 @@ class GameSession:
             self._set_feedback("error", message)
             return UndoResult(False, "unavailable")
 
-        caps = self._capabilities()
-        if scope == "halfmove" and not caps.can_undo_halfmove:
+        move_count = len(self._game.moves_list)
+
+        if scope == "halfmove" and move_count == 0:
             self._refresh_position_state(clear_move_text=False)
             self._set_feedback("error", "No move to undo.")
             return UndoResult(False, "unavailable")
-        if scope == "fullmove" and not caps.can_undo_fullmove:
+
+        if scope == "fullmove" and move_count <= 1:
             self._refresh_position_state(clear_move_text=False)
             self._set_feedback("error", "No move to undo.")
             return UndoResult(False, "unavailable")
@@ -417,7 +419,9 @@ class GameSession:
             - returns a stable failure result
         """
         self._sync_timing()
-        if not self._capabilities().can_resign:
+        phase = self._phase()
+
+        if phase.is_game_over:
             self._refresh_position_state(clear_move_text=False)
             self._set_feedback("error", "Game has concluded.")
             return ResignResult(False, "game_over")
@@ -474,20 +478,18 @@ class GameSession:
         phase = self._phase()
         clock = self._clock_state
         time_control = self._config.time_control
-        capabilities = self._capabilities()
+        availability = self._availability(phase)
 
         return SessionProjection.build(
             self._game,
             SessionProjectionInputs(
                 move_text=self._state.move_text,
                 parse_result=self._state.parse_result,
-                side_to_move=phase.side_to_move,
                 last_move_from=self._state.last_move_from,
                 last_move_to=self._state.last_move_to,
-                terminal=phase.terminal,
                 feedback=self._state.feedback,
-                is_game_over=phase.is_game_over,
-                capabilities=capabilities,
+                phase=phase,
+                availability=availability,
                 timing=TimingProjectionInputs(
                     clock_state=clock,
                     increment_seconds=None
@@ -549,12 +551,14 @@ class GameSession:
             self._set_terminal(TerminalState(winner=winner, reason="timeout"))
             self._refresh_position_state(clear_move_text=False)
 
-    def _capabilities(self) -> SessionCapabilities:
-        return SessionPolicy.capabilities(
+    def _availability(self, phase: SessionPhase | None = None) -> SessionAvailability:
+        phase = self._phase() if phase is None else phase
+
+        return SessionPolicy.availability(
             opponent=self._config.opponent,
             move_count=len(self._game.moves_list),
-            parse_result=self._state.parse_result,
-            is_game_over=self._phase().is_game_over,
+            parse_status=self._state.parse_result.status,
+            phase=phase,
         )
 
     def _apply_resolved_move(

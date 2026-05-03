@@ -73,7 +73,7 @@ class SessionPhase:
 
 
 @dataclass(frozen=True)
-class SessionCapabilities:
+class SessionAvailability:
     """
     UI-facing action availability flags derived for the current session state.
 

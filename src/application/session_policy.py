@@ -1,13 +1,18 @@
-from .move_parser import ParseResult
-from .session_types import OpponentType, SessionCapabilities, UndoScope
+from .session_types import (
+    OpponentType,
+    ParseStatus,
+    SessionAvailability,
+    SessionPhase,
+    UndoScope,
+)
 
 
 class SessionPolicy:
     """
-    Pure policy helpers for session-level action availability.
+    Pure policy helpers for session-level UI availability and simple default choices.
 
-    `SessionPolicy` derives default undo scope and UI capability flags from
-    opponent mode, move count, parse state, and whether the session is terminal.
+    This module does not mutate session state, call the engine, set feedback, or
+    return command failure statuses.
     """
 
     @staticmethod
@@ -27,12 +32,12 @@ class SessionPolicy:
         return "halfmove" if opponent == "local" else "fullmove"
 
     @staticmethod
-    def can_confirm_move(parse_result: ParseResult, is_game_over: bool) -> bool:
-        return parse_result.status == "resolved" and not is_game_over
+    def can_confirm_move(parse_status: ParseStatus, phase: SessionPhase) -> bool:
+        return parse_status == "resolved" and not phase.is_game_over
 
     @staticmethod
-    def can_resign(is_game_over: bool) -> bool:
-        return not is_game_over
+    def can_resign(phase: SessionPhase) -> bool:
+        return not phase.is_game_over
 
     @staticmethod
     def can_undo_halfmove(opponent: OpponentType, move_count: int) -> bool:
@@ -43,24 +48,24 @@ class SessionPolicy:
         return opponent != "online" and move_count > 1
 
     @staticmethod
-    def capabilities(
+    def availability(
         opponent: OpponentType,
         move_count: int,
-        parse_result: ParseResult,
-        is_game_over: bool,
-    ) -> SessionCapabilities:
-        return SessionCapabilities(
+        parse_status: ParseStatus,
+        phase: SessionPhase,
+    ) -> SessionAvailability:
+        return SessionAvailability(
             can_confirm_move=SessionPolicy.can_confirm_move(
-                parse_result,
-                is_game_over=is_game_over,
+                parse_status=parse_status,
+                phase=phase,
             ),
             can_undo_halfmove=SessionPolicy.can_undo_halfmove(
-                opponent,
+                opponent=opponent,
                 move_count=move_count,
             ),
             can_undo_fullmove=SessionPolicy.can_undo_fullmove(
-                opponent,
+                opponent=opponent,
                 move_count=move_count,
             ),
-            can_resign=SessionPolicy.can_resign(is_game_over=is_game_over),
+            can_resign=SessionPolicy.can_resign(phase=phase),
         )
