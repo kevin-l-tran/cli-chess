@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from random import choice
 from typing import Literal, cast
 
-from application.session_types import (
+from src.application.session_types import (
     OpponentType,
     PlayerSide,
     SessionConfig,

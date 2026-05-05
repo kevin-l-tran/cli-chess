@@ -14,8 +14,8 @@ from textual.widgets import (
 )
 from textual_slider import Slider
 
-from application.session_types import OpponentType, TimeControl
-from ui.models.setup_models import SetupSelection, SideChoice
+from src.application.session_types import OpponentType, TimeControl
+from src.ui.models.setup_models import SetupSelection, SideChoice
 
 
 class BotLevelSlider(Horizontal):

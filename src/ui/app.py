@@ -1,8 +1,8 @@
 from textual.app import App
 
-from ui.screens.menu import MenuScreen
-from ui.screens.setup import SetupScreen
-from ui.themes import CHESS_VARIABLE_DEFAULTS, DEFAULT_THEME, register_chess_themes
+from src.ui.screens.menu import MenuScreen
+from src.ui.screens.setup import SetupScreen
+from src.ui.themes import CHESS_VARIABLE_DEFAULTS, DEFAULT_THEME, register_chess_themes
 
 
 class ChessApp(App[None]):

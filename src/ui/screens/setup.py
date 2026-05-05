@@ -57,25 +57,7 @@ class SetupScreen(Screen):
         self.query_one(SetupSummary).selection = msg.selection
 
     def on_setup_actions_start_pressed(self, msg: SetupActions.StartPressed) -> None:
-        selection = self.query_one(SetupForm).settings()
-        config = selection.to_session_config()  # noqa: F841
-
-        # TODO: start game using config.
-        #
-        # Local:
-        # client = InProcessGameClient.local(
-        #     time_control=config.time_control,
-        # )
-        #
-        # Bot:
-        # bot = StockfishBotAdapter(level=selection.bot_level)
-        # client = InProcessGameClient.bot(
-        #     human_side=config.player_side,
-        #     bot=bot,
-        #     time_control=config.time_control,
-        # )
         pass
 
     def on_setup_actions_back_pressed(self, msg: SetupActions.BackPressed) -> None:
-        # TODO: return to previous screen
-        self.dismiss()
+        self.app.pop_screen()
