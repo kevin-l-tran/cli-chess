@@ -74,9 +74,10 @@ class Game:
 
         check = self.board.is_checked(self.is_white_turn)
         checkmate = check and not self.board.get_moves(self.is_white_turn)
+        stale_moves = self._get_num_stale_moves_after(move)
 
         draw = False
-        if self._get_num_stale_moves() >= 100:
+        if stale_moves >= 100:
             draw = True
         elif self.encountered_positions[position] >= 3:
             draw = True
@@ -167,6 +168,15 @@ class Game:
                 stale_moves += 1
 
         return stale_moves
+    
+    def _is_stale_move(self, move: Move) -> bool:
+        return get_piece(move) != "P" and get_captured_piece(move) is None
+
+    def _get_num_stale_moves_after(self, move: Move) -> int:
+        if not self._is_stale_move(move):
+            return 0
+
+        return self._get_num_stale_moves() + 1
 
     def _get_position_hash(self):
         hash = ""
