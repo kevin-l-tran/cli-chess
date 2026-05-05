@@ -32,14 +32,25 @@ class GameScreen(Screen):
         padding: 1 2;
     }
 
-    #layout {
+    #game-root {
         height: 1fr;
+        width: 1fr;
+    }
+
+    #top-layout {
+        height: 1fr;
+        width: 1fr;
     }
 
     #board-panel {
         width: auto;
         height: auto;
         margin-right: 2;
+    }
+
+    #side-panel {
+        width: 50;
+        height: 1fr;
     }
 
     #title {
@@ -49,7 +60,17 @@ class GameScreen(Screen):
     }
 
     #move-input {
+        width: 1fr;
+        height: auto;
         margin-top: 1;
+    }
+
+    #promotion-row {
+        height: auto;
+    }
+
+    #controls {
+        height: auto;
     }
     """
 
@@ -69,13 +90,17 @@ class GameScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Static("Chess", id="title")
-        with Horizontal(id="layout"):
-            with Vertical(id="board-panel"):
-                yield ChessBoard(orientation=self.config.player_side, id="board")
-                yield Input(placeholder="Move, e.g. e2e4 or Nc3", id="move-input")
-                yield PromotionPicker(id="promotion-row")
-                yield GameControls(id="controls")
-            yield GameSidePanel(id="side-panel")
+
+        with Vertical(id="game-root"):
+            with Horizontal(id="top-layout"):
+                with Vertical(id="board-panel"):
+                    yield ChessBoard(orientation=self.config.player_side, id="board")
+
+                yield GameSidePanel(id="side-panel")
+
+            yield Input(placeholder="Move, e.g. e2e4 or Nc3", id="move-input")
+            yield PromotionPicker(id="promotion-row")
+            yield GameControls(id="controls")
 
     def on_mount(self) -> None:
         self._refresh_view()
