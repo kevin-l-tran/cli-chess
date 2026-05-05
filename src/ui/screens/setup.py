@@ -6,6 +6,7 @@ from textual.widgets import Static
 from ..widgets.setup.setup_actions import SetupActions
 from ..widgets.setup.setup_form import SetupForm
 from ..widgets.setup.setup_summary import SetupSummary
+from .game import GameScreen
 
 
 class SetupScreen(Screen):
@@ -57,7 +58,8 @@ class SetupScreen(Screen):
         self.query_one(SetupSummary).selection = msg.selection
 
     def on_setup_actions_start_pressed(self, msg: SetupActions.StartPressed) -> None:
-        pass
+        selection = self.query_one(SetupForm).settings()
+        self.app.push_screen(GameScreen(selection))
 
     def on_setup_actions_back_pressed(self, msg: SetupActions.BackPressed) -> None:
         self.app.pop_screen()
