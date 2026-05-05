@@ -3,9 +3,9 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Static
 
-from ui.widgets.setup_actions import SetupActions
-from ui.widgets.setup_form import SetupForm
-from ui.widgets.setup_summary import SetupSummary
+from ..widgets.setup.setup_actions import SetupActions
+from ..widgets.setup.setup_form import SetupForm
+from ..widgets.setup.setup_summary import SetupSummary
 
 
 class SetupScreen(Screen):
