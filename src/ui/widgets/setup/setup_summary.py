@@ -3,7 +3,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
-from ui.models import SetupSelection
+from ui.models.setup_models import SetupSelection
 
 
 class SetupSummary(Widget):
