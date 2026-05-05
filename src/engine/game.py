@@ -60,22 +60,19 @@ class Game:
             raise IllegalMoveError(move)
 
         commands = self.board.get_move_command(move)
-        self.commands_list.append(commands)  # append commands
+        self.commands_list.append(commands)
 
-        self.commands_list[-1][0](self.board)  # apply move
+        commands[0](self.board)
+
+        # Toggle before hashing. The position key includes side-to-move.
+        self.is_white_turn = not self.is_white_turn
 
         position = self._get_position_hash()
-        # append encountered position
-        if self.encountered_positions.get(position) is not None:
-            self.encountered_positions[position] += 1
-        else:
-            self.encountered_positions[position] = 1
+        self.encountered_positions[position] = (
+            self.encountered_positions.get(position, 0) + 1
+        )
 
-        self.is_white_turn = not self.is_white_turn  # change player turn
-
-        # get evaluation
         check = self.board.is_checked(self.is_white_turn)
-
         checkmate = check and not self.board.get_moves(self.is_white_turn)
 
         draw = False
@@ -89,9 +86,8 @@ class Game:
             draw = True
 
         evaluation = make_evaluation(check, checkmate, draw, draw_offered)
-        self.moves_list.append((move, evaluation))  # append moves
+        self.moves_list.append((move, evaluation))
 
-        # set outcomes
         if draw:
             self.outcome = "1/2-1/2"
         if checkmate:
@@ -130,11 +126,15 @@ class Game:
         current_position = self._get_position_hash()
         commands = self.commands_list[-1]
 
-        commands[1](self.board)  # undo move
+        if current_position in self.encountered_positions:
+            self.encountered_positions[current_position] -= 1
+            if self.encountered_positions[current_position] <= 0:
+                del self.encountered_positions[current_position]
+
+        commands[1](self.board)
 
         self.commands_list.pop()
         self.moves_list.pop()
-        self.encountered_positions[current_position] -= 1
         self.is_white_turn = not self.is_white_turn
         self.outcome = ""
 
