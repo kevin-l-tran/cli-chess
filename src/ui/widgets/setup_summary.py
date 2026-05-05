@@ -3,7 +3,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
-from ui.models import GameSettings
+from ui.models import SetupSelection
 
 
 class SetupSummary(Widget):
@@ -28,30 +28,44 @@ class SetupSummary(Widget):
     }
     """
 
-    settings: reactive[GameSettings | None] = reactive(None)
+    selection: reactive[SetupSelection | None] = reactive(None)
+
+    # Compatibility with existing SetupScreen code that assigns .settings.
+    settings: reactive[SetupSelection | None] = reactive(None)
 
     def compose(self) -> ComposeResult:
         yield Static("Summary", id="summary_title")
         yield Static("", id="summary_body")
 
-    def watch_settings(self, settings: GameSettings | None) -> None:
-        if settings is None:
+    def watch_selection(self, selection: SetupSelection | None) -> None:
+        self._update_summary(selection)
+
+    def watch_settings(self, settings: SetupSelection | None) -> None:
+        self.selection = settings
+
+    def _update_summary(self, selection: SetupSelection | None) -> None:
+        if selection is None:
             self.query_one("#summary_body", Static).update("")
             return
 
         opp = (
             "Local (2P)"
-            if settings.opponent == "local"
-            else f"Bot (Level {settings.bot_level})"
+            if selection.opponent == "local"
+            else f"Bot (Level {selection.bot_level})"
         )
-        side = {"random": "Random", "white": "White", "black": "Black"}.get(
-            settings.side, settings.side
-        )
-        time = (
-            "No Clock"
-            if settings.time == (0, 0)
-            else f"{settings.time[0]}+{settings.time[1]}"
-        )
+
+        side = {
+            "random": "Random",
+            "white": "White",
+            "black": "Black",
+        }[selection.side_choice]
+
+        if selection.time_control is None:
+            time = "No Clock"
+        else:
+            mins = selection.time_control.initial_seconds // 60
+            inc = selection.time_control.increment_seconds
+            time = f"{mins}+{inc}"
 
         text = "\n".join(
             [

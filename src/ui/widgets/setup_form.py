@@ -1,3 +1,5 @@
+from typing import cast
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
@@ -12,7 +14,8 @@ from textual.widgets import (
 )
 from textual_slider import Slider
 
-from ui.models import GameSettings
+from application.session_types import OpponentType, TimeControl
+from ui.models import SetupSelection, SideChoice
 
 
 class BotLevelSlider(Horizontal):
@@ -40,7 +43,7 @@ class BotLevelSlider(Horizontal):
         self._sync_display()
 
     def _sync_display(self) -> None:
-        bot_level = self.query_one("#bot-level-slider", Slider).value
+        bot_level = int(self.query_one("#bot-level-slider", Slider).value)
         self.query_one("#bot-level-display", Static).update(
             self._format_bot_level(bot_level)
         )
@@ -129,8 +132,10 @@ class CustomTimeInput(Widget):
         inc = int(inc_s)
 
         if not (0 < mins <= 59):
+            self.value = None
             err.update("Start time must be 1-59 minutes.")
         elif not (0 <= inc <= 59):
+            self.value = None
             err.update("Increment must be 0-59 seconds.")
         else:
             self.value = (mins, inc)
@@ -169,9 +174,12 @@ class SetupForm(Widget):
     class SettingsChanged(Message):
         bubble = True
 
-        def __init__(self, settings: GameSettings) -> None:
+        def __init__(self, selection: SetupSelection) -> None:
             super().__init__()
-            self.settings = settings
+            self.selection = selection
+
+            # Compatibility with existing SetupScreen code that expects msg.settings.
+            self.settings = selection
 
     def compose(self) -> ComposeResult:
         yield Static("Opponent:", classes="label")
@@ -214,37 +222,61 @@ class SetupForm(Widget):
         self._sync_rows()
         self._emit()
 
-    def settings(self) -> GameSettings:
+    def settings(self) -> SetupSelection:
+        opponent = self._selected_opponent()
+        side_choice = self._selected_side_choice()
+        time_control = self._selected_time_control()
+
+        bot_level = None
+        if opponent == "bot":
+            bot_level = int(self.query_one("#bot-level-slider", Slider).value)
+
+        return SetupSelection(
+            opponent=opponent,
+            side_choice=side_choice,
+            time_control=time_control,
+            bot_level=bot_level,
+        )
+
+    def _selected_opponent(self) -> OpponentType:
         opponent_set = self.query_one("#opponent-row", RadioSet)
         opponent_id = (
             opponent_set.pressed_button.id if opponent_set.pressed_button else "local"
         )
 
-        side = str(self.query_one("#side-select", Select).value) or "random"
-        time = str(self.query_one("#time-select", Select).value) or "none"
-        bot_level = self.query_one("#bot-level-slider", Slider).value
+        return cast(OpponentType, "bot" if opponent_id == "bot" else "local")
 
-        return GameSettings(
-            opponent="bot" if opponent_id == "bot" else "local",
-            side=str(side),
-            time=self._extract_time(time),
-            bot_level=bot_level,
+    def _selected_side_choice(self) -> SideChoice:
+        raw = str(self.query_one("#side-select", Select).value) or "random"
+        return cast(SideChoice, raw)
+
+    def _selected_time_control(self) -> TimeControl | None:
+        time = str(self.query_one("#time-select", Select).value) or "none"
+
+        if time == "none":
+            return None
+
+        if time == "custom":
+            custom_time = self.query_one("#custom-time-input", CustomTimeInput).value
+            if custom_time is None:
+                return None
+
+            mins, inc = custom_time
+            return TimeControl(
+                initial_seconds=mins * 60,
+                increment_seconds=inc,
+            )
+
+        mins_s, inc_s = time.split("+")
+        return TimeControl(
+            initial_seconds=int(mins_s) * 60,
+            increment_seconds=int(inc_s),
         )
 
-    def _extract_time(self, time: str) -> tuple[int, int]:
-        if time == "none":
-            return (0, 0)
-        elif time == "custom":
-            custom_time = self.query_one("#custom-time-input", CustomTimeInput).value
-            return custom_time if custom_time is not None else (0, 0)
-
-        times = time.split("+")
-        return (int(times[0]), int(times[1]))
-
     def _sync_rows(self) -> None:
-        s = self.settings()
+        selection = self.settings()
 
-        bot_selected = s.opponent == "bot"
+        bot_selected = selection.opponent == "bot"
         self.query_one("#bot-level-label", Static).display = bot_selected
         self.query_one("#bot-level-row", Horizontal).display = bot_selected
         self.query_one("#side-label", Static).update(

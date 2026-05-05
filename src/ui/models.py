@@ -1,19 +1,34 @@
 from dataclasses import dataclass
+from random import choice
+from typing import Literal, cast
+
+from application.session_types import (
+    OpponentType,
+    PlayerSide,
+    SessionConfig,
+    TimeControl,
+)
+
+SideChoice = Literal["random", "white", "black"]
 
 
 @dataclass(frozen=True)
-class GameSettings:
-    """
-    Represents the settings of a chess game.
+class SetupSelection:
+    opponent: OpponentType
+    side_choice: SideChoice
+    time_control: TimeControl | None
+    bot_level: int | None = None
 
-    Attributes:
-        opponent (str): String indicating the opponent (currently "bot" or "local").
-        side (str): String representing the player's side. Will refer to Player 1's side if the opponent is local.
-        time (tuple[int, int]): Tuple representing the timer (starting time (min), increment time (sec)), if any. Otherwise defaults to (0,0).
-        bot_level (int): The difficulty of the chess bot, if the opponent is a bot. Otherwise defaults to 0.
-    """
+    def to_session_config(self) -> SessionConfig:
+        player_side: PlayerSide
 
-    opponent: str
-    side: str
-    time: tuple[int, int]
-    bot_level: int
+        if self.side_choice == "random":
+            player_side = choice(("white", "black"))
+        else:
+            player_side = cast(PlayerSide, self.side_choice)
+
+        return SessionConfig(
+            player_side=player_side,
+            opponent=self.opponent,
+            time_control=self.time_control,
+        )
