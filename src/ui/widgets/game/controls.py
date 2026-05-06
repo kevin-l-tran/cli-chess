@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal, cast
 
 from textual.app import ComposeResult
@@ -60,48 +61,7 @@ class ActionButton(Static):
 
 
 class GameControls(Grid):
-    DEFAULT_CSS = """
-    GameControls {
-        height: 7;
-        width: 1fr;
-        grid-size: 4 2;
-        grid-columns: 1fr 1fr 1fr 1fr;
-        grid-rows: 3 3;
-        grid-gutter: 1 1;
-    }
-
-    GameControls .action-button {
-        width: 1fr;
-        height: 3;
-        min-width: 10;
-        margin: 0;
-        padding: 0 1;
-        border: ascii $border;
-        background: $background;
-        color: $foreground;
-        content-align: center middle;
-        text-style: bold;
-    }
-
-    /* Keep hover cheap: no border or size changes. */
-    GameControls .action-button:hover {
-        color: $accent;
-    }
-
-    GameControls .action-button:focus {
-        color: $foreground;
-        text-style: bold reverse;
-    }
-
-    GameControls .action-button.disabled,
-    GameControls .action-button.disabled:hover,
-    GameControls .action-button.disabled:focus {
-        border: ascii $surface;
-        background: $panel;
-        color: $text-muted;
-        text-style: none;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "css" / "controls.tcss").read_text()
 
     class ActionPressed(Message):
         bubble = True

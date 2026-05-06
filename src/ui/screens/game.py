@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import cast
 
 from textual.app import ComposeResult
@@ -27,99 +28,7 @@ class GameScreen(Screen):
         ("ctrl+h", "undo_halfmove", "Undo move"),
     ]
 
-    CSS = """
-    GameScreen {
-        padding: 1 2;
-        background: $background;
-        color: $foreground;
-    }
-
-    #topbar {
-        height: 1;
-        margin-bottom: 1;
-        color: $text-muted;
-    }
-
-    #game-root {
-        height: 1fr;
-        width: 1fr;
-    }
-
-    #main {
-        height: 1fr;
-        width: 1fr;
-    }
-
-    #left {
-        width: 46;
-        height: 1fr;
-    }
-
-    #right {
-        width: 1fr;
-        height: 1fr;
-        padding-left: 2;
-    }
-
-    #bottombar {
-        height: 3;
-        margin-top: 1;
-    }
-
-    .frame {
-        border: ascii $border;
-        padding: 0 1;
-    }
-
-    .frame_title {
-        height: 1;
-        color: $accent;
-        text-style: bold;
-    }
-
-    .panel {
-        height: auto;
-        margin-bottom: 1;
-    }
-
-    #side-panel {
-        width: 1fr;
-        height: 1fr;
-        overflow-y: scroll;
-    }
-
-    #actions-panel {
-        height: auto;
-        margin-top: 1;
-        margin-bottom: 0;
-    }
-
-    #move-input {
-        width: 1fr;
-        height: auto;
-        border: ascii $border;
-        background: $background;
-        color: $foreground;
-    }
-
-    #move-input:focus {
-        border: heavy $accent;
-    }
-
-    #hint {
-        width: 38;
-        content-align: right middle;
-        color: $text-muted;
-    }
-
-    #promotion-row {
-        height: auto;
-    }
-
-    #controls {
-        height: auto;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "css" / "game.tcss").read_text()
 
     def __init__(
         self,

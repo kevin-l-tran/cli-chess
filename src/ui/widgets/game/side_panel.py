@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
@@ -7,58 +9,7 @@ from src.ui.models.setup_models import SetupSelection
 
 
 class GameSidePanel(Vertical):
-    DEFAULT_CSS = """
-    GameSidePanel {
-        width: 1fr;
-        height: 1fr;
-    }
-
-    GameSidePanel .panel {
-        height: auto;
-        margin-bottom: 1;
-    }
-
-    GameSidePanel .frame {
-        border: ascii $border;
-        padding: 0 1;
-    }
-
-    GameSidePanel .frame_title {
-        height: 1;
-        color: $accent;
-        text-style: bold;
-    }
-
-    GameSidePanel .panel_body {
-        height: auto;
-        margin-bottom: 1;
-    }
-
-    GameSidePanel #moves_panel {
-        height: 1fr;
-        min-height: 8;
-        margin-bottom: 0;
-    }
-
-    GameSidePanel #moves_list {
-        height: auto;
-    }
-
-    GameSidePanel #feedback.error {
-        color: $chess-feedback-error;
-        text-style: bold;
-    }
-
-    GameSidePanel #feedback.action {
-        color: $chess-feedback-action;
-        text-style: bold;
-    }
-
-    GameSidePanel #feedback.info {
-        color: $chess-feedback-info;
-        text-style: bold;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "css" / "side_panel.tcss").read_text()
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)

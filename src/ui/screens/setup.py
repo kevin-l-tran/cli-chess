@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
@@ -10,32 +12,7 @@ from .game import GameScreen
 
 
 class SetupScreen(Screen):
-    CSS = """
-    SetupScreen { align: center middle; }
-
-    #panel {
-        width: auto;
-        height: auto;
-        max-width: 120;
-        max-height: 35;
-        padding: 2 4;
-        border: round $border;
-        background: $panel;
-    }
-
-    #title {
-        content-align: center middle;
-        text-style: bold;
-        height: auto;
-    }
-
-    #subtitle {
-        content-align: center middle;
-        color: $text-muted;
-        margin-bottom: 1;
-        height: auto;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "css" / "setup.tcss").read_text()
 
     def compose(self) -> ComposeResult:
         yield Vertical(

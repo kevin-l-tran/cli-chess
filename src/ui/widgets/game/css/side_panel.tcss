@@ -1,0 +1,50 @@
+GameSidePanel {
+    width: 1fr;
+    height: 1fr;
+}
+
+GameSidePanel .panel {
+    height: auto;
+    margin-bottom: 1;
+}
+
+GameSidePanel .frame {
+    border: ascii $border;
+    padding: 0 1;
+}
+
+GameSidePanel .frame_title {
+    height: 1;
+    color: $accent;
+    text-style: bold;
+}
+
+GameSidePanel .panel_body {
+    height: auto;
+    margin-bottom: 1;
+}
+
+GameSidePanel #moves_panel {
+    height: 1fr;
+    min-height: 8;
+    margin-bottom: 0;
+}
+
+GameSidePanel #moves_list {
+    height: auto;
+}
+
+GameSidePanel #feedback.error {
+    color: $chess-feedback-error;
+    text-style: bold;
+}
+
+GameSidePanel #feedback.action {
+    color: $chess-feedback-action;
+    text-style: bold;
+}
+
+GameSidePanel #feedback.info {
+    color: $chess-feedback-info;
+    text-style: bold;
+}

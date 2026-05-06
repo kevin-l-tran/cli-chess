@@ -1,4 +1,5 @@
 from itertools import cycle
+from pathlib import Path
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -56,53 +57,7 @@ class TitleArt(Static):
 
 
 class MenuScreen(Screen[None]):
-    CSS = """
-    MenuScreen {
-        align: center middle;
-    }
-
-    #panel {
-        width: 120;
-        height: auto;
-        padding: 1 2;
-        border: $accent;
-    }
-
-    #title {
-        text-align: center;
-    }
-
-    #tagline {
-        text-align: center;
-        margin: 1 0 1 0;
-    }
-
-    #menu {
-        align: center middle;
-        height: auto;
-        margin-top: 1;
-    }
-
-    #menu Button {
-        width: 28;
-        height: 3;
-        padding: 0 1;
-        background: transparent;
-        color: $accent;
-        border: solid $accent;
-        content-align: center middle;
-        text-style: bold;
-    }
-
-    #menu Button:hover {
-        border: solid $foreground;
-    }
-
-    #menu Button:focus {
-        color: $foreground;
-        border: solid $foreground;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "css" / "menu.tcss").read_text()
 
     BINDINGS = [
         Binding("s", "start", "Start"),
