@@ -32,7 +32,7 @@ GameControls .action-button:focus {
 GameControls .action-button.disabled,
 GameControls .action-button.disabled:hover,
 GameControls .action-button.disabled:focus {
-    border: ascii $surface;
+    border: ascii $border;
     background: $panel;
     color: $text-muted;
     text-style: none;

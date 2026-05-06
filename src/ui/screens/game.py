@@ -16,6 +16,7 @@ from src.ui.controllers.game_controller import (
 from src.ui.models.setup_models import SetupSelection
 from src.ui.widgets.game.chess_board import ChessBoard
 from src.ui.widgets.game.controls import GameControls
+from src.ui.widgets.game.game_over_panel import GameOverPanel
 from src.ui.widgets.game.side_panel import GameSidePanel
 from src.ui.widgets.game.promotion_picker import PromotionPicker
 
@@ -47,6 +48,7 @@ class GameScreen(Screen):
         self._board: ChessBoard | None = None
         self._move_input: Input | None = None
         self._side_panel: GameSidePanel | None = None
+        self._game_over_panel: GameOverPanel | None = None
         self._controls: GameControls | None = None
         self._promotion_picker: PromotionPicker | None = None
 
@@ -72,6 +74,7 @@ class GameScreen(Screen):
                     with Vertical(id="actions-panel", classes="frame panel"):
                         yield Static("Actions", classes="frame_title", markup=False)
                         yield GameControls(id="controls")
+                        yield GameOverPanel(id="game-over-panel")
 
             with Horizontal(id="bottombar"):
                 yield Input(
@@ -90,6 +93,7 @@ class GameScreen(Screen):
         self._board = self.query_one("#board", ChessBoard)
         self._move_input = self.query_one("#move-input", Input)
         self._side_panel = self.query_one("#side-panel", GameSidePanel)
+        self._game_over_panel = self.query_one("#game-over-panel", GameOverPanel)
         self._controls = self.query_one("#controls", GameControls)
         self._promotion_picker = self.query_one("#promotion-row", PromotionPicker)
 
@@ -251,10 +255,21 @@ class GameScreen(Screen):
             offer_draw=self.offer_draw,
         )
 
-        self._controls_widget().sync(
-            snapshot,
-            offer_draw=self.offer_draw,
-        )
+        if snapshot.is_game_over:
+            self._controls_widget().display = False
+
+            game_over_panel = self._game_over_panel_widget()
+            game_over_panel.display = True
+            game_over_panel.sync(snapshot, selection=self.selection)
+        else:
+            self._game_over_panel_widget().display = False
+
+            controls = self._controls_widget()
+            controls.display = True
+            controls.sync(
+                snapshot,
+                offer_draw=self.offer_draw,
+            )
 
         self._promotion_picker_widget().display = snapshot.is_promotion_pending
 
@@ -284,6 +299,11 @@ class GameScreen(Screen):
         if self._side_panel is None:
             self._side_panel = self.query_one("#side-panel", GameSidePanel)
         return self._side_panel
+    
+    def _game_over_panel_widget(self) -> GameOverPanel:
+        if self._game_over_panel is None:
+            self._game_over_panel = self.query_one("#game-over-panel", GameOverPanel)
+        return self._game_over_panel
 
     def _controls_widget(self) -> GameControls:
         if self._controls is None:

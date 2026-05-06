@@ -105,10 +105,7 @@ class GameSidePanel(Vertical):
         for css_class in ("error", "action", "info"):
             feedback.remove_class(css_class)
 
-        if snapshot.outcome is not None:
-            feedback_text = snapshot.outcome.banner
-            feedback.add_class("info")
-        elif snapshot.feedback is not None:
+        if snapshot.feedback is not None:
             feedback_text = f"{snapshot.feedback.kind}: {snapshot.feedback.text}"
             feedback.add_class(snapshot.feedback.kind)
         else:
