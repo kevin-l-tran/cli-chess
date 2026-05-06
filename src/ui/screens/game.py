@@ -97,6 +97,7 @@ class GameScreen(Screen):
     #side-panel {
         width: 1fr;
         height: 1fr;
+        overflow-y: scroll;
     }
 
     #actions-panel {

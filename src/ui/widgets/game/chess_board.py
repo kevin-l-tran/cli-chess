@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
 from textual.events import Click

@@ -35,11 +35,12 @@ class GameSidePanel(Vertical):
 
     GameSidePanel #moves_panel {
         height: 1fr;
+        min-height: 8;
         margin-bottom: 0;
     }
 
     GameSidePanel #moves_list {
-        height: 1fr;
+        height: auto;
     }
 
     GameSidePanel #feedback.error {
