@@ -1,71 +1,292 @@
+from __future__ import annotations
+
 from textual.app import ComposeResult
-from textual.containers import Grid
+from textual.containers import Container, Horizontal
+from textual.events import Click
 from textual.message import Message
-from textual.widget import Widget
-from textual.widgets import Button
+from textual.widgets import Static
 
-from src.application.session_types import Snapshot, Square
+from src.application.session_types import Snapshot, Square as BoardCoordinate
 
 
-class ChessBoard(Widget):
+FILES = "abcdefgh"
+CELL_STATE_CLASSES = (
+    "light",
+    "dark",
+    "empty",
+    "white_piece",
+    "black_piece",
+    "candidate",
+    "last",
+    "check",
+)
+EMPTY_GLYPHS = {"", ".", ":", "\u00b7"}
+
+
+class BoardSquare(Container):
+    """A clickable board square with border on the container and fill on a child."""
+
+    def __init__(
+        self,
+        square: BoardCoordinate,
+        *,
+        id: str,
+        square_classes: str,
+        cell_classes: str,
+    ) -> None:
+        super().__init__(id=id, classes=square_classes)
+        self.square = square
+        self._initial_cell_classes = cell_classes
+        self._cell: Static | None = None
+        self._render_text: str | None = None
+        self._render_classes: frozenset[str] = frozenset()
+        self._render_highlights: frozenset[str] = frozenset()
+
+    def compose(self) -> ComposeResult:
+        self._cell = Static("", classes=self._initial_cell_classes, markup=False)
+        yield self._cell
+
+    def update_content(
+        self,
+        text: str,
+        *,
+        cell_classes: str,
+        highlight_classes: set[str],
+    ) -> None:
+        highlights = frozenset(highlight_classes)
+        class_set = frozenset(cell_classes.split()).union(highlights)
+        display_text = self._highlight_text(text, highlights)
+
+        if (
+            display_text == self._render_text
+            and class_set == self._render_classes
+            and highlights == self._render_highlights
+        ):
+            return
+
+        cell = self._cell or self.query_one(Static)
+        if display_text != self._render_text:
+            cell.update(display_text)
+            self._render_text = display_text
+
+        if class_set != self._render_classes:
+            for css_class in CELL_STATE_CLASSES:
+                cell.remove_class(css_class)
+            for css_class in class_set:
+                cell.add_class(css_class)
+            self._render_classes = class_set
+
+        self._render_highlights = highlights
+
+    def on_click(self, event: Click) -> None:
+        event.stop()
+        self.post_message(ChessBoard.SquarePressed(self.square))
+
+    def _highlight_text(self, text: str, highlight_classes: frozenset[str]) -> str:
+        if text not in EMPTY_GLYPHS:
+            return text
+        if "check" in highlight_classes:
+            return "!"
+        if "candidate" in highlight_classes:
+            return "o"
+        if "last" in highlight_classes:
+            return "*"
+        return text
+
+
+class ChessBoard(Container):
     DEFAULT_CSS = """
     ChessBoard {
-        width: auto;
         height: auto;
+        width: auto;
     }
 
-    #board-grid {
-        grid-size: 8;
-        grid-columns: 4 4 4 4 4 4 4 4;
-        grid-rows: 3 3 3 3 3 3 3 3;
-        width: 32;
-        height: 24;
+    ChessBoard .board-row,
+    ChessBoard .board-files {
+        height: auto;
+        width: auto;
     }
 
-    ChessBoard Button.square {
-        width: 4;
-        height: 3;
-        min-width: 4;
-        margin: 0;
+    ChessBoard .board-spacer,
+    ChessBoard .board-rank,
+    ChessBoard .board-file,
+    ChessBoard .board-cell {
         padding: 0;
-        border: none;
+        margin: 0;
+        text-wrap: nowrap;
         content-align: center middle;
     }
 
-    ChessBoard Button.last {
+    ChessBoard .board-spacer,
+    ChessBoard .board-rank {
+        width: 3;
+        height: 2;
+    }
+
+    ChessBoard .board-rank.top {
+        height: 3;
+    }
+
+    ChessBoard .board-file {
+        width: 4;
+        height: 1;
+    }
+
+    ChessBoard .board-file.first {
+        width: 5;
+    }
+
+    ChessBoard .board-square {
+        width: 4;
+        height: 2;
+        border-right: ascii;
+        border-bottom: ascii;
+    }
+
+    ChessBoard .board-square.first {
+        width: 5;
+        border-left: ascii;
+    }
+
+    ChessBoard .board-square.top {
+        height: 3;
+        border-top: ascii;
+    }
+
+    ChessBoard .board-cell {
+        width: 1fr;
+        height: 1fr;
+    }
+
+    .theme-green ChessBoard .board-rank,
+    .theme-green ChessBoard .board-file {
+        color: #9aa4a6;
+    }
+
+    .theme-green ChessBoard .board-square {
+        border-right: ascii #19d66b;
+        border-bottom: ascii #19d66b;
+    }
+
+    .theme-green ChessBoard .board-square.first {
+        border-left: ascii #19d66b;
+    }
+
+    .theme-green ChessBoard .board-square.top {
+        border-top: ascii #19d66b;
+    }
+
+    .theme-green ChessBoard .board-cell.light {
+        background: #111718;
+    }
+
+    .theme-green ChessBoard .board-cell.dark {
+        background: #0c1213;
+    }
+
+    .theme-green ChessBoard .board-cell.light.empty {
+        color: #314043;
+    }
+
+    .theme-green ChessBoard .board-cell.dark.empty {
+        color: #263234;
+    }
+
+    .theme-green ChessBoard .board-cell.white_piece {
+        color: #e8ecec;
         text-style: bold;
     }
 
-    ChessBoard Button.candidate {
-        text-style: reverse;
+    .theme-green ChessBoard .board-cell.black_piece {
+        color: #b4bcbc;
+        text-style: bold;
     }
 
-    ChessBoard Button.check {
-        text-style: bold reverse;
+    ChessBoard .board-cell.candidate,
+    .theme-green ChessBoard .board-cell.candidate {
+        color: #19d66b;
+        text-style: bold;
+    }
+
+    ChessBoard .board-cell.last,
+    .theme-green ChessBoard .board-cell.last {
+        color: #f2d16b;
+        text-style: bold;
+    }
+
+    ChessBoard .board-cell.check,
+    .theme-green ChessBoard .board-cell.check {
+        color: #ff6b6b;
+        text-style: bold underline;
     }
     """
 
     class SquarePressed(Message):
         bubble = True
 
-        def __init__(self, square: Square) -> None:
+        def __init__(self, square: BoardCoordinate) -> None:
             super().__init__()
             self.square = square
 
     def __init__(self, *, orientation: str = "white", id: str | None = None) -> None:
         super().__init__(id=id)
         self.orientation = orientation
+        self._squares: dict[tuple[int, int], BoardSquare] = {}
 
     def compose(self) -> ComposeResult:
-        with Grid(id="board-grid"):
-            for row in range(8):
-                for col in range(8):
-                    yield Button("", id=f"sq-{row}-{col}", classes="square")
+        with Horizontal(classes="board-files"):
+            yield Static("", classes="board-spacer", markup=False)
+            for index, file_label in enumerate(self._display_files()):
+                classes = "board-file first" if index == 0 else "board-file"
+                yield Static(file_label, classes=classes, markup=False)
+            yield Static("", classes="board-spacer", markup=False)
+
+        for display_row in range(8):
+            is_top = display_row == 0
+            rank_classes = "board-rank top" if is_top else "board-rank"
+
+            with Horizontal(classes="board-row"):
+                yield Static(
+                    self._display_rank_label(display_row),
+                    classes=rank_classes,
+                    markup=False,
+                )
+
+                for display_col in range(8):
+                    square = self._display_to_square(display_row, display_col)
+                    cell_classes = self._cell_classes_for("", square)
+                    square_classes = ["board-square"]
+                    if is_top:
+                        square_classes.append("top")
+                    if display_col == 0:
+                        square_classes.append("first")
+
+                    board_square = BoardSquare(
+                        square,
+                        id=f"sq-{display_row}-{display_col}",
+                        square_classes=" ".join(square_classes),
+                        cell_classes=cell_classes,
+                    )
+                    self._squares[(display_row, display_col)] = board_square
+                    yield board_square
+
+                yield Static(
+                    self._display_rank_label(display_row),
+                    classes=rank_classes,
+                    markup=False,
+                )
+
+        with Horizontal(classes="board-files"):
+            yield Static("", classes="board-spacer", markup=False)
+            for index, file_label in enumerate(self._display_files()):
+                classes = "board-file first" if index == 0 else "board-file"
+                yield Static(file_label, classes=classes, markup=False)
+            yield Static("", classes="board-spacer", markup=False)
 
     def refresh_from_snapshot(self, snapshot: Snapshot) -> None:
         highlighted: dict[tuple[int, int], set[str]] = {}
 
-        def add_highlight(square: Square | None, css_class: str) -> None:
+        def add_highlight(square: BoardCoordinate | None, css_class: str) -> None:
             if square is None:
                 return
             highlighted.setdefault(self._square_to_display(square), set()).add(
@@ -82,39 +303,68 @@ class ChessBoard(Widget):
 
         for display_row in range(8):
             for display_col in range(8):
-                file, rank = self._display_to_square(display_row, display_col)
+                square = self._display_to_square(display_row, display_col)
+                file, rank = square
                 glyph = snapshot.board_glyphs[7 - rank][file]
+                cell_classes = self._cell_classes_for(glyph, square)
+                text = self._display_glyph(glyph, square)
 
-                button = self.query_one(f"#sq-{display_row}-{display_col}", Button)
-                button.label = self._display_glyph(glyph)
+                board_square = self._squares.get((display_row, display_col))
+                if board_square is None:
+                    board_square = self.query_one(
+                        f"#sq-{display_row}-{display_col}", BoardSquare
+                    )
+                    self._squares[(display_row, display_col)] = board_square
 
-                for css_class in ("candidate", "last", "check"):
-                    button.remove_class(css_class)
+                board_square.update_content(
+                    text,
+                    cell_classes=cell_classes,
+                    highlight_classes=highlighted.get((display_row, display_col), set()),
+                )
 
-                for css_class in highlighted.get((display_row, display_col), set()):
-                    button.add_class(css_class)
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        button_id = event.button.id or ""
-        if not button_id.startswith("sq-"):
-            return
-
-        _, row_s, col_s = button_id.split("-")
-        square = self._display_to_square(int(row_s), int(col_s))
-        event.stop()
-        self.post_message(self.SquarePressed(square))
-
-    def _display_to_square(self, display_row: int, display_col: int) -> Square:
+    def _display_to_square(self, display_row: int, display_col: int) -> BoardCoordinate:
         if self.orientation == "black":
             return 7 - display_col, display_row
         return display_col, 7 - display_row
 
-    def _square_to_display(self, square: Square) -> tuple[int, int]:
+    def _square_to_display(self, square: BoardCoordinate) -> tuple[int, int]:
         file, rank = square
         if self.orientation == "black":
             return rank, 7 - file
         return 7 - rank, file
 
-    def _display_glyph(self, glyph: str) -> str:
+    def _display_files(self) -> str:
+        if self.orientation == "black":
+            return FILES[::-1]
+        return FILES
+
+    def _display_rank_label(self, display_row: int) -> str:
+        if self.orientation == "black":
+            return str(display_row + 1)
+        return str(8 - display_row)
+
+    def _cell_classes_for(self, glyph: str, square: BoardCoordinate) -> str:
+        shade = "light" if self._is_light_square(square) else "dark"
+        piece_class = self._piece_class(glyph)
+        return f"board-cell {shade} {piece_class}"
+
+    def _display_glyph(self, glyph: str, square: BoardCoordinate) -> str:
         glyph = glyph.strip()
-        return glyph if glyph else "·"
+        if glyph and glyph not in EMPTY_GLYPHS:
+            return glyph
+        return "." if self._is_light_square(square) else ":"
+
+    def _piece_class(self, glyph: str) -> str:
+        glyph = glyph.strip()
+        if not glyph or glyph in EMPTY_GLYPHS:
+            return "empty"
+        codepoint = ord(glyph[0])
+        if glyph.isupper() or 0x2654 <= codepoint <= 0x2659:
+            return "white_piece"
+        if glyph.islower() or 0x265A <= codepoint <= 0x265F:
+            return "black_piece"
+        return "white_piece"
+
+    def _is_light_square(self, square: BoardCoordinate) -> bool:
+        file, rank = square
+        return (file + rank) % 2 == 1
