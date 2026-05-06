@@ -1,5 +1,5 @@
 from textual.app import ComposeResult
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Vertical
 from textual.widgets import Static
 
 from src.application.session_types import SessionConfig, Snapshot
@@ -93,7 +93,7 @@ class GameSidePanel(Vertical):
 
         with Vertical(classes="frame panel", id="moves_panel"):
             yield Static("Moves", classes="frame_title", markup=False)
-            with VerticalScroll(id="moves_list"):
+            with Vertical(id="moves_list"):
                 self._move_list = Static("", id="move-list", markup=False)
                 yield self._move_list
 
