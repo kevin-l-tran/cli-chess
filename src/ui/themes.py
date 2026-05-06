@@ -274,6 +274,17 @@ CHESS_THEMES: dict[str, Theme] = {
 }
 
 
+THEME_ORDER: tuple[str, ...] = tuple(CHESS_THEMES.keys())
+
+
 def register_chess_themes(app: App[None]) -> None:
     for theme in CHESS_THEMES.values():
         app.register_theme(theme)
+
+
+def next_chess_theme(current: str) -> str:
+    if current not in THEME_ORDER:
+        return DEFAULT_THEME
+
+    index = THEME_ORDER.index(current)
+    return THEME_ORDER[(index + 1) % len(THEME_ORDER)]

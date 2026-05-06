@@ -15,6 +15,7 @@ CELL_STATE_CLASSES = (
     "white_piece",
     "black_piece",
     "candidate",
+    "capture",
     "last",
     "check",
 )
@@ -85,6 +86,8 @@ class BoardSquare(Container):
             return text
         if "check" in highlight_classes:
             return "!"
+        if "capture" in highlight_classes:
+            return "x"
         if "candidate" in highlight_classes:
             return "o"
         if "last" in highlight_classes:
@@ -137,18 +140,18 @@ class ChessBoard(Container):
     ChessBoard .board-square {
         width: 4;
         height: 2;
-        border-right: ascii;
-        border-bottom: ascii;
+        border-right: ascii $chess-border;
+        border-bottom: ascii $chess-border;
     }
 
     ChessBoard .board-square.first {
         width: 5;
-        border-left: ascii;
+        border-left: ascii $chess-border;
     }
 
     ChessBoard .board-square.top {
         height: 3;
-        border-top: ascii;
+        border-top: ascii $chess-border;
     }
 
     ChessBoard .board-cell {
@@ -156,65 +159,56 @@ class ChessBoard(Container):
         height: 1fr;
     }
 
-    .theme-green ChessBoard .board-rank,
-    .theme-green ChessBoard .board-file {
-        color: #9aa4a6;
+    ChessBoard .board-rank,
+    ChessBoard .board-file {
+        color: $chess-coords;
     }
 
-    .theme-green ChessBoard .board-square {
-        border-right: ascii #19d66b;
-        border-bottom: ascii #19d66b;
+    ChessBoard .board-cell.light {
+        background: $chess-board-light;
     }
 
-    .theme-green ChessBoard .board-square.first {
-        border-left: ascii #19d66b;
+    ChessBoard .board-cell.dark {
+        background: $chess-board-dark;
     }
 
-    .theme-green ChessBoard .board-square.top {
-        border-top: ascii #19d66b;
+    ChessBoard .board-cell.light.empty {
+        color: $chess-empty-light;
     }
 
-    .theme-green ChessBoard .board-cell.light {
-        background: #111718;
+    ChessBoard .board-cell.dark.empty {
+        color: $chess-empty-dark;
     }
 
-    .theme-green ChessBoard .board-cell.dark {
-        background: #0c1213;
-    }
-
-    .theme-green ChessBoard .board-cell.light.empty {
-        color: #314043;
-    }
-
-    .theme-green ChessBoard .board-cell.dark.empty {
-        color: #263234;
-    }
-
-    .theme-green ChessBoard .board-cell.white_piece {
-        color: #e8ecec;
+    ChessBoard .board-cell.white_piece {
+        color: $chess-piece-white;
         text-style: bold;
     }
 
-    .theme-green ChessBoard .board-cell.black_piece {
-        color: #b4bcbc;
+    ChessBoard .board-cell.black_piece {
+        color: $chess-piece-black;
         text-style: bold;
     }
 
-    ChessBoard .board-cell.candidate,
-    .theme-green ChessBoard .board-cell.candidate {
-        color: #19d66b;
+    ChessBoard .board-cell.candidate {
+        color: $success;
         text-style: bold;
     }
 
-    ChessBoard .board-cell.last,
-    .theme-green ChessBoard .board-cell.last {
-        color: #f2d16b;
+    ChessBoard .board-cell.last {
+        color: $warning;
         text-style: bold;
     }
 
-    ChessBoard .board-cell.check,
-    .theme-green ChessBoard .board-cell.check {
-        color: #ff6b6b;
+    /* Capture comes after last so capturable recently-moved pieces stay red. */
+    ChessBoard .board-cell.capture {
+        color: $error;
+        text-style: bold;
+    }
+
+    /* Check comes last because it should always be the strongest warning. */
+    ChessBoard .board-cell.check {
+        color: $error;
         text-style: bold underline;
     }
     """
@@ -293,7 +287,10 @@ class ChessBoard(Container):
 
         for from_square, to_square in snapshot.candidate_moves:
             add_highlight(from_square, "candidate")
-            add_highlight(to_square, "candidate")
+            add_highlight(
+                to_square,
+                "capture" if self._square_has_piece(snapshot, to_square) else "candidate",
+            )
 
         add_highlight(snapshot.last_move_from, "last")
         add_highlight(snapshot.last_move_to, "last")
@@ -319,6 +316,11 @@ class ChessBoard(Container):
                     cell_classes=cell_classes,
                     highlight_classes=highlighted.get((display_row, display_col), set()),
                 )
+
+    def _square_has_piece(self, snapshot: Snapshot, square: BoardCoordinate) -> bool:
+        file, rank = square
+        glyph = snapshot.board_glyphs[7 - rank][file].strip()
+        return bool(glyph and glyph not in EMPTY_GLYPHS)
 
     def _display_to_square(self, display_row: int, display_col: int) -> BoardCoordinate:
         if self.orientation == "black":

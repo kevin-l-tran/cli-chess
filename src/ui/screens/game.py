@@ -19,38 +19,25 @@ from src.ui.widgets.game.side_panel import GameSidePanel
 from src.ui.widgets.game.promotion_picker import PromotionPicker
 
 
-THEMES = [
-    "theme-green",
-    "theme-gray",
-    "theme-amber",
-    "theme-cyan",
-    "theme-blue",
-    "theme-purple",
-    "theme-red",
-    "theme-solarized",
-    "theme-paper",
-]
-
-
 class GameScreen(Screen):
     BINDINGS = [
         ("escape", "back", "Back"),
         ("ctrl+r", "restart", "Restart"),
         ("ctrl+u", "undo_fullmove", "Undo turn"),
         ("ctrl+h", "undo_halfmove", "Undo move"),
-        ("t", "cycle_theme", "Theme"),
     ]
 
     CSS = """
     GameScreen {
         padding: 1 2;
-        background: #0b0f10;
-        color: #cfd6d6;
+        background: $background;
+        color: $foreground;
     }
 
     #topbar {
         height: 1;
         margin-bottom: 1;
+        color: $text-muted;
     }
 
     #game-root {
@@ -80,12 +67,13 @@ class GameScreen(Screen):
     }
 
     .frame {
-        border: ascii #19d66b;
+        border: ascii $border;
         padding: 0 1;
     }
 
     .frame_title {
         height: 1;
+        color: $accent;
         text-style: bold;
     }
 
@@ -109,19 +97,19 @@ class GameScreen(Screen):
     #move-input {
         width: 1fr;
         height: auto;
-        border: ascii #19d66b;
-        background: #0b0f10;
-        color: #cfd6d6;
+        border: ascii $border;
+        background: $background;
+        color: $foreground;
     }
 
     #move-input:focus {
-        border: heavy #19d66b;
+        border: heavy $accent;
     }
 
     #hint {
         width: 38;
         content-align: right middle;
-        color: #9aa4a6;
+        color: $text-muted;
     }
 
     #promotion-row {
@@ -130,10 +118,6 @@ class GameScreen(Screen):
 
     #controls {
         height: auto;
-    }
-
-    GameScreen.theme-green {
-        background: #0b0f10;
     }
     """
 
@@ -150,7 +134,6 @@ class GameScreen(Screen):
         )
         self.offer_draw = False
         self._syncing_input = False
-        self._theme_index = 0
 
         self._board: ChessBoard | None = None
         self._move_input: Input | None = None
@@ -195,7 +178,6 @@ class GameScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.add_class(THEMES[self._theme_index])
         self._board = self.query_one("#board", ChessBoard)
         self._move_input = self.query_one("#move-input", Input)
         self._side_panel = self.query_one("#side-panel", GameSidePanel)
@@ -214,11 +196,6 @@ class GameScreen(Screen):
         if self._pending_move_text is not None:
             return
         self._refresh_view()
-
-    def action_cycle_theme(self) -> None:
-        self.remove_class(THEMES[self._theme_index])
-        self._theme_index = (self._theme_index + 1) % len(THEMES)
-        self.add_class(THEMES[self._theme_index])
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id != "move-input" or self._syncing_input:
@@ -277,6 +254,7 @@ class GameScreen(Screen):
                 self._refresh_view()
             case "accept_draw":
                 self.controller.accept_draw_offer()
+                self.offer_draw = False
                 self._refresh_view()
             case "undo_halfmove":
                 self.controller.undo("halfmove")
@@ -286,6 +264,7 @@ class GameScreen(Screen):
                 self._refresh_view()
             case "resign":
                 self.controller.resign()
+                self.offer_draw = False
                 self._refresh_view()
             case "restart":
                 self.controller.restart_game()
@@ -325,6 +304,9 @@ class GameScreen(Screen):
 
     def _refresh_view(self, snapshot: Snapshot | None = None) -> None:
         snapshot = self.controller.snapshot() if snapshot is None else snapshot
+
+        if self.offer_draw and (snapshot.is_game_over or not snapshot.can_offer_draw):
+            self.offer_draw = False
 
         self._board_widget().refresh_from_snapshot(snapshot)
         self._sync_move_input(snapshot)

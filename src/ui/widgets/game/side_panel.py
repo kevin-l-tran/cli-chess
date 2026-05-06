@@ -1,5 +1,5 @@
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
 from src.application.session_types import SessionConfig, Snapshot
@@ -19,12 +19,13 @@ class GameSidePanel(Vertical):
     }
 
     GameSidePanel .frame {
-        border: ascii #19d66b;
+        border: ascii $border;
         padding: 0 1;
     }
 
     GameSidePanel .frame_title {
         height: 1;
+        color: $accent;
         text-style: bold;
     }
 
@@ -44,13 +45,13 @@ class GameSidePanel(Vertical):
     }
 
     GameSidePanel #feedback.error {
-        color: #ff6b6b;
+        color: $error;
         text-style: bold;
     }
 
     GameSidePanel #feedback.action,
     GameSidePanel #feedback.info {
-        color: #19d66b;
+        color: $success;
         text-style: bold;
     }
     """
@@ -93,7 +94,7 @@ class GameSidePanel(Vertical):
 
         with Vertical(classes="frame panel", id="moves_panel"):
             yield Static("Moves", classes="frame_title", markup=False)
-            with Vertical(id="moves_list"):
+            with VerticalScroll(id="moves_list"):
                 self._move_list = Static("", id="move-list", markup=False)
                 yield self._move_list
 

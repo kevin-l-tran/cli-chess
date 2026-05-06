@@ -25,14 +25,15 @@ class PromotionPicker(Grid):
         height: 3;
         min-width: 8;
         margin: 0;
-        border: ascii #19d66b;
-        background: #0b0f10;
-        color: #cfd6d6;
+        border: ascii $border;
+        background: $background;
+        color: $foreground;
     }
 
     PromotionPicker Button:hover,
     PromotionPicker Button:focus {
-        border: heavy #19d66b;
+        border: heavy $accent;
+        color: $accent;
         text-style: bold;
     }
     """

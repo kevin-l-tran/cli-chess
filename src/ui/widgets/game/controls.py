@@ -76,29 +76,29 @@ class GameControls(Grid):
         min-width: 10;
         margin: 0;
         padding: 0 1;
-        border: ascii #19d66b;
-        background: #0b0f10;
-        color: #cfd6d6;
+        border: ascii $border;
+        background: $background;
+        color: $foreground;
         content-align: center middle;
         text-style: bold;
     }
 
     /* Keep hover cheap: no border or size changes. */
     GameControls .action-button:hover {
-        color: #e8ecec;
+        color: $accent;
     }
 
     GameControls .action-button:focus {
-        color: #e8ecec;
+        color: $foreground;
         text-style: bold reverse;
     }
 
     GameControls .action-button.disabled,
     GameControls .action-button.disabled:hover,
     GameControls .action-button.disabled:focus {
-        border: ascii #263234;
-        background: #0c1213;
-        color: #6b7779;
+        border: ascii $surface;
+        background: $panel;
+        color: $text-muted;
         text-style: none;
     }
     """
@@ -133,9 +133,7 @@ class GameControls(Grid):
     def sync(self, snapshot: Snapshot, *, offer_draw: bool) -> None:
         self._button("confirm").set_enabled(snapshot.can_confirm_move)
         self._button("offer-draw").set_enabled(snapshot.can_offer_draw)
-        self._button("accept-draw").set_enabled(
-            snapshot.draw_offered_by is not None and not snapshot.is_game_over
-        )
+        self._button("accept-draw").set_enabled(self._can_accept_draw(snapshot))
         self._button("undo-half").set_enabled(snapshot.can_undo_halfmove)
         self._button("undo-full").set_enabled(snapshot.can_undo_fullmove)
         self._button("resign").set_enabled(snapshot.can_resign)
@@ -143,6 +141,12 @@ class GameControls(Grid):
         self._button("offer-draw").set_label(
             "Cancel draw" if offer_draw else "Offer draw"
         )
+
+    def _can_accept_draw(self, snapshot: Snapshot) -> bool:
+        explicit = getattr(snapshot, "can_accept_draw", None)
+        if explicit is not None:
+            return bool(explicit)
+        return snapshot.draw_offered_by is not None and not snapshot.is_game_over
 
     def _button(self, button_id: str) -> ActionButton:
         button = self._buttons.get(button_id)
