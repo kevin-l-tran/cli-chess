@@ -138,7 +138,13 @@ class GameScreen(Screen):
     def on_chess_board_square_pressed(self, msg: ChessBoard.SquarePressed) -> None:
         self._apply_pending_input_now(refresh=False)
         self.controller.click_square(msg.square)
-        self._refresh_view()
+
+        snapshot = self.controller.snapshot()
+        if self._should_auto_confirm_click(snapshot):
+            self._confirm_move()
+            return
+
+        self._refresh_view(snapshot)
         self._move_input_widget().focus()
 
     def on_promotion_picker_piece_selected(
@@ -210,6 +216,24 @@ class GameScreen(Screen):
 
         self._refresh_view(snapshot)
         self._move_input_widget().focus()
+
+    def _should_auto_confirm_click(self, snapshot: Snapshot) -> bool:
+        draft = snapshot.move_draft
+        canonical_text = draft.canonical_text
+
+        if snapshot.is_game_over:
+            return False
+
+        if snapshot.is_promotion_pending:
+            return False
+
+        if not snapshot.can_confirm_move:
+            return False
+
+        if canonical_text is None:
+            return False
+
+        return draft.text.strip() == canonical_text.strip()
 
     def _refresh_view(self, snapshot: Snapshot | None = None) -> None:
         snapshot = self.controller.snapshot() if snapshot is None else snapshot
