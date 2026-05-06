@@ -190,25 +190,37 @@ class ChessBoard(Container):
         text-style: bold;
     }
 
-    ChessBoard .board-cell.candidate {
-        color: $success;
+    ChessBoard .board-cell.candidate,
+    ChessBoard .board-cell.empty.candidate,
+    ChessBoard .board-cell.white_piece.candidate,
+    ChessBoard .board-cell.black_piece.candidate {
+        color: $chess-highlight-candidate;
         text-style: bold;
     }
 
-    ChessBoard .board-cell.last {
-        color: $warning;
+    ChessBoard .board-cell.last,
+    ChessBoard .board-cell.empty.last,
+    ChessBoard .board-cell.white_piece.last,
+    ChessBoard .board-cell.black_piece.last {
+        color: $chess-highlight-last;
         text-style: bold;
     }
 
-    /* Capture comes after last so capturable recently-moved pieces stay red. */
-    ChessBoard .board-cell.capture {
-        color: $error;
+    /* Capture comes after last so capturable recently-moved pieces stay capture-colored. */
+    ChessBoard .board-cell.capture,
+    ChessBoard .board-cell.empty.capture,
+    ChessBoard .board-cell.white_piece.capture,
+    ChessBoard .board-cell.black_piece.capture {
+        color: $chess-highlight-capture;
         text-style: bold;
     }
 
-    /* Check comes last because it should always be the strongest warning. */
-    ChessBoard .board-cell.check {
-        color: $error;
+    /* Check comes last because it should always be strongest. */
+    ChessBoard .board-cell.check,
+    ChessBoard .board-cell.empty.check,
+    ChessBoard .board-cell.white_piece.check,
+    ChessBoard .board-cell.black_piece.check {
+        color: $chess-highlight-check;
         text-style: bold underline;
     }
     """
@@ -289,7 +301,9 @@ class ChessBoard(Container):
             add_highlight(from_square, "candidate")
             add_highlight(
                 to_square,
-                "capture" if self._square_has_piece(snapshot, to_square) else "candidate",
+                "capture"
+                if self._square_has_piece(snapshot, to_square)
+                else "candidate",
             )
 
         add_highlight(snapshot.last_move_from, "last")
@@ -314,7 +328,9 @@ class ChessBoard(Container):
                 board_square.update_content(
                     text,
                     cell_classes=cell_classes,
-                    highlight_classes=highlighted.get((display_row, display_col), set()),
+                    highlight_classes=highlighted.get(
+                        (display_row, display_col), set()
+                    ),
                 )
 
     def _square_has_piece(self, snapshot: Snapshot, square: BoardCoordinate) -> bool:

@@ -45,13 +45,17 @@ class GameSidePanel(Vertical):
     }
 
     GameSidePanel #feedback.error {
-        color: $error;
+        color: $chess-feedback-error;
         text-style: bold;
     }
 
-    GameSidePanel #feedback.action,
+    GameSidePanel #feedback.action {
+        color: $chess-feedback-action;
+        text-style: bold;
+    }
+
     GameSidePanel #feedback.info {
-        color: $success;
+        color: $chess-feedback-info;
         text-style: bold;
     }
     """
