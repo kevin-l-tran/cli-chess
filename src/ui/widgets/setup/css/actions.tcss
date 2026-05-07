@@ -1,0 +1,27 @@
+SetupActions {
+    align-horizontal: center;
+    height: auto;
+    margin-top: 1;
+}
+
+TerminalAction {
+    width: auto;
+    min-width: 12;
+    height: 1;
+    padding: 0 1;
+    margin: 0 1;
+    background: transparent;
+    color: $foreground;
+    text-style: bold;
+    content-align: center middle;
+}
+
+TerminalAction.primary {
+    color: $accent;
+}
+
+TerminalAction:focus {
+    background: $foreground;
+    color: $background;
+    text-style: bold;
+}

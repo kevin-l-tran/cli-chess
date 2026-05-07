@@ -6,9 +6,9 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Static
 
-from ..widgets.setup.setup_actions import SetupActions
-from ..widgets.setup.setup_form import SetupForm
-from ..widgets.setup.setup_summary import SetupSummary
+from ..widgets.setup.actions import SetupActions
+from ..widgets.setup.form import SetupForm
+from ..widgets.setup.summary import SetupSummary
 from .game import GameScreen
 
 

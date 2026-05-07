@@ -1,4 +1,4 @@
-from __future__ import annotations
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
@@ -37,35 +37,7 @@ class TerminalAction(Static, can_focus=True):
 
 
 class SetupActions(Horizontal):
-    DEFAULT_CSS = """
-    SetupActions {
-        align-horizontal: center;
-        height: auto;
-        margin-top: 1;
-    }
-
-    TerminalAction {
-        width: auto;
-        min-width: 12;
-        height: 1;
-        padding: 0 1;
-        margin: 0 1;
-        background: transparent;
-        color: $foreground;
-        text-style: bold;
-        content-align: center middle;
-    }
-
-    TerminalAction.primary {
-        color: $accent;
-    }
-
-    TerminalAction:focus {
-        background: $foreground;
-        color: $background;
-        text-style: bold;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "css" / "actions.tcss").read_text()
 
     class StartPressed(Message):
         bubble = True

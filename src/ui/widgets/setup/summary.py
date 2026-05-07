@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.reactive import reactive
@@ -7,31 +9,7 @@ from src.ui.models.setup_models import SetupSelection
 
 
 class SetupSummary(Vertical):
-    DEFAULT_CSS = """
-    SetupSummary {
-        width: 1fr;
-        min-width: 68;
-        height: auto;
-        margin-top: 0;
-        margin-bottom: 1;
-        background: $background;
-    }
-
-    SetupSummary #summary_title {
-        height: 1;
-        width: 1fr;
-        color: $accent;
-        text-style: bold;
-        overflow: hidden;
-    }
-
-    SetupSummary #summary_body {
-        height: 1;
-        margin-left: 2;
-        color: $foreground;
-        overflow: hidden;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "css" / "summary.tcss").read_text()
 
     selection: reactive[SetupSelection | None] = reactive(None)
 
