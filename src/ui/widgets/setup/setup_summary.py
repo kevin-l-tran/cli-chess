@@ -1,30 +1,35 @@
 from textual.app import ComposeResult
+from textual.containers import Vertical
 from textual.reactive import reactive
-from textual.widget import Widget
 from textual.widgets import Static
 
 from src.ui.models.setup_models import SetupSelection
 
 
-class SetupSummary(Widget):
+class SetupSummary(Vertical):
     DEFAULT_CSS = """
     SetupSummary {
-        width: 34;
+        width: 1fr;
+        min-width: 68;
         height: auto;
-        padding: 1 2;
-        margin: 0 4;
-        border: round $border;
-        background: $boost;
-    }
-
-    #summary_title {
-        text-style: bold;
+        margin-top: 0;
         margin-bottom: 1;
-        height: auto;
+        background: $background;
     }
 
-    #summary_body {
-        height: auto;
+    SetupSummary #summary_title {
+        height: 1;
+        width: 1fr;
+        color: $accent;
+        text-style: bold;
+        overflow: hidden;
+    }
+
+    SetupSummary #summary_body {
+        height: 1;
+        margin-left: 2;
+        color: $foreground;
+        overflow: hidden;
     }
     """
 
@@ -34,8 +39,8 @@ class SetupSummary(Widget):
     settings: reactive[SetupSelection | None] = reactive(None)
 
     def compose(self) -> ComposeResult:
-        yield Static("Summary", id="summary_title")
-        yield Static("", id="summary_body")
+        yield Static(self._section_title("Summary"), id="summary_title", markup=False)
+        yield Static("", id="summary_body", markup=False)
 
     def watch_selection(self, selection: SetupSelection | None) -> None:
         self._update_summary(selection)
@@ -43,19 +48,24 @@ class SetupSummary(Widget):
     def watch_settings(self, settings: SetupSelection | None) -> None:
         self.selection = settings
 
+    def _section_title(self, label: str) -> str:
+        width = 76
+        prefix = f"-- {label} "
+        return prefix + "-" * max(0, width - len(prefix))
+
     def _update_summary(self, selection: SetupSelection | None) -> None:
         if selection is None:
             self.query_one("#summary_body", Static).update("")
             return
 
-        opp = (
+        opponent = (
             "Local (2P)"
             if selection.opponent == "local"
             else f"Bot (Level {selection.bot_level})"
         )
 
         side = {
-            "random": "Random",
+            "random": "Random side",
             "white": "White",
             "black": "Black",
         }[selection.side_choice]
@@ -67,12 +77,6 @@ class SetupSummary(Widget):
             inc = selection.time_control.increment_seconds
             time = f"{mins}+{inc}"
 
-        text = "\n".join(
-            [
-                f"Opponent: {opp}",
-                f"Side:     {side}",
-                f"Time:     {time}",
-                "Start:    Standard",
-            ]
+        self.query_one("#summary_body", Static).update(
+            f"Ready: {opponent} | {side} | {time} | Standard"
         )
-        self.query_one("#summary_body", Static).update(text)
