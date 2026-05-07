@@ -6,7 +6,7 @@ MenuScreen {
     width: 120;
     height: auto;
     padding: 1 2;
-    border: $accent;
+    border: ascii $accent;
 }
 
 #title {
@@ -30,16 +30,16 @@ MenuScreen {
     padding: 0 1;
     background: transparent;
     color: $accent;
-    border: solid $accent;
+    border: ascii $accent;
     content-align: center middle;
     text-style: bold;
 }
 
 #menu Button:hover {
-    border: solid $foreground;
+    border: ascii $foreground;
 }
 
 #menu Button:focus {
     color: $foreground;
-    border: solid $foreground;
+    border: ascii $foreground;
 }
