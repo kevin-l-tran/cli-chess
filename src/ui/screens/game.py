@@ -7,7 +7,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Input, Static
 
 from src.application.session import GameSession
-from src.application.session_types import SessionConfig, Snapshot
+from src.application.session_types import PlayerSide, SessionConfig, Snapshot
 from src.ui.controllers.game_controller import (
     CurrentSessionController,
     GameController,
@@ -66,7 +66,7 @@ class GameScreen(Screen):
             with Horizontal(id="main"):
                 with Vertical(id="left", classes="frame"):
                     yield Static("Board", classes="frame_title", markup=False)
-                    yield ChessBoard(orientation=self.config.player_side, id="board")
+                    yield ChessBoard(orientation="white", id="board")
                     yield PromotionPicker(id="promotion-row")
 
                 with Vertical(id="right"):
@@ -245,7 +245,10 @@ class GameScreen(Screen):
         if self.offer_draw and (snapshot.is_game_over or not snapshot.can_offer_draw):
             self.offer_draw = False
 
-        self._board_widget().refresh_from_snapshot(snapshot)
+        board = self._board_widget()
+        board.set_orientation(self._board_orientation_for(snapshot))
+        board.refresh_from_snapshot(snapshot)
+
         self._sync_move_input(snapshot)
 
         self._side_panel_widget().sync(
@@ -290,6 +293,12 @@ class GameScreen(Screen):
             self._board = self.query_one("#board", ChessBoard)
         return self._board
 
+    def _board_orientation_for(self, snapshot: Snapshot) -> PlayerSide:
+        if self.config.opponent == "local" and snapshot.side_to_move is not None:
+            return snapshot.side_to_move
+
+        return self.config.player_side
+
     def _move_input_widget(self) -> Input:
         if self._move_input is None:
             self._move_input = self.query_one("#move-input", Input)
@@ -299,7 +308,7 @@ class GameScreen(Screen):
         if self._side_panel is None:
             self._side_panel = self.query_one("#side-panel", GameSidePanel)
         return self._side_panel
-    
+
     def _game_over_panel_widget(self) -> GameOverPanel:
         if self._game_over_panel is None:
             self._game_over_panel = self.query_one("#game-over-panel", GameOverPanel)

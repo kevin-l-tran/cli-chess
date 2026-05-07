@@ -6,7 +6,11 @@ from textual.events import Click
 from textual.message import Message
 from textual.widgets import Static
 
-from src.application.session_types import Snapshot, Square as BoardCoordinate
+from src.application.session_types import (
+    PlayerSide,
+    Snapshot,
+    Square as BoardCoordinate,
+)
 
 
 FILES = "abcdefgh"
@@ -107,17 +111,27 @@ class ChessBoard(Container):
             super().__init__()
             self.square = square
 
-    def __init__(self, *, orientation: str = "white", id: str | None = None) -> None:
+    def __init__(
+        self, *, orientation: PlayerSide = "white", id: str | None = None
+    ) -> None:
         super().__init__(id=id)
         self.orientation = orientation
         self._squares: dict[tuple[int, int], BoardSquare] = {}
+        self._file_labels: list[tuple[int, Static]] = []
+        self._rank_labels: list[tuple[int, Static]] = []
 
     def compose(self) -> ComposeResult:
+        self._squares.clear()
+        self._file_labels.clear()
+        self._rank_labels.clear()
+
         with Horizontal(classes="board-files"):
             yield Static("", classes="board-spacer", markup=False)
             for index, file_label in enumerate(self._display_files()):
                 classes = "board-file first" if index == 0 else "board-file"
-                yield Static(file_label, classes=classes, markup=False)
+                label = Static(file_label, classes=classes, markup=False)
+                self._file_labels.append((index, label))
+                yield label
             yield Static("", classes="board-spacer", markup=False)
 
         for display_row in range(8):
@@ -125,11 +139,13 @@ class ChessBoard(Container):
             rank_classes = "board-rank top" if is_top else "board-rank"
 
             with Horizontal(classes="board-row"):
-                yield Static(
+                left_rank = Static(
                     self._display_rank_label(display_row),
                     classes=rank_classes,
                     markup=False,
                 )
+                self._rank_labels.append((display_row, left_rank))
+                yield left_rank
 
                 for display_col in range(8):
                     square = self._display_to_square(display_row, display_col)
@@ -149,18 +165,29 @@ class ChessBoard(Container):
                     self._squares[(display_row, display_col)] = board_square
                     yield board_square
 
-                yield Static(
+                right_rank = Static(
                     self._display_rank_label(display_row),
                     classes=rank_classes,
                     markup=False,
                 )
+                self._rank_labels.append((display_row, right_rank))
+                yield right_rank
 
         with Horizontal(classes="board-files"):
             yield Static("", classes="board-spacer", markup=False)
             for index, file_label in enumerate(self._display_files()):
                 classes = "board-file first" if index == 0 else "board-file"
-                yield Static(file_label, classes=classes, markup=False)
+                label = Static(file_label, classes=classes, markup=False)
+                self._file_labels.append((index, label))
+                yield label
             yield Static("", classes="board-spacer", markup=False)
+
+    def set_orientation(self, orientation: PlayerSide) -> None:
+        if self.orientation == orientation:
+            return
+
+        self.orientation = orientation
+        self._sync_orientation_widgets()
 
     def refresh_from_snapshot(self, snapshot: Snapshot) -> None:
         highlighted: dict[tuple[int, int], set[str]] = {}
@@ -200,6 +227,7 @@ class ChessBoard(Container):
                     )
                     self._squares[(display_row, display_col)] = board_square
 
+                board_square.square = square
                 board_square.update_content(
                     text,
                     cell_classes=cell_classes,
@@ -207,6 +235,24 @@ class ChessBoard(Container):
                         (display_row, display_col), set()
                     ),
                 )
+
+    def _sync_orientation_widgets(self) -> None:
+        files = self._display_files()
+
+        for index, label in self._file_labels:
+            label.update(files[index])
+
+        for display_row, label in self._rank_labels:
+            label.update(self._display_rank_label(display_row))
+
+        for display_row in range(8):
+            for display_col in range(8):
+                board_square = self._squares.get((display_row, display_col))
+                if board_square is not None:
+                    board_square.square = self._display_to_square(
+                        display_row,
+                        display_col,
+                    )
 
     def _square_has_piece(self, snapshot: Snapshot, square: BoardCoordinate) -> bool:
         file, rank = square
