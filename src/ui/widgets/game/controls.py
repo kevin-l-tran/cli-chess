@@ -23,12 +23,17 @@ GameAction = Literal[
 
 
 class ActionButton(Static):
-    """Small clickable control with stable layout and low-cost hover styling."""
+    """Small clickable control with stable layout and low-cost hover styling.
+
+    The visual brackets are part of the rendered label rather than CSS borders.
+    This keeps the action area compact on short terminals while preserving a
+    large enough mouse target for each command.
+    """
 
     can_focus = True
 
     def __init__(self, label: str, action: GameAction, *, id: str) -> None:
-        super().__init__(label, id=id, classes="action-button", markup=False)
+        super().__init__(self._display_label(label), id=id, classes="action-button", markup=False)
         self.action = action
         self._label = label
         self._enabled = True
@@ -37,7 +42,7 @@ class ActionButton(Static):
         if label == self._label:
             return
         self._label = label
-        self.update(label)
+        self.update(self._display_label(label))
 
     def set_enabled(self, enabled: bool) -> None:
         if enabled == self._enabled:
@@ -58,6 +63,9 @@ class ActionButton(Static):
                 self.post_message(
                     GameControls.ActionPressed(cast(GameAction, self.action))
                 )
+
+    def _display_label(self, label: str) -> str:
+        return f"[ {label} ]"
 
 
 class GameControls(Grid):

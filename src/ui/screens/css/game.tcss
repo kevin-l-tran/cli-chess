@@ -10,41 +10,51 @@ GameScreen {
     color: $text-muted;
 }
 
+/* HorizontalScroll is used so readable panel minimum widths are honored.
+   If the terminal is narrower than the board + right rail, scroll instead of
+   wrapping labels into unusable columns. */
+#game-scroll {
+    width: 1fr;
+    height: 1fr;
+    scrollbar-size: 1 1;
+}
+
 #game-root {
     height: 1fr;
     width: 1fr;
+    min-width: 118;
 }
 
 #main {
     height: 1fr;
     width: 1fr;
+    min-width: 118;
+    min-height: 18;
 }
 
 #left {
     width: 46;
+    min-width: 46;
     height: 1fr;
 }
 
 #right {
     width: 1fr;
+    min-width: 68;
     height: 1fr;
     padding-left: 2;
-}
-
-#bottombar {
-    height: 3;
-    margin-top: 1;
 }
 
 .frame {
     border: ascii $border;
     padding: 0 1;
+    background: $background;
+    border-title-color: $accent;
+    border-title-style: bold;
 }
 
-.frame_title {
-    height: 1;
-    color: $accent;
-    text-style: bold;
+.frame:focus-within {
+    border: ascii $accent;
 }
 
 .panel {
@@ -54,38 +64,136 @@ GameScreen {
 
 #side-panel {
     width: 1fr;
+    min-width: 66;
     height: 1fr;
-    overflow-y: scroll;
+    min-height: 5;
+    margin-bottom: 1;
 }
 
 #actions-panel {
-    height: auto;
-    margin-top: 1;
-    margin-bottom: 0;
-}
-
-#move-input {
     width: 1fr;
-    height: auto;
-    border: ascii $border;
-    background: $background;
-    color: $foreground;
-}
-
-#move-input:focus {
-    border: heavy $accent;
-}
-
-#hint {
-    width: 38;
-    content-align: right middle;
-    color: $text-muted;
+    min-width: 66;
+    height: 5;
+    min-height: 5;
+    max-height: 5;
 }
 
 #promotion-row {
     height: auto;
 }
 
+/* Move input and draft feedback are intentionally one visual unit. */
+#move-composer {
+    width: 1fr;
+    min-width: 118;
+    height: 5;
+    min-height: 5;
+    max-height: 5;
+    margin-top: 1;
+}
+
+#move-input {
+    width: 1fr;
+    height: 1;
+    margin: 0;
+    padding: 0 1;
+    border: none;
+    background: $panel;
+    color: $foreground;
+}
+
+#move-input:focus {
+    background: $surface;
+    color: $foreground;
+}
+
+#move-input:disabled {
+    background: $panel;
+    color: $text-muted;
+}
+
+#draft-row {
+    height: 1;
+    margin-top: 0;
+}
+
+#draft-status {
+    width: 1fr;
+    min-width: 42;
+    height: 1;
+    color: $text-muted;
+}
+
+#autocomplete {
+    width: 1fr;
+    min-width: 28;
+    height: 1;
+    color: $text-muted;
+    content-align: right middle;
+}
+
+#feedback {
+    height: 1;
+    color: $foreground;
+}
+
+#feedback.error {
+    color: $chess-feedback-error;
+    text-style: bold;
+}
+
+#feedback.action {
+    color: $chess-feedback-action;
+    text-style: bold;
+}
+
+#feedback.info {
+    color: $chess-feedback-info;
+    text-style: bold;
+}
+
 #controls {
-    height: auto;
+    height: 3;
+    margin-top: 0;
+}
+
+#game-over-panel {
+    display: none;
+    margin-top: 0;
+}
+
+/* Height-constrained layout: preserve widths and scroll horizontally as needed.
+   Only vertical padding is reduced. */
+GameScreen.short {
+    padding: 0 1;
+}
+
+GameScreen.short #topbar {
+    margin-bottom: 0;
+}
+
+GameScreen.short #main {
+    min-height: 14;
+}
+
+GameScreen.short #side-panel {
+    margin-bottom: 0;
+}
+
+GameScreen.short #actions-panel {
+    height: 5;
+    min-height: 5;
+    max-height: 5;
+}
+
+GameScreen.short #move-composer {
+    height: 5;
+    min-height: 5;
+    max-height: 5;
+    margin-top: 1;
+}
+
+GameScreen.narrow {
+    padding-left: 0;
+    padding-right: 0;
 }

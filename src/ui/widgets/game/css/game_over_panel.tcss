@@ -1,7 +1,7 @@
 GameOverPanel {
     display: none;
     width: 1fr;
-    height: 7;
+    height: 3;
     padding: 0;
     background: $background;
 }
@@ -20,7 +20,7 @@ GameOverPanel {
 #game-over-detail {
     width: 1fr;
     height: 1;
-    margin: 0 0 1 0;
+    margin: 0;
     padding: 0 1;
     color: $text-muted;
     content-align: center middle;
@@ -29,20 +29,20 @@ GameOverPanel {
 
 #game-over-actions {
     width: 1fr;
-    height: 3;
+    min-width: 62;
+    height: 1;
     grid-size: 4;
     grid-columns: 1fr 1fr 1fr 1fr;
     grid-gutter: 1 1;
 }
 
-/* Match GameControls button styling. */
 GameOverPanel .action-button {
     width: 1fr;
-    height: 3;
-    min-width: 10;
+    min-width: 14;
+    height: 1;
     margin: 0;
-    padding: 0 1;
-    border: ascii $border;
+    padding: 0;
+    border: none;
     background: $background;
     color: $foreground;
     content-align: center middle;
@@ -51,18 +51,19 @@ GameOverPanel .action-button {
 
 GameOverPanel .action-button:hover {
     color: $accent;
+    text-style: bold;
 }
 
 GameOverPanel .action-button:focus {
     color: $foreground;
+    background: $surface;
     text-style: bold reverse;
 }
 
 GameOverPanel .action-button.disabled,
 GameOverPanel .action-button.disabled:hover,
 GameOverPanel .action-button.disabled:focus {
-    border: ascii $border;
-    background: $panel;
+    background: $background;
     color: $text-muted;
     text-style: none;
 }

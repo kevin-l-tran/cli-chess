@@ -2,7 +2,8 @@ from pathlib import Path
 from typing import cast
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, HorizontalScroll, Vertical
+from textual.events import Resize
 from textual.screen import Screen
 from textual.widgets import Footer, Input, Static
 
@@ -17,16 +18,16 @@ from src.ui.models.setup_models import SetupSelection
 from src.ui.widgets.game.chess_board import ChessBoard
 from src.ui.widgets.game.controls import GameControls
 from src.ui.widgets.game.game_over_panel import GameOverPanel
-from src.ui.widgets.game.side_panel import GameSidePanel
 from src.ui.widgets.game.promotion_picker import PromotionPicker
+from src.ui.widgets.game.side_panel import GameSidePanel
 
 
 class GameScreen(Screen):
     BINDINGS = [
-        ("escape", "back", "Back"),
+        ("ctrl+g", "back", "Back"),
         ("ctrl+r", "restart", "Restart"),
         ("ctrl+u", "undo_fullmove", "Undo turn"),
-        ("ctrl+h", "undo_halfmove", "Undo move"),
+        ("ctrl+y", "undo_halfmove", "Undo move"),
     ]
 
     DEFAULT_CSS = (Path(__file__).parent / "css" / "game.tcss").read_text()
@@ -48,44 +49,79 @@ class GameScreen(Screen):
         self._board: ChessBoard | None = None
         self._move_input: Input | None = None
         self._side_panel: GameSidePanel | None = None
+        self._actions_panel: Vertical | None = None
         self._game_over_panel: GameOverPanel | None = None
         self._controls: GameControls | None = None
         self._promotion_picker: PromotionPicker | None = None
+        self._draft_status: Static | None = None
+        self._autocomplete: Static | None = None
+        self._feedback: Static | None = None
 
         self._pending_move_text: str | None = None
         self._input_update_queued = False
+        self._text_cache: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield Static(
-            "CLI Chess - press 't' to cycle themes - Esc to go back",
+            "CLI Chess",
             id="topbar",
             markup=False,
         )
 
-        with Vertical(id="game-root"):
-            with Horizontal(id="main"):
-                with Vertical(id="left", classes="frame"):
-                    yield Static("Board", classes="frame_title", markup=False)
-                    yield ChessBoard(orientation="white", id="board")
-                    yield PromotionPicker(id="promotion-row")
+        # The scroll wrapper is intentional. The board and state rail now have
+        # minimum readable widths; on very narrow terminals we scroll
+        # horizontally rather than squeezing panels until labels wrap.
+        with HorizontalScroll(id="game-scroll"):
+            with Vertical(id="game-root"):
+                with Horizontal(id="main"):
+                    board_panel = Vertical(id="left", classes="frame titled-frame")
+                    board_panel.border_title = "Board"
+                    with board_panel:
+                        yield ChessBoard(orientation="white", id="board")
+                        yield PromotionPicker(id="promotion-row")
 
-                with Vertical(id="right"):
-                    yield GameSidePanel(id="side-panel")
-                    with Vertical(id="actions-panel", classes="frame panel"):
-                        yield Static("Actions", classes="frame_title", markup=False)
-                        yield GameControls(id="controls")
-                        yield GameOverPanel(id="game-over-panel")
+                    with Vertical(id="right"):
+                        yield GameSidePanel(id="side-panel")
 
-            with Horizontal(id="bottombar"):
-                yield Input(
-                    placeholder="Enter move (e2e4 / Nf3) ...",
-                    id="move-input",
-                )
-                yield Static(
-                    "Keys: Ctrl+R restart - Ctrl+U undo turn",
-                    id="hint",
-                    markup=False,
-                )
+                        actions_panel = Vertical(
+                            id="actions-panel",
+                            classes="frame titled-frame",
+                        )
+                        actions_panel.border_title = "Actions"
+                        self._actions_panel = actions_panel
+                        with actions_panel:
+                            yield GameControls(id="controls")
+                            yield GameOverPanel(id="game-over-panel")
+
+                move_composer = Vertical(id="move-composer", classes="frame titled-frame")
+                move_composer.border_title = "Move"
+                with move_composer:
+                    yield Input(
+                        placeholder="Enter move (e2e4 / Nf3) ...",
+                        id="move-input",
+                    )
+                    with Horizontal(id="draft-row"):
+                        self._draft_status = Static(
+                            "Status: empty",
+                            id="draft-status",
+                            classes="composer_meta",
+                            markup=False,
+                        )
+                        yield self._draft_status
+                        self._autocomplete = Static(
+                            "Completions: -",
+                            id="autocomplete",
+                            classes="composer_meta",
+                            markup=False,
+                        )
+                        yield self._autocomplete
+                    self._feedback = Static(
+                        "",
+                        id="feedback",
+                        classes="composer_feedback",
+                        markup=False,
+                    )
+                    yield self._feedback
 
         yield Footer()
 
@@ -93,10 +129,15 @@ class GameScreen(Screen):
         self._board = self.query_one("#board", ChessBoard)
         self._move_input = self.query_one("#move-input", Input)
         self._side_panel = self.query_one("#side-panel", GameSidePanel)
+        self._actions_panel = self.query_one("#actions-panel", Vertical)
         self._game_over_panel = self.query_one("#game-over-panel", GameOverPanel)
         self._controls = self.query_one("#controls", GameControls)
         self._promotion_picker = self.query_one("#promotion-row", PromotionPicker)
+        self._draft_status = self.query_one("#draft-status", Static)
+        self._autocomplete = self.query_one("#autocomplete", Static)
+        self._feedback = self.query_one("#feedback", Static)
 
+        self._sync_responsive_classes()
         self._refresh_view()
         self._move_input.focus()
 
@@ -104,6 +145,15 @@ class GameScreen(Screen):
         # This is intentionally slower than the old 0.5s full refresh because the
         # styled board is widget-heavy and Textual hover/input events already repaint.
         self.set_interval(1.0, self._periodic_refresh)
+
+    def on_resize(self, event: Resize) -> None:
+        self._sync_responsive_classes()
+
+    def _sync_responsive_classes(self) -> None:
+        # Width is protected by min-widths + the horizontal scroll wrapper.
+        # Height is the only dimension where we compact the controls/composer.
+        self.set_class(self.size.height < 44, "short")
+        self.set_class(self.size.width < 118, "narrow")
 
     def _periodic_refresh(self) -> None:
         if self._pending_move_text is not None:
@@ -250,6 +300,7 @@ class GameScreen(Screen):
         board.refresh_from_snapshot(snapshot)
 
         self._sync_move_input(snapshot)
+        self._sync_move_composer(snapshot)
 
         self._side_panel_widget().sync(
             snapshot,
@@ -257,6 +308,9 @@ class GameScreen(Screen):
             config=self.config,
             offer_draw=self.offer_draw,
         )
+
+        actions_panel = self._actions_panel_widget()
+        actions_panel.border_title = "Game over" if snapshot.is_game_over else "Actions"
 
         if snapshot.is_game_over:
             self._controls_widget().display = False
@@ -288,6 +342,41 @@ class GameScreen(Screen):
             move_input.value = snapshot.move_draft.text
             self._syncing_input = False
 
+    def _sync_move_composer(self, snapshot: Snapshot) -> None:
+        draft = snapshot.move_draft
+        canonical = f" -> {draft.canonical_text}" if draft.canonical_text else ""
+        text = draft.text.strip() or "-"
+        self._update_text(
+            "draft-status",
+            self._draft_status_widget(),
+            f"Text: {text}    Status: {draft.status}{canonical}",
+        )
+
+        completions = ", ".join(snapshot.move_autocompletions[:8])
+        self._update_text(
+            "autocomplete",
+            self._autocomplete_widget(),
+            f"Completions: {completions or '-'}",
+        )
+
+        feedback = self._feedback_widget()
+        for css_class in ("error", "action", "info"):
+            feedback.remove_class(css_class)
+
+        if snapshot.feedback is None:
+            feedback_text = ""
+        else:
+            feedback_text = f"{snapshot.feedback.kind}: {snapshot.feedback.text}"
+            feedback.add_class(snapshot.feedback.kind)
+
+        self._update_text("feedback", feedback, feedback_text)
+
+    def _update_text(self, cache_key: str, widget: Static, text: str) -> None:
+        if self._text_cache.get(cache_key) == text:
+            return
+        self._text_cache[cache_key] = text
+        widget.update(text)
+
     def _board_widget(self) -> ChessBoard:
         if self._board is None:
             self._board = self.query_one("#board", ChessBoard)
@@ -309,6 +398,11 @@ class GameScreen(Screen):
             self._side_panel = self.query_one("#side-panel", GameSidePanel)
         return self._side_panel
 
+    def _actions_panel_widget(self) -> Vertical:
+        if self._actions_panel is None:
+            self._actions_panel = self.query_one("#actions-panel", Vertical)
+        return self._actions_panel
+
     def _game_over_panel_widget(self) -> GameOverPanel:
         if self._game_over_panel is None:
             self._game_over_panel = self.query_one("#game-over-panel", GameOverPanel)
@@ -323,3 +417,18 @@ class GameScreen(Screen):
         if self._promotion_picker is None:
             self._promotion_picker = self.query_one("#promotion-row", PromotionPicker)
         return self._promotion_picker
+
+    def _draft_status_widget(self) -> Static:
+        if self._draft_status is None:
+            self._draft_status = self.query_one("#draft-status", Static)
+        return self._draft_status
+
+    def _autocomplete_widget(self) -> Static:
+        if self._autocomplete is None:
+            self._autocomplete = self.query_one("#autocomplete", Static)
+        return self._autocomplete
+
+    def _feedback_widget(self) -> Static:
+        if self._feedback is None:
+            self._feedback = self.query_one("#feedback", Static)
+        return self._feedback

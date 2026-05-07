@@ -1,19 +1,20 @@
 GameControls {
-    height: 7;
+    height: 3;
     width: 1fr;
+    min-width: 62;
     grid-size: 4 2;
     grid-columns: 1fr 1fr 1fr 1fr;
-    grid-rows: 3 3;
+    grid-rows: 1 1;
     grid-gutter: 1 1;
 }
 
 GameControls .action-button {
     width: 1fr;
-    height: 3;
-    min-width: 10;
+    min-width: 14;
+    height: 1;
     margin: 0;
-    padding: 0 1;
-    border: ascii $border;
+    padding: 0;
+    border: none;
     background: $background;
     color: $foreground;
     content-align: center middle;
@@ -26,14 +27,14 @@ GameControls .action-button:hover {
 
 GameControls .action-button:focus {
     color: $foreground;
+    background: $surface;
     text-style: bold reverse;
 }
 
 GameControls .action-button.disabled,
 GameControls .action-button.disabled:hover,
 GameControls .action-button.disabled:focus {
-    border: ascii $border;
-    background: $panel;
+    background: $background;
     color: $text-muted;
     text-style: none;
 }
