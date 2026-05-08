@@ -1,0 +1,434 @@
+from pathlib import Path
+from typing import cast
+
+from textual.app import ComposeResult
+from textual.containers import Horizontal, HorizontalScroll, Vertical
+from textual.events import Resize
+from textual.screen import Screen
+from textual.widgets import Footer, Input, Static
+
+from src.application.session import GameSession
+from src.application.session_types import PlayerSide, SessionConfig, Snapshot
+from src.ui.controllers.game_controller import (
+    CurrentSessionController,
+    GameController,
+    PromotionPiece,
+)
+from src.ui.models.setup_models import SetupSelection
+from src.ui.widgets.game.chess_board import ChessBoard
+from src.ui.widgets.game.controls import GameControls
+from src.ui.widgets.game.game_over_panel import GameOverPanel
+from src.ui.widgets.game.promotion_picker import PromotionPicker
+from src.ui.widgets.game.side_panel import GameSidePanel
+
+
+class GameScreen(Screen):
+    BINDINGS = [
+        ("ctrl+g", "back", "Back"),
+        ("ctrl+r", "restart", "Restart"),
+        ("ctrl+u", "undo_fullmove", "Undo turn"),
+        ("ctrl+y", "undo_halfmove", "Undo move"),
+    ]
+
+    DEFAULT_CSS = (Path(__file__).parent / "css" / "game.tcss").read_text()
+
+    def __init__(
+        self,
+        selection: SetupSelection,
+        controller: GameController | None = None,
+    ) -> None:
+        super().__init__()
+        self.selection = selection
+        self.config: SessionConfig = selection.to_session_config()
+        self.controller = controller or CurrentSessionController(
+            GameSession(self.config)
+        )
+        self.offer_draw = False
+        self._syncing_input = False
+
+        self._board: ChessBoard | None = None
+        self._move_input: Input | None = None
+        self._side_panel: GameSidePanel | None = None
+        self._actions_panel: Vertical | None = None
+        self._game_over_panel: GameOverPanel | None = None
+        self._controls: GameControls | None = None
+        self._promotion_picker: PromotionPicker | None = None
+        self._draft_status: Static | None = None
+        self._autocomplete: Static | None = None
+        self._feedback: Static | None = None
+
+        self._pending_move_text: str | None = None
+        self._input_update_queued = False
+        self._text_cache: dict[str, str] = {}
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            "CLI Chess",
+            id="topbar",
+            markup=False,
+        )
+
+        # The scroll wrapper is intentional. The board and state rail now have
+        # minimum readable widths; on very narrow terminals we scroll
+        # horizontally rather than squeezing panels until labels wrap.
+        with HorizontalScroll(id="game-scroll"):
+            with Vertical(id="game-root"):
+                with Horizontal(id="main"):
+                    board_panel = Vertical(id="left", classes="frame titled-frame")
+                    board_panel.border_title = "Board"
+                    with board_panel:
+                        yield ChessBoard(orientation="white", id="board")
+                        yield PromotionPicker(id="promotion-row")
+
+                    with Vertical(id="right"):
+                        yield GameSidePanel(id="side-panel")
+
+                        actions_panel = Vertical(
+                            id="actions-panel",
+                            classes="frame titled-frame",
+                        )
+                        actions_panel.border_title = "Actions"
+                        self._actions_panel = actions_panel
+                        with actions_panel:
+                            yield GameControls(id="controls")
+                            yield GameOverPanel(id="game-over-panel")
+
+                move_composer = Vertical(id="move-composer", classes="frame titled-frame")
+                move_composer.border_title = "Move"
+                with move_composer:
+                    yield Input(
+                        placeholder="Enter move (e2e4 / Nf3) ...",
+                        id="move-input",
+                    )
+                    with Horizontal(id="draft-row"):
+                        self._draft_status = Static(
+                            "Status: empty",
+                            id="draft-status",
+                            classes="composer_meta",
+                            markup=False,
+                        )
+                        yield self._draft_status
+                        self._autocomplete = Static(
+                            "Completions: -",
+                            id="autocomplete",
+                            classes="composer_meta",
+                            markup=False,
+                        )
+                        yield self._autocomplete
+                    self._feedback = Static(
+                        "",
+                        id="feedback",
+                        classes="composer_feedback",
+                        markup=False,
+                    )
+                    yield self._feedback
+
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._board = self.query_one("#board", ChessBoard)
+        self._move_input = self.query_one("#move-input", Input)
+        self._side_panel = self.query_one("#side-panel", GameSidePanel)
+        self._actions_panel = self.query_one("#actions-panel", Vertical)
+        self._game_over_panel = self.query_one("#game-over-panel", GameOverPanel)
+        self._controls = self.query_one("#controls", GameControls)
+        self._promotion_picker = self.query_one("#promotion-row", PromotionPicker)
+        self._draft_status = self.query_one("#draft-status", Static)
+        self._autocomplete = self.query_one("#autocomplete", Static)
+        self._feedback = self.query_one("#feedback", Static)
+
+        self._sync_responsive_classes()
+        self._refresh_view()
+        self._move_input.focus()
+
+        # Keep clocks/bot state fresh without forcing a full repaint every frame.
+        # This is intentionally slower than the old 0.5s full refresh because the
+        # styled board is widget-heavy and Textual hover/input events already repaint.
+        self.set_interval(1.0, self._periodic_refresh)
+
+    def on_resize(self, event: Resize) -> None:
+        self._sync_responsive_classes()
+
+    def _sync_responsive_classes(self) -> None:
+        # Width is protected by min-widths + the horizontal scroll wrapper.
+        # Height is the only dimension where we compact the controls/composer.
+        self.set_class(self.size.height < 44, "short")
+        self.set_class(self.size.width < 118, "narrow")
+
+    def _periodic_refresh(self) -> None:
+        if self._pending_move_text is not None:
+            return
+        self._refresh_view()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "move-input" or self._syncing_input:
+            return
+
+        self._pending_move_text = event.value
+        if not self._input_update_queued:
+            self._input_update_queued = True
+            self.set_timer(0.04, self._flush_pending_input)
+
+    def _flush_pending_input(self) -> None:
+        self._input_update_queued = False
+        self._apply_pending_input_now(refresh=True)
+
+    def _apply_pending_input_now(self, *, refresh: bool = False) -> None:
+        if self._pending_move_text is None:
+            return
+
+        text = self._pending_move_text
+        self._pending_move_text = None
+        self.controller.set_move_text(text)
+
+        if refresh:
+            self._refresh_view()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "move-input":
+            self._apply_pending_input_now(refresh=False)
+            self._confirm_move()
+
+    def on_chess_board_square_pressed(self, msg: ChessBoard.SquarePressed) -> None:
+        self._apply_pending_input_now(refresh=False)
+        self.controller.click_square(msg.square)
+
+        snapshot = self.controller.snapshot()
+        if self._should_auto_confirm_click(snapshot):
+            self._confirm_move()
+            return
+
+        self._refresh_view(snapshot)
+        self._move_input_widget().focus()
+
+    def on_promotion_picker_piece_selected(
+        self,
+        msg: PromotionPicker.PieceSelected,
+    ) -> None:
+        self._apply_pending_input_now(refresh=False)
+        self.controller.select_promotion_piece(cast(PromotionPiece, msg.piece))
+        self._refresh_view()
+        self._move_input_widget().focus()
+
+    def on_game_controls_action_pressed(
+        self,
+        msg: GameControls.ActionPressed,
+    ) -> None:
+        self._apply_pending_input_now(refresh=False)
+        match msg.action:
+            case "confirm":
+                self._confirm_move()
+            case "toggle_draw_offer":
+                self.offer_draw = not self.offer_draw
+                self._refresh_view()
+            case "accept_draw":
+                self.controller.accept_draw_offer()
+                self.offer_draw = False
+                self._refresh_view()
+            case "undo_halfmove":
+                self.controller.undo("halfmove")
+                self._refresh_view()
+            case "undo_fullmove":
+                self.controller.undo("fullmove")
+                self._refresh_view()
+            case "resign":
+                self.controller.resign()
+                self.offer_draw = False
+                self._refresh_view()
+            case "restart":
+                self.controller.restart_game()
+                self.offer_draw = False
+                self._refresh_view()
+            case "back":
+                self.app.pop_screen()
+
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+    def action_restart(self) -> None:
+        self._apply_pending_input_now(refresh=False)
+        self.controller.restart_game()
+        self.offer_draw = False
+        self._refresh_view()
+
+    def action_undo_fullmove(self) -> None:
+        self._apply_pending_input_now(refresh=False)
+        self.controller.undo("fullmove")
+        self._refresh_view()
+
+    def action_undo_halfmove(self) -> None:
+        self._apply_pending_input_now(refresh=False)
+        self.controller.undo("halfmove")
+        self._refresh_view()
+
+    def _confirm_move(self) -> None:
+        self.controller.confirm_move(offer_draw=self.offer_draw)
+        snapshot = self.controller.snapshot()
+
+        if snapshot.feedback is None or snapshot.feedback.kind != "error":
+            self.offer_draw = False
+
+        self._refresh_view(snapshot)
+        self._move_input_widget().focus()
+
+    def _should_auto_confirm_click(self, snapshot: Snapshot) -> bool:
+        draft = snapshot.move_draft
+        canonical_text = draft.canonical_text
+
+        if snapshot.is_game_over:
+            return False
+
+        if snapshot.is_promotion_pending:
+            return False
+
+        if not snapshot.can_confirm_move:
+            return False
+
+        if canonical_text is None:
+            return False
+
+        return draft.text.strip() == canonical_text.strip()
+
+    def _refresh_view(self, snapshot: Snapshot | None = None) -> None:
+        snapshot = self.controller.snapshot() if snapshot is None else snapshot
+
+        if self.offer_draw and (snapshot.is_game_over or not snapshot.can_offer_draw):
+            self.offer_draw = False
+
+        board = self._board_widget()
+        board.set_orientation(self._board_orientation_for(snapshot))
+        board.refresh_from_snapshot(snapshot)
+
+        self._sync_move_input(snapshot)
+        self._sync_move_composer(snapshot)
+
+        self._side_panel_widget().sync(
+            snapshot,
+            selection=self.selection,
+            config=self.config,
+            offer_draw=self.offer_draw,
+        )
+
+        actions_panel = self._actions_panel_widget()
+        actions_panel.border_title = "Game over" if snapshot.is_game_over else "Actions"
+
+        if snapshot.is_game_over:
+            self._controls_widget().display = False
+
+            game_over_panel = self._game_over_panel_widget()
+            game_over_panel.display = True
+            game_over_panel.sync(snapshot, selection=self.selection)
+        else:
+            self._game_over_panel_widget().display = False
+
+            controls = self._controls_widget()
+            controls.display = True
+            controls.sync(
+                snapshot,
+                offer_draw=self.offer_draw,
+            )
+
+        self._promotion_picker_widget().display = snapshot.is_promotion_pending
+
+    def _sync_move_input(self, snapshot: Snapshot) -> None:
+        if self._pending_move_text is not None:
+            return
+
+        move_input = self._move_input_widget()
+        move_input.disabled = snapshot.is_game_over
+
+        if move_input.value != snapshot.move_draft.text:
+            self._syncing_input = True
+            move_input.value = snapshot.move_draft.text
+            self._syncing_input = False
+
+    def _sync_move_composer(self, snapshot: Snapshot) -> None:
+        draft = snapshot.move_draft
+        canonical = f" -> {draft.canonical_text}" if draft.canonical_text else ""
+        text = draft.text.strip() or "-"
+        self._update_text(
+            "draft-status",
+            self._draft_status_widget(),
+            f"Text: {text}    Status: {draft.status}{canonical}",
+        )
+
+        completions = ", ".join(snapshot.move_autocompletions[:8])
+        self._update_text(
+            "autocomplete",
+            self._autocomplete_widget(),
+            f"Completions: {completions or '-'}",
+        )
+
+        feedback = self._feedback_widget()
+        for css_class in ("error", "action", "info"):
+            feedback.remove_class(css_class)
+
+        if snapshot.feedback is None:
+            feedback_text = ""
+        else:
+            feedback_text = f"{snapshot.feedback.kind}: {snapshot.feedback.text}"
+            feedback.add_class(snapshot.feedback.kind)
+
+        self._update_text("feedback", feedback, feedback_text)
+
+    def _update_text(self, cache_key: str, widget: Static, text: str) -> None:
+        if self._text_cache.get(cache_key) == text:
+            return
+        self._text_cache[cache_key] = text
+        widget.update(text)
+
+    def _board_widget(self) -> ChessBoard:
+        if self._board is None:
+            self._board = self.query_one("#board", ChessBoard)
+        return self._board
+
+    def _board_orientation_for(self, snapshot: Snapshot) -> PlayerSide:
+        if self.config.opponent == "local" and snapshot.side_to_move is not None:
+            return snapshot.side_to_move
+
+        return self.config.player_side
+
+    def _move_input_widget(self) -> Input:
+        if self._move_input is None:
+            self._move_input = self.query_one("#move-input", Input)
+        return self._move_input
+
+    def _side_panel_widget(self) -> GameSidePanel:
+        if self._side_panel is None:
+            self._side_panel = self.query_one("#side-panel", GameSidePanel)
+        return self._side_panel
+
+    def _actions_panel_widget(self) -> Vertical:
+        if self._actions_panel is None:
+            self._actions_panel = self.query_one("#actions-panel", Vertical)
+        return self._actions_panel
+
+    def _game_over_panel_widget(self) -> GameOverPanel:
+        if self._game_over_panel is None:
+            self._game_over_panel = self.query_one("#game-over-panel", GameOverPanel)
+        return self._game_over_panel
+
+    def _controls_widget(self) -> GameControls:
+        if self._controls is None:
+            self._controls = self.query_one("#controls", GameControls)
+        return self._controls
+
+    def _promotion_picker_widget(self) -> PromotionPicker:
+        if self._promotion_picker is None:
+            self._promotion_picker = self.query_one("#promotion-row", PromotionPicker)
+        return self._promotion_picker
+
+    def _draft_status_widget(self) -> Static:
+        if self._draft_status is None:
+            self._draft_status = self.query_one("#draft-status", Static)
+        return self._draft_status
+
+    def _autocomplete_widget(self) -> Static:
+        if self._autocomplete is None:
+            self._autocomplete = self.query_one("#autocomplete", Static)
+        return self._autocomplete
+
+    def _feedback_widget(self) -> Static:
+        if self._feedback is None:
+            self._feedback = self.query_one("#feedback", Static)
+        return self._feedback

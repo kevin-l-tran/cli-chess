@@ -93,6 +93,52 @@ def test_get_promotion() -> None:
 
 
 @pytest.mark.parametrize(
+    "move_kwargs, expected_castle",
+    [
+        (
+            dict(
+                piece_name="K",
+                initial_position=(4, 0),  # e1
+                final_position=(6, 0),  # g1
+                capture_name=None,
+                en_passant=False,
+                promotion=None,
+            ),
+            "0-0",
+        ),
+        (
+            dict(
+                piece_name="K",
+                initial_position=(4, 0),  # e1
+                final_position=(2, 0),  # c1
+                capture_name=None,
+                en_passant=False,
+                promotion=None,
+            ),
+            "0-0-0",
+        ),
+    ],
+)
+def test_get_castle_uses_file_rank_coordinates(
+    move_kwargs: Mapping[str, Any], expected_castle: str | None
+) -> None:
+    m: str = moves.make_move(**move_kwargs)
+    assert moves.get_castle(m) == expected_castle
+
+
+def test_get_castle_returns_none_for_non_castle_king_move() -> None:
+    m: str = moves.make_move(
+        piece_name="K",
+        initial_position=(4, 0),  # e1
+        final_position=(4, 1),  # e2
+        capture_name=None,
+        en_passant=False,
+        promotion=None,
+    )
+    assert moves.get_castle(m) is None
+
+
+@pytest.mark.parametrize(
     "bad_piece",
     ["", "p", "X", "KK", "1", None],
 )

@@ -1,0 +1,84 @@
+SetupForm {
+    width: 1fr;
+    min-width: 68;
+    height: auto;
+}
+
+SetupForm .setup-section {
+    width: 1fr;
+    height: auto;
+    margin-bottom: 1;
+    background: $background;
+}
+
+SetupForm .section-title {
+    height: 1;
+    width: 1fr;
+    margin-bottom: 0;
+    color: $accent;
+    text-style: bold;
+    overflow: hidden;
+}
+
+SetupForm .field-row,
+SetupForm .option-row,
+SetupForm .level-row,
+SetupForm .custom-time-row {
+    height: auto;
+    width: auto;
+}
+
+SetupForm .field-row {
+    margin-bottom: 1;
+}
+
+SetupForm .field-label {
+    width: 16;
+    height: 1;
+    content-align: right middle;
+    color: $text-muted;
+    margin-right: 1;
+}
+
+TerminalOption,
+TerminalStep {
+    height: 1;
+    width: auto;
+    min-width: 1;
+    padding: 0 1;
+    margin: 0 1 0 0;
+    background: transparent;
+    color: $foreground;
+}
+
+TerminalOption.selected {
+    background: $accent;
+    color: $background;
+    text-style: bold;
+}
+
+TerminalOption:focus,
+TerminalStep:focus,
+TerminalOption.selected:focus {
+    background: $foreground;
+    color: $background;
+    text-style: bold;
+}
+
+TerminalStep {
+    color: $foreground;
+    text-style: bold;
+}
+
+SetupForm #bot-level-display {
+    width: 16;
+    height: 1;
+    content-align: center middle;
+    text-style: bold;
+}
+
+SetupForm #bot-level-track {
+    height: 1;
+    margin-left: 17;
+    color: $text-muted;
+}

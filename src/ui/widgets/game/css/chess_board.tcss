@@ -1,0 +1,126 @@
+ChessBoard {
+    height: auto;
+    width: auto;
+}
+
+ChessBoard .board-row,
+ChessBoard .board-files {
+    height: auto;
+    width: auto;
+}
+
+ChessBoard .board-spacer,
+ChessBoard .board-rank,
+ChessBoard .board-file,
+ChessBoard .board-cell {
+    padding: 0;
+    margin: 0;
+    text-wrap: nowrap;
+    content-align: center middle;
+}
+
+ChessBoard .board-spacer,
+ChessBoard .board-rank {
+    width: 3;
+    height: 2;
+}
+
+ChessBoard .board-rank.top {
+    height: 3;
+}
+
+ChessBoard .board-file {
+    width: 4;
+    height: 1;
+}
+
+ChessBoard .board-file.first {
+    width: 5;
+}
+
+ChessBoard .board-square {
+    width: 4;
+    height: 2;
+    border-right: ascii $chess-border;
+    border-bottom: ascii $chess-border;
+}
+
+ChessBoard .board-square.first {
+    width: 5;
+    border-left: ascii $chess-border;
+}
+
+ChessBoard .board-square.top {
+    height: 3;
+    border-top: ascii $chess-border;
+}
+
+ChessBoard .board-cell {
+    width: 1fr;
+    height: 1fr;
+}
+
+ChessBoard .board-rank,
+ChessBoard .board-file {
+    color: $chess-coords;
+}
+
+ChessBoard .board-cell.light {
+    background: $chess-board-light;
+}
+
+ChessBoard .board-cell.dark {
+    background: $chess-board-dark;
+}
+
+ChessBoard .board-cell.light.empty {
+    color: $chess-empty-light;
+}
+
+ChessBoard .board-cell.dark.empty {
+    color: $chess-empty-dark;
+}
+
+ChessBoard .board-cell.white_piece {
+    color: $chess-piece-white;
+    text-style: bold;
+}
+
+ChessBoard .board-cell.black_piece {
+    color: $chess-piece-black;
+    text-style: bold;
+}
+
+ChessBoard .board-cell.candidate,
+ChessBoard .board-cell.empty.candidate,
+ChessBoard .board-cell.white_piece.candidate,
+ChessBoard .board-cell.black_piece.candidate {
+    color: $chess-highlight-candidate;
+    text-style: bold;
+}
+
+ChessBoard .board-cell.last,
+ChessBoard .board-cell.empty.last,
+ChessBoard .board-cell.white_piece.last,
+ChessBoard .board-cell.black_piece.last {
+    color: $chess-highlight-last;
+    text-style: bold;
+}
+
+/* Capture comes after last so capturable recently-moved pieces stay capture-colored. */
+ChessBoard .board-cell.capture,
+ChessBoard .board-cell.empty.capture,
+ChessBoard .board-cell.white_piece.capture,
+ChessBoard .board-cell.black_piece.capture {
+    color: $chess-highlight-capture;
+    text-style: bold;
+}
+
+/* Check comes last because it should always be strongest. */
+ChessBoard .board-cell.check,
+ChessBoard .board-cell.empty.check,
+ChessBoard .board-cell.white_piece.check,
+ChessBoard .board-cell.black_piece.check {
+    color: $chess-highlight-check;
+    text-style: bold underline;
+}

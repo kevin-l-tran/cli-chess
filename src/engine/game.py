@@ -21,6 +21,10 @@ class NoDrawOfferError(GameError):
     pass
 
 
+class NoMoveToUndoError(GameError):
+    pass
+
+
 class Game:
     """
     Represents a chess game.
@@ -56,26 +60,24 @@ class Game:
             raise IllegalMoveError(move)
 
         commands = self.board.get_move_command(move)
-        self.commands_list.append(commands)  # append commands
+        self.commands_list.append(commands)
 
-        self.commands_list[-1][0](self.board)  # apply move
+        commands[0](self.board)
+
+        # Toggle before hashing. The position key includes side-to-move.
+        self.is_white_turn = not self.is_white_turn
 
         position = self._get_position_hash()
-        # append encountered position
-        if self.encountered_positions.get(position) is not None:
-            self.encountered_positions[position] += 1
-        else:
-            self.encountered_positions[position] = 1
+        self.encountered_positions[position] = (
+            self.encountered_positions.get(position, 0) + 1
+        )
 
-        self.is_white_turn = not self.is_white_turn  # change player turn
-
-        # get evaluation
         check = self.board.is_checked(self.is_white_turn)
-
         checkmate = check and not self.board.get_moves(self.is_white_turn)
+        stale_moves = self._get_num_stale_moves_after(move)
 
         draw = False
-        if self._get_num_stale_moves() >= 100:
+        if stale_moves >= 100:
             draw = True
         elif self.encountered_positions[position] >= 3:
             draw = True
@@ -85,36 +87,74 @@ class Game:
             draw = True
 
         evaluation = make_evaluation(check, checkmate, draw, draw_offered)
-        self.moves_list.append((move, evaluation))  # append moves
+        self.moves_list.append((move, evaluation))
 
-        # set outcomes
         if draw:
             self.outcome = "1/2-1/2"
         if checkmate:
             self.outcome = "1-0" if not self.is_white_turn else "0-1"
 
     def accept_draw(self) -> None:
+        if self.outcome != "":
+            raise GameConcludedError(self.outcome)
+
+        if not self.moves_list:
+            raise NoDrawOfferError(None)
+
         _, evaluation = self.moves_list[-1]
         if not is_draw_offer(evaluation):
             raise NoDrawOfferError(evaluation)
-        else:
-            self.outcome = "1/2-1/2"
+
+        self.outcome = "1/2-1/2"
+
+    def pending_draw_offer_side_is_white(self) -> bool | None:
+        if self.outcome != "":
+            return None
+
+        if not self.moves_list:
+            return None
+
+        _, evaluation = self.moves_list[-1]
+        if not is_draw_offer(evaluation):
+            return None
+
+        return not self.is_white_turn
 
     def undo_halfmove(self) -> None:
         if not self.moves_list:
-            return
+            raise NoMoveToUndoError()
 
+        current_position = self._get_position_hash()
+        commands = self.commands_list[-1]
+
+        if current_position in self.encountered_positions:
+            self.encountered_positions[current_position] -= 1
+            if self.encountered_positions[current_position] <= 0:
+                del self.encountered_positions[current_position]
+
+        commands[1](self.board)
+
+        self.commands_list.pop()
         self.moves_list.pop()
-        self.encountered_positions[self._get_position_hash()] -= 1
         self.is_white_turn = not self.is_white_turn
         self.outcome = ""
-        commands = self.commands_list.pop()
-
-        commands[1](self.board)  # undo move
 
     def undo_fullmove(self) -> None:
+        if len(self.moves_list) < 2:
+            raise NoMoveToUndoError()
+
         self.undo_halfmove()
         self.undo_halfmove()
+
+    def resign(self) -> None:
+        if self.outcome != "":
+            raise GameConcludedError(self.outcome)
+        self.outcome = "0-1" if self.is_white_turn else "1-0"
+
+    def checked_king_position(self) -> tuple[int, int] | None:
+        if not self.board.is_checked(self.is_white_turn):
+            return None
+        return self.board.king_position(self.is_white_turn)
 
     def _get_num_stale_moves(self) -> int:
         stale_moves = 0
@@ -128,6 +168,15 @@ class Game:
                 stale_moves += 1
 
         return stale_moves
+    
+    def _is_stale_move(self, move: Move) -> bool:
+        return get_piece(move) != "P" and get_captured_piece(move) is None
+
+    def _get_num_stale_moves_after(self, move: Move) -> int:
+        if not self._is_stale_move(move):
+            return 0
+
+        return self._get_num_stale_moves() + 1
 
     def _get_position_hash(self):
         hash = ""
