@@ -300,7 +300,7 @@ def test_promotion_selection_only_updates_local_draft(
 def test_confirm_move_calls_game_client_submit_move(
     screen_harness: SimpleNamespace,
 ) -> None:
-    screen_harness.screen.state.latest_draft_view = make_draft(
+    screen_harness.screen.interactor.latest_draft_view = make_draft(
         text="e2e4",
         status="resolved",
         canonical_text="e2e4",
@@ -337,8 +337,8 @@ def test_confirm_uses_offer_draw_and_accepted_submit_clears_draft(
         side_to_move="black",
         can_submit_for_side="black",
     )
-    screen_harness.screen.state.offer_draw = True
-    screen_harness.screen.state.latest_draft_view = make_draft(
+    screen_harness.screen.interactor.offer_draw = True
+    screen_harness.screen.interactor.latest_draft_view = make_draft(
         text="e2e4",
         status="resolved",
         canonical_text="e2e4",
@@ -360,11 +360,11 @@ def test_confirm_uses_offer_draw_and_accepted_submit_clears_draft(
             "offer_draw": True,
         }
     ]
-    assert screen_harness.screen.state.latest_view is new_view
+    assert screen_harness.screen.interactor.latest_view is new_view
     assert screen_harness.draft.sync_calls[-1] is new_view
     assert screen_harness.draft.clear_calls == 1
-    assert screen_harness.screen.state.latest_draft_view.text == ""
-    assert screen_harness.screen.state.offer_draw is False
+    assert screen_harness.screen.interactor.latest_draft_view.text == ""
+    assert screen_harness.screen.interactor.offer_draw is False
 
 
 def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
@@ -375,7 +375,7 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
         status="unvalidated",
         submit_text="bad",
     )
-    screen_harness.screen.state.latest_draft_view = screen_harness.draft.current
+    screen_harness.screen.interactor.latest_draft_view = screen_harness.draft.current
     result_view = make_view(current_ply=3, last_event_seq=3)
     screen_harness.client.submit_result = CommandResult(
         ok=False,
@@ -387,10 +387,10 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
     screen_harness.screen._confirm_move()
 
     assert screen_harness.client.submit_calls[0]["move_text"] == "bad"
-    assert screen_harness.screen.state.latest_view is result_view
+    assert screen_harness.screen.interactor.latest_view is result_view
     assert screen_harness.draft.sync_calls[-1] is result_view
     assert screen_harness.draft.clear_calls == 0
-    assert screen_harness.screen.state.latest_draft_view.text == "bad"
+    assert screen_harness.screen.interactor.latest_draft_view.text == "bad"
 
 
 def test_replace_view_syncs_local_draft_to_new_authoritative_view(
@@ -405,6 +405,9 @@ def test_replace_view_syncs_local_draft_to_new_authoritative_view(
 
     screen_harness.screen._replace_view(new_view)
 
-    assert screen_harness.screen.state.latest_view is new_view
+    assert screen_harness.screen.interactor.latest_view is new_view
     assert screen_harness.draft.sync_calls == [screen_harness.initial_view, new_view]
-    assert screen_harness.screen.state.latest_draft_view is screen_harness.draft.view()
+    assert (
+        screen_harness.screen.interactor.latest_draft_view
+        is screen_harness.draft.view()
+    )

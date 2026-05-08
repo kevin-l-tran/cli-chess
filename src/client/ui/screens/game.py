@@ -1,6 +1,5 @@
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import cast
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, HorizontalScroll, Vertical
@@ -12,6 +11,7 @@ from src.application.game_client import GameClient
 from src.application.local_draft_controller import LocalDraftController
 from src.application.viewer_types import LocalDraftView, ViewerSessionView
 from src.client.ui.models.setup_models import SetupSelection
+from src.client.ui.screens.game_interactor import GameInteractor, PromotionPiece
 from src.client.ui.widgets.game.chess_board import ChessBoard
 from src.client.ui.widgets.game.controls import GameControls
 from src.client.ui.widgets.game.game_over_panel import GameOverPanel
@@ -19,18 +19,6 @@ from src.client.ui.widgets.game.promotion_picker import PromotionPicker
 from src.client.ui.widgets.game.side_panel import GameSidePanel
 from src.shared.ids import new_request_id
 from src.shared.protocol_types import PlayerSide
-
-
-PromotionPiece = Literal["Q", "R", "B", "N"]
-
-
-@dataclass
-class GameScreenState:
-    client: GameClient
-    draft: LocalDraftController
-    latest_view: ViewerSessionView
-    latest_draft_view: LocalDraftView
-    offer_draw: bool = False
 
 
 class GameScreen(Screen):
@@ -50,18 +38,11 @@ class GameScreen(Screen):
     ) -> None:
         super().__init__()
 
-        view = client.get_view()
-        draft.sync_to_view(view)
-
         self.selection = selection
         self.player_side = selection.require_player_side()
 
-        self.state = GameScreenState(
-            client=client,
-            draft=draft,
-            latest_view=view,
-            latest_draft_view=draft.view(),
-        )
+        self.interactor = GameInteractor.create(client=client, draft=draft)
+
         self._syncing_input = False
 
         self._board: ChessBoard | None = None
@@ -109,7 +90,8 @@ class GameScreen(Screen):
                             yield GameOverPanel(id="game-over-panel")
 
                 move_composer = Vertical(
-                    id="move-composer", classes="frame titled-frame"
+                    id="move-composer",
+                    classes="frame titled-frame",
                 )
                 move_composer.border_title = "Move"
                 with move_composer:
@@ -174,7 +156,7 @@ class GameScreen(Screen):
         if self._pending_move_text is not None:
             return
 
-        self._replace_view(self.state.client.get_view())
+        self.interactor.refresh_from_client()
         self._refresh_view()
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -197,8 +179,7 @@ class GameScreen(Screen):
         text = self._pending_move_text
         self._pending_move_text = None
 
-        if self.state.latest_view.can_submit_for_side is not None:
-            self.state.latest_draft_view = self.state.draft.set_text(text)
+        self.interactor.apply_text(text)
 
         if refresh:
             self._refresh_view()
@@ -211,12 +192,8 @@ class GameScreen(Screen):
     def on_chess_board_square_pressed(self, msg: ChessBoard.SquarePressed) -> None:
         self._apply_pending_input_now(refresh=False)
 
-        if self.state.latest_view.can_submit_for_side is None:
-            return
-
-        self.state.latest_draft_view = self.state.draft.click_square(msg.square)
-
-        if self._should_auto_confirm_click():
+        should_confirm = self.interactor.click_square(msg.square)
+        if should_confirm:
             self._confirm_move()
             return
 
@@ -229,12 +206,7 @@ class GameScreen(Screen):
     ) -> None:
         self._apply_pending_input_now(refresh=False)
 
-        if self.state.latest_view.can_submit_for_side is None:
-            return
-
-        self.state.latest_draft_view = self.state.draft.select_promotion_piece(
-            cast(PromotionPiece, msg.piece)
-        )
+        self.interactor.select_promotion_piece(cast(PromotionPiece, msg.piece))
         self._refresh_view()
         self._move_input_widget().focus()
 
@@ -247,7 +219,7 @@ class GameScreen(Screen):
             case "confirm":
                 self._confirm_move()
             case "toggle_draw_offer":
-                self.state.offer_draw = not self.state.offer_draw
+                self.interactor.toggle_draw_offer()
                 self._refresh_view()
             case "accept_draw":
                 self._accept_draw_offer()
@@ -266,101 +238,38 @@ class GameScreen(Screen):
         self._request_undo()
 
     def _confirm_move(self) -> None:
-        view = self.state.latest_view
-        draft = self.state.latest_draft_view
-
-        if view.can_submit_for_side is None:
-            return
-
-        if draft.submit_text is None:
-            return
-
-        result = self.state.client.submit_move(
-            draft.submit_text,
-            request_id=new_request_id(),
-            expected_ply=view.current_ply,
-            offer_draw=self.state.offer_draw,
-        )
-
-        if result.view is not None:
-            self._replace_view(result.view)
-
-        if result.ok:
-            self.state.latest_draft_view = self.state.draft.clear()
-            self.state.offer_draw = False
-
+        self.interactor.confirm_move(request_id=new_request_id())
         self._refresh_view()
         self._move_input_widget().focus()
 
     def _accept_draw_offer(self) -> None:
-        view = self.state.latest_view
-        if not view.can_accept_draw:
-            return
-
-        result = self.state.client.accept_draw_offer(
-            request_id=new_request_id(),
-            expected_ply=view.current_ply,
-        )
-        if result.view is not None:
-            self._replace_view(result.view)
-
-        self.state.offer_draw = False
+        self.interactor.accept_draw_offer(request_id=new_request_id())
         self._refresh_view()
 
     def _request_undo(self) -> None:
-        if not self.state.latest_view.can_request_undo:
-            return
-
-        result = self.state.client.request_undo(request_id=new_request_id())
-
-        if result.view is not None:
-            self._replace_view(result.view)
-
-        self.state.offer_draw = False
+        self.interactor.request_undo(request_id=new_request_id())
         self._refresh_view()
 
     def _resign(self) -> None:
-        if not self.state.latest_view.can_resign:
-            return
-
-        result = self.state.client.resign(request_id=new_request_id())
-        if result.view is not None:
-            self._replace_view(result.view)
-
-        self.state.offer_draw = False
+        self.interactor.resign(request_id=new_request_id())
         self._refresh_view()
 
     def _replace_view(self, view: ViewerSessionView) -> None:
-        self.state.latest_view = view
-        self.state.draft.sync_to_view(view)
-        self.state.latest_draft_view = self.state.draft.view()
+        # Compatibility method for tests/callers that still patch or invoke this
+        # private method. New code should prefer interactor.replace_view().
+        self.interactor.replace_view(view)
 
     def _should_auto_confirm_click(self) -> bool:
-        view = self.state.latest_view
-        draft = self.state.latest_draft_view
-        canonical_text = draft.canonical_text
-
-        if view.snapshot.is_game_over:
-            return False
-
-        if draft.promotion_prompt_position is not None:
-            return False
-
-        if not view.can_submit_for_side is not None:
-            return False
-
-        if canonical_text is None:
-            return False
-
-        return draft.text.strip() == canonical_text.strip()
+        # Compatibility method for tests/callers that still patch or invoke this
+        # private method. New code should prefer interactor.should_auto_confirm_click().
+        return self.interactor.should_auto_confirm_click()
 
     def _refresh_view(self) -> None:
-        view = self.state.latest_view
-        snapshot = view.snapshot
-        draft = self.state.latest_draft_view
+        self.interactor.clear_invalid_offer_draw_state()
 
-        if self.state.offer_draw and (snapshot.is_game_over or not view.can_offer_draw):
-            self.state.offer_draw = False
+        view = self.interactor.latest_view
+        snapshot = view.snapshot
+        draft = self.interactor.latest_draft_view
 
         board = self._board_widget()
         board.set_orientation(self._board_orientation_for(view))
@@ -373,7 +282,7 @@ class GameScreen(Screen):
             view=view,
             selection=self.selection,
             player_side=self._board_orientation_for(view),
-            offer_draw=self.state.offer_draw,
+            offer_draw=self.interactor.offer_draw,
         )
 
         actions_panel = self._actions_panel_widget()
@@ -393,10 +302,12 @@ class GameScreen(Screen):
             controls.sync(
                 view=view,
                 draft=draft,
-                offer_draw=self.state.offer_draw,
+                offer_draw=self.interactor.offer_draw,
             )
 
-        self._promotion_picker_widget().display = draft.promotion_prompt_position is not None
+        self._promotion_picker_widget().display = (
+            draft.promotion_prompt_position is not None
+        )
 
     def _sync_move_input(self, view: ViewerSessionView, draft: LocalDraftView) -> None:
         if self._pending_move_text is not None:
