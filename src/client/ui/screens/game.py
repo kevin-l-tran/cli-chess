@@ -9,17 +9,17 @@ from textual.widgets import Footer, Input, Static
 
 from src.application.session import GameSession
 from src.application.session_types import PlayerSide, SessionConfig, Snapshot
-from src.ui.controllers.game_controller import (
+from src.client.ui.controllers.game_controller import (
     CurrentSessionController,
     GameController,
     PromotionPiece,
 )
-from src.ui.models.setup_models import SetupSelection
-from src.ui.widgets.game.chess_board import ChessBoard
-from src.ui.widgets.game.controls import GameControls
-from src.ui.widgets.game.game_over_panel import GameOverPanel
-from src.ui.widgets.game.promotion_picker import PromotionPicker
-from src.ui.widgets.game.side_panel import GameSidePanel
+from src.client.ui.models.setup_models import SetupSelection
+from src.client.ui.widgets.game.chess_board import ChessBoard
+from src.client.ui.widgets.game.controls import GameControls
+from src.client.ui.widgets.game.game_over_panel import GameOverPanel
+from src.client.ui.widgets.game.promotion_picker import PromotionPicker
+from src.client.ui.widgets.game.side_panel import GameSidePanel
 
 
 class GameScreen(Screen):

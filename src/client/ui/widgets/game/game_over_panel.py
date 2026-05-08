@@ -5,8 +5,8 @@ from textual.containers import Grid, Vertical
 from textual.widgets import Static
 
 from src.application.session_types import Snapshot
-from src.ui.models.setup_models import SetupSelection
-from src.ui.widgets.game.controls import ActionButton
+from src.client.ui.models.setup_models import SetupSelection
+from src.client.ui.widgets.game.controls import ActionButton
 
 
 class GameOverPanel(Vertical):

@@ -1,4 +1,4 @@
-from src.ui.app import ChessApp
+from src.client.ui.app import ChessApp
 
 
 if __name__ == "__main__":

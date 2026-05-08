@@ -5,7 +5,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from src.ui.models.setup_models import SetupSelection
+from src.client.ui.models.setup_models import SetupSelection
 
 
 class SetupSummary(Vertical):

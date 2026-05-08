@@ -8,8 +8,8 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from src.application.session_types import OpponentType, TimeControl
-from src.ui.models.setup_models import SetupSelection, SideChoice
-from src.ui.widgets.setup.inputs import CustomTimeInput, TerminalOption, TerminalStep
+from src.client.ui.models.setup_models import SetupSelection, SideChoice
+from src.client.ui.widgets.setup.inputs import CustomTimeInput, TerminalOption, TerminalStep
 
 
 class SetupForm(Vertical):

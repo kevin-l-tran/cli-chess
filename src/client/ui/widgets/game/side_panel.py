@@ -5,7 +5,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static
 
 from src.application.session_types import SessionConfig, Snapshot
-from src.ui.models.setup_models import SetupSelection
+from src.client.ui.models.setup_models import SetupSelection
 
 
 class GameSidePanel(Vertical):
