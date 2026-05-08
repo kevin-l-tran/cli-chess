@@ -10,8 +10,8 @@ from src.application.viewer_types import (
     ViewerSessionView,
 )
 from src.client.ui.models.setup_models import SetupSelection
-from src.client.ui.screens import game as game_screen_module
-from src.client.ui.screens.game import GameScreen
+from src.client.ui.screens.game import game as game_screen_module
+from src.client.ui.screens.game.game import GameScreen
 from src.shared.ids import LobbyId, PlayerId, RequestId
 from src.shared.protocol_types import PlayerSide
 

@@ -18,7 +18,7 @@ from src.client.ui.models.setup_models import SetupSelection, SetupTimeControl
 from ..widgets.setup.actions import SetupActions
 from ..widgets.setup.form import SetupForm
 from ..widgets.setup.summary import SetupSummary
-from .game import GameScreen
+from .game.game import GameScreen
 
 
 class SetupScreen(Screen):
