@@ -63,7 +63,6 @@ def viewer_view_from_legacy_snapshot(
         viewer_role="local_controller",
         viewer_side=None,
         current_ply=current_ply,
-        last_event_seq=current_ply,
         can_submit_for_side=snapshot.side_to_move,
         can_offer_draw=snapshot.can_offer_draw,
         can_accept_draw=(

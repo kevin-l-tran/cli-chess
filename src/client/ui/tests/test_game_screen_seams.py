@@ -50,7 +50,6 @@ def make_snapshot(
 def make_view(
     *,
     current_ply: int = 0,
-    last_event_seq: int | None = None,
     can_submit_for_side: PlayerSide | None = "white",
     can_accept_draw: bool = False,
     can_resign: bool = True,
@@ -63,7 +62,6 @@ def make_view(
         viewer_role="local_controller",
         viewer_side=None,
         current_ply=current_ply,
-        last_event_seq=current_ply if last_event_seq is None else last_event_seq,
         can_submit_for_side=can_submit_for_side,
         can_offer_draw=can_submit_for_side is not None,
         can_accept_draw=can_accept_draw,
@@ -333,7 +331,6 @@ def test_confirm_uses_offer_draw_and_accepted_submit_clears_draft(
 ) -> None:
     new_view = make_view(
         current_ply=4,
-        last_event_seq=4,
         side_to_move="black",
         can_submit_for_side="black",
     )
@@ -376,7 +373,7 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
         submit_text="bad",
     )
     screen_harness.screen.interactor.latest_draft_view = screen_harness.draft.current
-    result_view = make_view(current_ply=3, last_event_seq=3)
+    result_view = make_view(current_ply=3)
     screen_harness.client.submit_result = CommandResult(
         ok=False,
         status="invalid_move",
@@ -398,7 +395,6 @@ def test_replace_view_syncs_local_draft_to_new_authoritative_view(
 ) -> None:
     new_view = make_view(
         current_ply=8,
-        last_event_seq=12,
         side_to_move="black",
         can_submit_for_side="black",
     )
