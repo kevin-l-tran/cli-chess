@@ -1,4 +1,3 @@
-from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any
 
@@ -28,11 +27,12 @@ def make_selection() -> SetupSelection:
 
 
 def make_snapshot(
-    *, is_game_over: bool = False, side_to_move: PlayerSide | None = "white"
+    *,
+    is_game_over: bool = False,
+    side_to_move: PlayerSide | None = "white",
 ) -> AuthoritativeSnapshot:
     return AuthoritativeSnapshot(
         board_glyphs=[["." for _ in range(8)] for _ in range(8)],
-        board_squares=None,
         side_to_move=side_to_move,
         last_move_from=None,
         last_move_to=None,
@@ -51,7 +51,7 @@ def make_view(
     *,
     current_ply: int = 0,
     last_event_seq: int | None = None,
-    can_submit_move: bool = True,
+    can_submit_for_side: PlayerSide | None = "white",
     can_accept_draw: bool = False,
     can_resign: bool = True,
     can_request_undo: bool = False,
@@ -64,17 +64,14 @@ def make_view(
         viewer_side=None,
         current_ply=current_ply,
         last_event_seq=current_ply if last_event_seq is None else last_event_seq,
-        connection_state="connected",
-        can_submit_move=can_submit_move,
-        can_submit_for_side=side_to_move if can_submit_move else None,
-        can_offer_draw=can_submit_move,
+        can_submit_for_side=can_submit_for_side,
+        can_offer_draw=can_submit_for_side is not None,
         can_accept_draw=can_accept_draw,
         can_resign=can_resign,
         can_request_undo=can_request_undo,
-        can_spectate=False,
         status_text=None,
         snapshot=make_snapshot(
-            is_game_over=not can_submit_move and side_to_move is None,
+            is_game_over=can_submit_for_side is None and side_to_move is None,
             side_to_move=side_to_move,
         ),
         preview_hints=None,
@@ -86,19 +83,16 @@ def make_draft(
     text: str = "",
     status: str = "empty",
     canonical_text: str | None = None,
-    base_ply: int | None = 0,
-    is_promotion_pending: bool = False,
+    promotion_prompt_position: tuple[int, int] | None = None,
     submit_text: str | None = None,
 ) -> LocalDraftView:
     return LocalDraftView(
         text=text,
         status=status,  # type: ignore[arg-type]
         canonical_text=canonical_text,
-        base_ply=base_ply,
         candidate_moves=set(),
         autocompletions=[],
-        promotion_prompt_position=None,
-        is_promotion_pending=is_promotion_pending,
+        promotion_prompt_position=promotion_prompt_position,
         submit_text=submit_text,
     )
 
@@ -111,7 +105,6 @@ class FakeClient:
         self.accept_draw_calls: list[dict[str, Any]] = []
         self.resign_calls: list[dict[str, Any]] = []
         self.undo_calls: list[dict[str, Any]] = []
-        self.tick_calls = 0
 
     def get_view(self) -> ViewerSessionView:
         return self.view
@@ -140,7 +133,10 @@ class FakeClient:
         return self.submit_result
 
     def accept_draw_offer(
-        self, *, request_id: RequestId, expected_ply: int
+        self,
+        *,
+        request_id: RequestId,
+        expected_ply: int,
     ) -> CommandResult:
         self.accept_draw_calls.append(
             {"request_id": request_id, "expected_ply": expected_ply}
@@ -155,12 +151,6 @@ class FakeClient:
         self.undo_calls.append({"request_id": request_id})
         return CommandResult(ok=True, status="accepted", view=self.view)
 
-    def events_since(self, last_seen_seq: int) -> list[Any]:
-        return []
-
-    def tick(self) -> None:
-        self.tick_calls += 1
-
 
 class FakeDraft:
     def __init__(self, initial: LocalDraftView | None = None) -> None:
@@ -173,22 +163,19 @@ class FakeDraft:
 
     def sync_to_view(self, view: ViewerSessionView) -> None:
         self.sync_calls.append(view)
-        if self.current.base_ply is None or self.current.base_ply != view.current_ply:
-            self.current = replace(self.current, base_ply=view.current_ply)
 
     def set_text(self, text: str) -> LocalDraftView:
         self.set_text_calls.append(text)
         self.current = make_draft(
             text=text,
             status="unvalidated" if text else "empty",
-            base_ply=self.current.base_ply,
             submit_text=text or None,
         )
         return self.current
 
     def clear(self) -> LocalDraftView:
         self.clear_calls += 1
-        self.current = make_draft(base_ply=self.current.base_ply)
+        self.current = make_draft()
         return self.current
 
     def click_square(self, square: Any) -> LocalDraftView:
@@ -196,7 +183,6 @@ class FakeDraft:
         self.current = make_draft(
             text="e2",
             status="ambiguous",
-            base_ply=self.current.base_ply,
             submit_text=None,
         )
         return self.current
@@ -207,7 +193,6 @@ class FakeDraft:
             text="e8=Q",
             status="resolved",
             canonical_text="e8=Q",
-            base_ply=self.current.base_ply,
             submit_text="e8=Q",
         )
         return self.current
@@ -228,7 +213,7 @@ class FocusTarget:
 def screen_harness(monkeypatch: pytest.MonkeyPatch):
     view = make_view(current_ply=3)
     client = FakeClient(view)
-    draft = FakeDraft(make_draft(base_ply=3))
+    draft = FakeDraft(make_draft())
     screen = GameScreen(client=client, draft=draft, selection=make_selection())
 
     refresh_calls: list[None] = []
@@ -280,10 +265,13 @@ def test_typing_ignores_non_move_input(screen_harness: SimpleNamespace) -> None:
 
 
 def test_board_click_only_updates_local_draft(
-    screen_harness: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    screen_harness: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        screen_harness.screen, "_should_auto_confirm_click", lambda: False
+        screen_harness.screen,
+        "_should_auto_confirm_click",
+        lambda: False,
     )
     square = (6, 4)
 
@@ -316,7 +304,6 @@ def test_confirm_move_calls_game_client_submit_move(
         text="e2e4",
         status="resolved",
         canonical_text="e2e4",
-        base_ply=3,
         submit_text="e2e4",
     )
     screen_harness.client.submit_result = CommandResult(
@@ -344,19 +331,22 @@ def test_confirm_move_calls_game_client_submit_move(
 def test_confirm_uses_offer_draw_and_accepted_submit_clears_draft(
     screen_harness: SimpleNamespace,
 ) -> None:
-    new_view = make_view(current_ply=4, last_event_seq=4, side_to_move="black")
+    new_view = make_view(
+        current_ply=4,
+        last_event_seq=4,
+        side_to_move="black",
+        can_submit_for_side="black",
+    )
     screen_harness.screen.state.offer_draw = True
     screen_harness.screen.state.latest_draft_view = make_draft(
         text="e2e4",
         status="resolved",
         canonical_text="e2e4",
-        base_ply=3,
         submit_text="e2e4",
     )
     screen_harness.client.submit_result = CommandResult(
         ok=True,
         status="accepted",
-        event_seq=4,
         view=new_view,
     )
 
@@ -371,7 +361,6 @@ def test_confirm_uses_offer_draw_and_accepted_submit_clears_draft(
         }
     ]
     assert screen_harness.screen.state.latest_view is new_view
-    assert screen_harness.screen.state.last_event_seq == 4
     assert screen_harness.draft.sync_calls[-1] is new_view
     assert screen_harness.draft.clear_calls == 1
     assert screen_harness.screen.state.latest_draft_view.text == ""
@@ -384,7 +373,6 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
     screen_harness.draft.current = make_draft(
         text="bad",
         status="unvalidated",
-        base_ply=3,
         submit_text="bad",
     )
     screen_harness.screen.state.latest_draft_view = screen_harness.draft.current
@@ -408,11 +396,15 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
 def test_replace_view_syncs_local_draft_to_new_authoritative_view(
     screen_harness: SimpleNamespace,
 ) -> None:
-    new_view = make_view(current_ply=8, last_event_seq=12, side_to_move="black")
+    new_view = make_view(
+        current_ply=8,
+        last_event_seq=12,
+        side_to_move="black",
+        can_submit_for_side="black",
+    )
 
     screen_harness.screen._replace_view(new_view)
 
     assert screen_harness.screen.state.latest_view is new_view
-    assert screen_harness.screen.state.last_event_seq == 12
     assert screen_harness.draft.sync_calls == [screen_harness.initial_view, new_view]
     assert screen_harness.screen.state.latest_draft_view is screen_harness.draft.view()

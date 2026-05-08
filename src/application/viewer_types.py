@@ -33,12 +33,6 @@ FeedbackKind = Literal[
 
 
 @dataclass(frozen=True)
-class BoardSquareView:
-    square: Square
-    glyph: str
-
-
-@dataclass(frozen=True)
 class MoveListItem:
     ply: int
     notation: str
@@ -77,7 +71,6 @@ class FeedbackView:
 @dataclass(frozen=True)
 class AuthoritativeSnapshot:
     board_glyphs: list[list[str]]
-    board_squares: list[list[BoardSquareView]] | None
 
     side_to_move: PlayerSide | None
     last_move_from: Square | None
@@ -98,7 +91,6 @@ class AuthoritativeSnapshot:
 @dataclass(frozen=True)
 class MovePreviewHints:
     base_ply: int
-    side_to_move: PlayerSide | None
     legal_move_texts: list[str]
     legal_move_edges: set[tuple[Square, Square]]
 
@@ -108,12 +100,10 @@ class LocalDraftView:
     text: str
     status: DraftStatus
     canonical_text: str | None
-    base_ply: int | None
 
     candidate_moves: set[tuple[Square, Square]]
     autocompletions: list[str]
     promotion_prompt_position: Square | None
-    is_promotion_pending: bool
 
     submit_text: str | None
 
@@ -127,16 +117,15 @@ class ViewerSessionView:
 
     current_ply: int
     last_event_seq: int
-    connection_state: ConnectionState
 
-    can_submit_move: bool
     can_submit_for_side: PlayerSide | None
     can_offer_draw: bool
     can_accept_draw: bool
     can_resign: bool
     can_request_undo: bool
-    can_spectate: bool
 
     status_text: str | None
     snapshot: AuthoritativeSnapshot
     preview_hints: MovePreviewHints | None = None
+
+    connection_state: ConnectionState | None = None

@@ -16,7 +16,6 @@ def authoritative_snapshot_from_legacy(
 ) -> vt.AuthoritativeSnapshot:
     return vt.AuthoritativeSnapshot(
         board_glyphs=snapshot.board_glyphs,
-        board_squares=None,
         side_to_move=snapshot.side_to_move,
         last_move_from=snapshot.last_move_from,
         last_move_to=snapshot.last_move_to,
@@ -44,11 +43,9 @@ def local_draft_from_legacy_snapshot(
         text=draft.text,
         status=cast(vt.DraftStatus, draft.status),
         canonical_text=draft.canonical_text,
-        base_ply=current_ply_from_snapshot(snapshot),
         candidate_moves=snapshot.candidate_moves,
         autocompletions=snapshot.move_autocompletions,
         promotion_prompt_position=snapshot.promotion_prompt_position,
-        is_promotion_pending=snapshot.is_promotion_pending,
         submit_text=submit_text if submit_text.strip() else None,
     )
 
@@ -67,10 +64,6 @@ def viewer_view_from_legacy_snapshot(
         viewer_side=None,
         current_ply=current_ply,
         last_event_seq=current_ply,
-        connection_state="connected",
-        # This means "the viewer may submit a move in this position",
-        # not "the current draft is resolved".
-        can_submit_move=not snapshot.is_game_over and snapshot.side_to_move is not None,
         can_submit_for_side=snapshot.side_to_move,
         can_offer_draw=snapshot.can_offer_draw,
         can_accept_draw=(
@@ -78,7 +71,6 @@ def viewer_view_from_legacy_snapshot(
         ),
         can_resign=snapshot.can_resign,
         can_request_undo=snapshot.can_undo_halfmove or snapshot.can_undo_fullmove,
-        can_spectate=False,
         status_text=None,
         snapshot=authoritative_snapshot_from_legacy(snapshot),
         # The legacy draft adapter reads preview state directly from GameSession,

@@ -30,7 +30,6 @@ class GameScreenState:
     draft: LocalDraftController
     latest_view: ViewerSessionView
     latest_draft_view: LocalDraftView
-    last_event_seq: int
     offer_draw: bool = False
 
 
@@ -62,7 +61,6 @@ class GameScreen(Screen):
             draft=draft,
             latest_view=view,
             latest_draft_view=draft.view(),
-            last_event_seq=view.last_event_seq,
         )
         self._syncing_input = False
 
@@ -176,7 +174,6 @@ class GameScreen(Screen):
         if self._pending_move_text is not None:
             return
 
-        self.state.client.tick()
         self._replace_view(self.state.client.get_view())
         self._refresh_view()
 
@@ -200,7 +197,7 @@ class GameScreen(Screen):
         text = self._pending_move_text
         self._pending_move_text = None
 
-        if self.state.latest_view.can_submit_move:
+        if self.state.latest_view.can_submit_for_side is not None:
             self.state.latest_draft_view = self.state.draft.set_text(text)
 
         if refresh:
@@ -214,7 +211,7 @@ class GameScreen(Screen):
     def on_chess_board_square_pressed(self, msg: ChessBoard.SquarePressed) -> None:
         self._apply_pending_input_now(refresh=False)
 
-        if not self.state.latest_view.can_submit_move:
+        if self.state.latest_view.can_submit_for_side is None:
             return
 
         self.state.latest_draft_view = self.state.draft.click_square(msg.square)
@@ -232,7 +229,7 @@ class GameScreen(Screen):
     ) -> None:
         self._apply_pending_input_now(refresh=False)
 
-        if not self.state.latest_view.can_submit_move:
+        if self.state.latest_view.can_submit_for_side is None:
             return
 
         self.state.latest_draft_view = self.state.draft.select_promotion_piece(
@@ -272,7 +269,7 @@ class GameScreen(Screen):
         view = self.state.latest_view
         draft = self.state.latest_draft_view
 
-        if not view.can_submit_move:
+        if view.can_submit_for_side is None:
             return
 
         if draft.submit_text is None:
@@ -335,7 +332,6 @@ class GameScreen(Screen):
 
     def _replace_view(self, view: ViewerSessionView) -> None:
         self.state.latest_view = view
-        self.state.last_event_seq = view.last_event_seq
         self.state.draft.sync_to_view(view)
         self.state.latest_draft_view = self.state.draft.view()
 
@@ -347,10 +343,10 @@ class GameScreen(Screen):
         if view.snapshot.is_game_over:
             return False
 
-        if draft.is_promotion_pending:
+        if draft.promotion_prompt_position is not None:
             return False
 
-        if not view.can_submit_move:
+        if not view.can_submit_for_side is not None:
             return False
 
         if canonical_text is None:
@@ -400,14 +396,14 @@ class GameScreen(Screen):
                 offer_draw=self.state.offer_draw,
             )
 
-        self._promotion_picker_widget().display = draft.is_promotion_pending
+        self._promotion_picker_widget().display = draft.promotion_prompt_position is not None
 
     def _sync_move_input(self, view: ViewerSessionView, draft: LocalDraftView) -> None:
         if self._pending_move_text is not None:
             return
 
         move_input = self._move_input_widget()
-        move_input.disabled = not view.can_submit_move
+        move_input.disabled = view.can_submit_for_side is None
 
         if move_input.value != draft.text:
             self._syncing_input = True

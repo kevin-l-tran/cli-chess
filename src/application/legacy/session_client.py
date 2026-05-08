@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import cast
 
-from src.application.command_types import CommandResult, GameEvent
+from src.application.command_types import CommandResult
 from src.application.legacy.session import GameSession
 from src.application.legacy.session_types import (
     DrawActionStatus,
@@ -36,6 +36,7 @@ class LegacyGameSessionClient:
     def submit_move(
         self,
         move_text: str,
+        *,
         request_id: RequestId,
         expected_ply: int,
         offer_draw: bool = False,
@@ -49,7 +50,6 @@ class LegacyGameSessionClient:
                 ok=False,
                 status=cast(CommandStatus, "stale_position"),
                 message="Position changed.",
-                event_seq=view.last_event_seq,
                 view=view,
             )
 
@@ -63,12 +63,12 @@ class LegacyGameSessionClient:
             ok=legacy_result.ok,
             status=_move_status_to_command_status(legacy_result.status),
             message=_message_from_view(view),
-            event_seq=view.last_event_seq,
             view=view,
         )
 
     def accept_draw_offer(
         self,
+        *,
         request_id: RequestId,
         expected_ply: int,
     ) -> CommandResult:
@@ -81,7 +81,6 @@ class LegacyGameSessionClient:
                 ok=False,
                 status=cast(CommandStatus, "stale_position"),
                 message="Position changed.",
-                event_seq=view.last_event_seq,
                 view=view,
             )
 
@@ -92,12 +91,12 @@ class LegacyGameSessionClient:
             ok=legacy_result.ok,
             status=_draw_status_to_command_status(legacy_result.status),
             message=_message_from_view(view),
-            event_seq=view.last_event_seq,
             view=view,
         )
 
     def resign(
         self,
+        *,
         request_id: RequestId,
     ) -> CommandResult:
         del request_id
@@ -109,12 +108,12 @@ class LegacyGameSessionClient:
             ok=legacy_result.ok,
             status=_resign_status_to_command_status(legacy_result.status),
             message=_message_from_view(view),
-            event_seq=view.last_event_seq,
             view=view,
         )
 
     def request_undo(
         self,
+        *,
         request_id: RequestId,
         scope: UndoScope | None = None,
     ) -> CommandResult:
@@ -127,17 +126,8 @@ class LegacyGameSessionClient:
             ok=legacy_result.ok,
             status=_undo_status_to_command_status(legacy_result.status),
             message=_message_from_view(view),
-            event_seq=view.last_event_seq,
             view=view,
         )
-
-    def events_since(self, last_seen_seq: int) -> list[GameEvent]:
-        del last_seen_seq
-        return []
-
-    def tick(self) -> None:
-        # Snapshot syncs clocks in the legacy session.
-        self.session.snapshot()
 
     # Transitional convenience. Do not add this to the GameClient protocol.
     def restart_game(self) -> ViewerSessionView:

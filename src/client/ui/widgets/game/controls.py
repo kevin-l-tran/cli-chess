@@ -123,7 +123,7 @@ class GameControls(Vertical):
         view: ViewerSessionView,
         draft: LocalDraftView,
     ) -> bool:
-        if not view.can_submit_move:
+        if view.can_submit_for_side is None:
             return False
         if draft.submit_text is None:
             return False
