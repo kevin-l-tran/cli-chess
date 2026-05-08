@@ -6,7 +6,7 @@ from textual.events import Click
 from textual.message import Message
 from textual.widgets import Static
 
-from src.application.session_types import (
+from src.application.legacy.session_types import (
     PlayerSide,
     Snapshot,
     Square as BoardCoordinate,

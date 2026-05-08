@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.containers import Grid, Vertical
 from textual.widgets import Static
 
-from src.application.session_types import Snapshot
+from src.application.legacy.session_types import Snapshot
 from src.client.ui.models.setup_models import SetupSelection
 from src.client.ui.widgets.game.controls import ActionButton
 

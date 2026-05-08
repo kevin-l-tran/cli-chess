@@ -7,7 +7,7 @@ from textual.events import Click, Key
 from textual.message import Message
 from textual.widgets import Static
 
-from src.application.session_types import Snapshot
+from src.application.legacy.session_types import Snapshot
 
 
 GameAction = Literal[

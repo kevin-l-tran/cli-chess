@@ -3,7 +3,7 @@ import pytest
 from helpers import make, sq
 
 from src.engine import moves
-from src.application import move_parser
+from src.application.legacy import move_parser
 
 Move = moves.Move
 

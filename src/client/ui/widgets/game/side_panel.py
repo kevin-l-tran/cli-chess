@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static
 
-from src.application.session_types import SessionConfig, Snapshot
+from src.application.legacy.session_types import SessionConfig, Snapshot
 from src.client.ui.models.setup_models import SetupSelection
 
 

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Literal, Protocol, cast
 
-from src.application.session import GameSession
-from src.application.session_types import Snapshot, Square, UndoScope
+from src.application.legacy.session import GameSession
+from src.application.legacy.session_types import Snapshot, Square, UndoScope
 
 
 PromotionPiece = Literal["Q", "R", "B", "N"]
