@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import Grid, Vertical
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from src.application.viewer_types import ViewerSessionView
@@ -25,7 +25,7 @@ class GameOverPanel(Vertical):
         self._detail = Static("", id="game-over-detail", markup=False)
         yield self._detail
 
-        with Grid(id="game-over-actions"):
+        with Horizontal(id="game-over-actions"):
             yield self._make_button("game-over-undo", "Undo", "request_undo")
             yield self._make_button("game-over-back", "Back", "back")
 

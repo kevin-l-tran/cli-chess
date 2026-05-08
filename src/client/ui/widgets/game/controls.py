@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from textual.app import ComposeResult
-from textual.containers import Grid
+from textual.containers import Vertical, Horizontal
 from textual.events import Click, Key
 from textual.message import Message
 from textual.widgets import Static
@@ -66,7 +66,7 @@ class ActionButton(Static):
         return f"[ {label} ]"
 
 
-class GameControls(Grid):
+class GameControls(Vertical):
     DEFAULT_CSS = (Path(__file__).parent / "css" / "controls.tcss").read_text()
 
     class ActionPressed(Message):
@@ -81,18 +81,25 @@ class GameControls(Grid):
         self._buttons: dict[str, ActionButton] = {}
 
     def compose(self) -> ComposeResult:
-        specs: tuple[tuple[str, str, GameAction], ...] = (
+        top_specs: tuple[tuple[str, str, GameAction], ...] = (
             ("confirm", "Confirm", "confirm"),
             ("offer-draw", "Offer draw", "toggle_draw_offer"),
             ("accept-draw", "Accept draw", "accept_draw"),
+        )
+
+        bottom_specs: tuple[tuple[str, str, GameAction], ...] = (
             ("undo", "Undo", "request_undo"),
             ("resign", "Resign", "resign"),
             ("back", "Back", "back"),
         )
-        for button_id, label, action in specs:
-            button = ActionButton(label, action, id=button_id)
-            self._buttons[button_id] = button
-            yield button
+
+        with Horizontal(classes="action-row"):
+            for button_id, label, action in top_specs:
+                yield self._make_button(button_id, label, action)
+
+        with Horizontal(classes="action-row"):
+            for button_id, label, action in bottom_specs:
+                yield self._make_button(button_id, label, action)
 
     def sync(
         self,
@@ -127,4 +134,14 @@ class GameControls(Grid):
         if button is None:
             button = self.query_one(f"#{button_id}", ActionButton)
             self._buttons[button_id] = button
+        return button
+
+    def _make_button(
+        self,
+        button_id: str,
+        label: str,
+        action: GameAction,
+    ) -> ActionButton:
+        button = ActionButton(label, action, id=button_id)
+        self._buttons[button_id] = button
         return button

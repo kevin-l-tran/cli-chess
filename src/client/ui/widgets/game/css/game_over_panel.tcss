@@ -31,9 +31,7 @@ GameOverPanel {
     width: 1fr;
     min-width: 62;
     height: 1;
-    grid-size: 4;
-    grid-columns: 1fr 1fr 1fr 1fr;
-    grid-gutter: 1 1;
+    align: center middle;
 }
 
 GameOverPanel .action-button {
