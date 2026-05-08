@@ -1,6 +1,6 @@
 from src.engine.moves import Move, get_final_position, get_initial_position, get_piece
+from src.shared.protocol_types import Square
 from .move_parser import ParseResult, get_canonical
-from .session_types import Square
 
 
 def click_to_move_text(

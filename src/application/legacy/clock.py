@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 import time
 from typing import Callable
 
-from .session_types import PlayerSide
+from src.shared.protocol_types import PlayerSide
+
 
 TimeSource = Callable[[], int]
 """Callable that returns the current monotonic time in milliseconds."""
@@ -20,6 +21,7 @@ class ClockFrame:
     """
     Immutable snapshot of clock state used for timing undo restoration.
     """
+
     white_remaining_ms: int
     black_remaining_ms: int
     active_side: PlayerSide | None
@@ -52,6 +54,7 @@ class ClockState:
             Stack of prior timing frames used to restore timing state during
             undo operations.
     """
+
     white_remaining_ms: int
     black_remaining_ms: int
     active_side: PlayerSide | None

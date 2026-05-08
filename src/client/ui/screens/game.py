@@ -8,7 +8,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Input, Static
 
 from src.application.legacy.session import GameSession
-from src.application.legacy.session_types import PlayerSide, SessionConfig, Snapshot
+from src.application.legacy.session_types import SessionConfig, Snapshot
 from src.client.ui.controllers.game_controller import (
     CurrentSessionController,
     GameController,
@@ -20,6 +20,7 @@ from src.client.ui.widgets.game.controls import GameControls
 from src.client.ui.widgets.game.game_over_panel import GameOverPanel
 from src.client.ui.widgets.game.promotion_picker import PromotionPicker
 from src.client.ui.widgets.game.side_panel import GameSidePanel
+from src.shared.protocol_types import PlayerSide
 
 
 class GameScreen(Screen):

@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from src.shared.protocol_types import PlayerSide, Square
 
-Square = tuple[int, int]
+
 ParseStatus = Literal["empty", "no_match", "ambiguous", "resolved"]
-PlayerSide = Literal["white", "black"]
 OpponentType = Literal["local", "bot", "online"]
 MoveAttemptStatus = Literal[
     "applied",

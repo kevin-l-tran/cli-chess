@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
-from .session_types import PlayerSide, TimeControl
+from src.shared.protocol_types import PlayerSide
+
+from .session_types import TimeControl
 from .clock import ClockFrame, ClockState, TimeSource, advance_clock, freeze_clock
 
 
