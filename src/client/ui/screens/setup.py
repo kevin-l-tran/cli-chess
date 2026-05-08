@@ -6,6 +6,10 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Static
 
+from src.application.legacy.session import GameSession
+from src.application.legacy.session_client import LegacyGameSessionClient
+from src.application.legacy.session_draft_controller import LegacySessionDraftController
+
 from ..widgets.setup.actions import SetupActions
 from ..widgets.setup.form import SetupForm
 from ..widgets.setup.summary import SetupSummary
@@ -59,7 +63,18 @@ class SetupScreen(Screen):
 
     def action_start(self) -> None:
         selection = self.query_one(SetupForm).settings()
-        self.app.push_screen(GameScreen(selection))
+        session = GameSession(selection.to_session_config())
+
+        client = LegacyGameSessionClient(session)
+        draft = LegacySessionDraftController(session)
+
+        self.app.push_screen(
+            GameScreen(
+                client=client,
+                draft=draft,
+                selection=selection,
+            )
+        )
 
     def action_back(self) -> None:
         self.app.pop_screen()
