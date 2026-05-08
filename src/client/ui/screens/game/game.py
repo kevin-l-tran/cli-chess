@@ -45,8 +45,6 @@ class GameScreen(Screen):
         self.player_side = selection.require_player_side()
 
         self.interactor = GameInteractor.create(client=client, draft=draft)
-        # Compatibility alias for tests/callers that still use screen.state.
-        self.state = self.interactor
 
         self._screen_view = GameScreenView(
             screen=self,

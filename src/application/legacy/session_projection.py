@@ -4,7 +4,7 @@ from src.engine.board import Piece, get_name, is_white
 from src.engine.game import Game
 from src.engine.moves import get_final_position, get_initial_position, get_promotion
 
-from .move_parser import ParseResult, get_canonical
+from ..helpers.move_parser import ParseResult, get_canonical
 from .session_types import (
     ClockView,
     FeedbackView,

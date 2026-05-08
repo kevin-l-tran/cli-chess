@@ -1,8 +1,9 @@
 from helpers import make, sq
 
-from src.application.legacy import move_parser, session_types
+from src.application.helpers import move_parser
+from src.application.legacy import session_types
 from src.application.legacy import session
-from src.application.legacy.move_parser import get_canonical
+from src.application.helpers.move_parser import get_canonical
 from src.engine import game, moves
 from src.engine.board import Piece, make_piece
 

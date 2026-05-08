@@ -9,7 +9,7 @@ from src.engine.moves import (
     get_piece,
     get_promotion,
 )
-from .session_types import ParseStatus, Square
+from ..legacy.session_types import ParseStatus, Square
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ class ParseResult:
     canonical_text: str | None
 
 
-def _normalize_move_text(text: str) -> str:
+def normalize_move_text(text: str) -> str:
     """Trim surrounding whitespace and remove all internal spaces."""
     return "".join(text.strip().split())
 
@@ -212,7 +212,7 @@ def _get_spellings(move: Move, legal_moves: set[Move]) -> set[str]:
 def _collect_matches(
     text: str, legal_moves: set[Move]
 ) -> tuple[str, list[Move], list[str]]:
-    normalized = _normalize_move_text(text)
+    normalized = normalize_move_text(text)
     if normalized == "":
         return normalized, [], []
 

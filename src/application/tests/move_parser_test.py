@@ -3,7 +3,7 @@ import pytest
 from helpers import make, sq
 
 from src.engine import moves
-from src.application.legacy import move_parser
+from src.application.helpers import move_parser
 
 Move = moves.Move
 
@@ -15,8 +15,8 @@ def pairset(
 
 
 def test_normalize_move_text_trims_and_removes_internal_spaces() -> None:
-    assert move_parser._normalize_move_text("  N b1 - c 3  ") == "Nb1-c3"
-    assert move_parser._normalize_move_text(" O - O ") == "O-O"
+    assert move_parser.normalize_move_text("  N b1 - c 3  ") == "Nb1-c3"
+    assert move_parser.normalize_move_text(" O - O ") == "O-O"
 
 
 @pytest.mark.parametrize(

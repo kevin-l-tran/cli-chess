@@ -15,8 +15,8 @@ from src.engine.game import (
     NoMoveToUndoError,
 )
 
-from .move_parser import ParseResult, get_canonical, parse
-from .click_draft import click_to_move_text
+from ..helpers.move_parser import ParseResult, get_canonical, parse
+from ..helpers.click_draft import click_to_move_text
 from .clock import ClockState, TimeSource, system_time_ms
 from .session_timing import SessionTiming
 from .session_policy import SessionPolicy
