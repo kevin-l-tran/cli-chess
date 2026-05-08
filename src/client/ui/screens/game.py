@@ -1,8 +1,6 @@
 from dataclasses import dataclass
-from inspect import signature
 from pathlib import Path
 from typing import Literal, cast
-from uuid import uuid4
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, HorizontalScroll, Vertical
@@ -11,31 +9,15 @@ from textual.screen import Screen
 from textual.widgets import Footer, Input, Static
 
 from src.application.game_client import GameClient
-from src.application.legacy.session_types import (
-    ClockView,
-    FeedbackView,
-    MoveDraftView,
-    MoveListItem,
-    OutcomeView,
-    ParseStatus,
-    SessionConfig,
-    Snapshot,
-    TimedGameView,
-    UndoScope,
-)
 from src.application.local_draft_controller import LocalDraftController
-from src.application.viewer_types import (
-    AuthoritativeSnapshot,
-    LocalDraftView,
-    ViewerSessionView,
-)
+from src.application.viewer_types import LocalDraftView, ViewerSessionView
 from src.client.ui.models.setup_models import SetupSelection
 from src.client.ui.widgets.game.chess_board import ChessBoard
 from src.client.ui.widgets.game.controls import GameControls
 from src.client.ui.widgets.game.game_over_panel import GameOverPanel
 from src.client.ui.widgets.game.promotion_picker import PromotionPicker
 from src.client.ui.widgets.game.side_panel import GameSidePanel
-from src.shared.ids import RequestId
+from src.shared.ids import new_request_id
 from src.shared.protocol_types import PlayerSide
 
 
@@ -55,9 +37,7 @@ class GameScreenState:
 class GameScreen(Screen):
     BINDINGS = [
         ("ctrl+g", "back", "Back"),
-        ("ctrl+r", "restart", "Restart"),
-        ("ctrl+u", "undo_fullmove", "Undo turn"),
-        ("ctrl+y", "undo_halfmove", "Undo move"),
+        ("ctrl+u", "undo", "Undo"),
     ]
 
     DEFAULT_CSS = (Path(__file__).parent / "css" / "game.tcss").read_text()
@@ -75,7 +55,8 @@ class GameScreen(Screen):
         draft.sync_to_view(view)
 
         self.selection = selection
-        self.config: SessionConfig = selection.to_session_config()
+        self.player_side = selection.require_player_side()
+
         self.state = GameScreenState(
             client=client,
             draft=draft,
@@ -273,31 +254,19 @@ class GameScreen(Screen):
                 self._refresh_view()
             case "accept_draw":
                 self._accept_draw_offer()
-            case "undo_halfmove":
-                self._request_undo("halfmove")
-            case "undo_fullmove":
-                self._request_undo("fullmove")
+            case "request_undo":
+                self._request_undo()
             case "resign":
                 self._resign()
-            case "restart":
-                self._restart_game()
             case "back":
                 self.app.pop_screen()
 
     def action_back(self) -> None:
         self.app.pop_screen()
 
-    def action_restart(self) -> None:
+    def action_undo(self) -> None:
         self._apply_pending_input_now(refresh=False)
-        self._restart_game()
-
-    def action_undo_fullmove(self) -> None:
-        self._apply_pending_input_now(refresh=False)
-        self._request_undo("fullmove")
-
-    def action_undo_halfmove(self) -> None:
-        self._apply_pending_input_now(refresh=False)
-        self._request_undo("halfmove")
+        self._request_undo()
 
     def _confirm_move(self) -> None:
         view = self.state.latest_view
@@ -311,7 +280,7 @@ class GameScreen(Screen):
 
         result = self.state.client.submit_move(
             draft.submit_text,
-            request_id=_new_request_id(),
+            request_id=new_request_id(),
             expected_ply=view.current_ply,
             offer_draw=self.state.offer_draw,
         )
@@ -332,7 +301,7 @@ class GameScreen(Screen):
             return
 
         result = self.state.client.accept_draw_offer(
-            request_id=_new_request_id(),
+            request_id=new_request_id(),
             expected_ply=view.current_ply,
         )
         if result.view is not None:
@@ -341,19 +310,11 @@ class GameScreen(Screen):
         self.state.offer_draw = False
         self._refresh_view()
 
-    def _request_undo(self, scope: UndoScope) -> None:
+    def _request_undo(self) -> None:
         if not self.state.latest_view.can_request_undo:
             return
 
-        request_undo = self.state.client.request_undo
-        parameters = signature(request_undo).parameters
-        if "scope" in parameters:
-            result = request_undo(
-                request_id=_new_request_id(),
-                scope=scope,  # type: ignore
-            )
-        else:
-            result = request_undo(request_id=_new_request_id())
+        result = self.state.client.request_undo(request_id=new_request_id())
 
         if result.view is not None:
             self._replace_view(result.view)
@@ -365,24 +326,10 @@ class GameScreen(Screen):
         if not self.state.latest_view.can_resign:
             return
 
-        result = self.state.client.resign(request_id=_new_request_id())
+        result = self.state.client.resign(request_id=new_request_id())
         if result.view is not None:
             self._replace_view(result.view)
 
-        self.state.offer_draw = False
-        self._refresh_view()
-
-    def _restart_game(self) -> None:
-        restart_game = getattr(self.state.client, "restart_game", None)
-        if restart_game is None:
-            return
-
-        view = restart_game()
-        if view is None:
-            view = self.state.client.get_view()
-
-        self._replace_view(view)
-        self.state.latest_draft_view = self.state.draft.clear()
         self.state.offer_draw = False
         self._refresh_view()
 
@@ -412,24 +359,24 @@ class GameScreen(Screen):
         return draft.text.strip() == canonical_text.strip()
 
     def _refresh_view(self) -> None:
-        snapshot = self._legacy_render_snapshot()
+        view = self.state.latest_view
+        snapshot = view.snapshot
+        draft = self.state.latest_draft_view
 
-        if self.state.offer_draw and (
-            snapshot.is_game_over or not snapshot.can_offer_draw
-        ):
+        if self.state.offer_draw and (snapshot.is_game_over or not view.can_offer_draw):
             self.state.offer_draw = False
 
         board = self._board_widget()
-        board.set_orientation(self._board_orientation_for(snapshot))
-        board.refresh_from_snapshot(snapshot)
+        board.set_orientation(self._board_orientation_for(view))
+        board.refresh_from_view(snapshot=snapshot, draft=draft)
 
-        self._sync_move_input(snapshot)
-        self._sync_move_composer(snapshot)
+        self._sync_move_input(view, draft)
+        self._sync_move_composer(view, draft)
 
         self._side_panel_widget().sync(
-            snapshot,
+            view=view,
             selection=self.selection,
-            config=self.config,
+            player_side=self._board_orientation_for(view),
             offer_draw=self.state.offer_draw,
         )
 
@@ -441,70 +388,37 @@ class GameScreen(Screen):
 
             game_over_panel = self._game_over_panel_widget()
             game_over_panel.display = True
-            game_over_panel.sync(snapshot, selection=self.selection)
+            game_over_panel.sync(view=view, selection=self.selection)
         else:
             self._game_over_panel_widget().display = False
 
             controls = self._controls_widget()
             controls.display = True
             controls.sync(
-                snapshot,
+                view=view,
+                draft=draft,
                 offer_draw=self.state.offer_draw,
             )
 
-        self._promotion_picker_widget().display = snapshot.is_promotion_pending
+        self._promotion_picker_widget().display = draft.is_promotion_pending
 
-    def _legacy_render_snapshot(self) -> Snapshot:
-        view = self.state.latest_view
-        snapshot = view.snapshot
-        draft = self.state.latest_draft_view
-
-        return Snapshot(
-            board_glyphs=snapshot.board_glyphs,
-            side_to_move=snapshot.side_to_move,
-            candidate_moves=draft.candidate_moves,
-            last_move_from=snapshot.last_move_from,
-            last_move_to=snapshot.last_move_to,
-            move_list=[
-                MoveListItem(ply=item.ply, notation=item.notation)
-                for item in snapshot.move_list
-            ],
-            move_draft=MoveDraftView(
-                text=draft.text,
-                status=_legacy_parse_status(draft),
-                canonical_text=draft.canonical_text,
-            ),
-            move_autocompletions=draft.autocompletions,
-            promotion_prompt_position=draft.promotion_prompt_position,
-            draw_offered_by=snapshot.draw_offered_by,
-            check_square=snapshot.check_square,
-            is_player_checked=snapshot.is_player_checked,
-            is_game_over=snapshot.is_game_over,
-            can_confirm_move=_can_confirm_move(view, draft),
-            can_offer_draw=view.can_offer_draw,
-            can_undo_fullmove=view.can_request_undo,
-            can_undo_halfmove=view.can_request_undo,
-            can_resign=view.can_resign,
-            is_promotion_pending=draft.is_promotion_pending,
-            timed_game=_legacy_timed_game(snapshot),
-            outcome=_legacy_outcome(snapshot),
-            feedback=_legacy_feedback(snapshot),
-        )
-
-    def _sync_move_input(self, snapshot: Snapshot) -> None:
+    def _sync_move_input(self, view: ViewerSessionView, draft: LocalDraftView) -> None:
         if self._pending_move_text is not None:
             return
 
         move_input = self._move_input_widget()
-        move_input.disabled = not self.state.latest_view.can_submit_move
+        move_input.disabled = not view.can_submit_move
 
-        if move_input.value != snapshot.move_draft.text:
+        if move_input.value != draft.text:
             self._syncing_input = True
-            move_input.value = snapshot.move_draft.text
+            move_input.value = draft.text
             self._syncing_input = False
 
-    def _sync_move_composer(self, snapshot: Snapshot) -> None:
-        draft = snapshot.move_draft
+    def _sync_move_composer(
+        self,
+        view: ViewerSessionView,
+        draft: LocalDraftView,
+    ) -> None:
         canonical = f" -> {draft.canonical_text}" if draft.canonical_text else ""
         text = draft.text.strip() or "-"
         self._update_text(
@@ -513,7 +427,7 @@ class GameScreen(Screen):
             f"Text: {text}    Status: {draft.status}{canonical}",
         )
 
-        completions = ", ".join(snapshot.move_autocompletions[:8])
+        completions = ", ".join(draft.autocompletions[:8])
         self._update_text(
             "autocomplete",
             self._autocomplete_widget(),
@@ -524,14 +438,15 @@ class GameScreen(Screen):
         for css_class in ("error", "action", "info"):
             feedback.remove_class(css_class)
 
-        if self.state.latest_view.status_text is not None:
-            feedback_text = f"info: {self.state.latest_view.status_text}"
+        public_feedback = view.snapshot.feedback
+        if view.status_text is not None:
+            feedback_text = f"info: {view.status_text}"
             feedback.add_class("info")
-        elif snapshot.feedback is None:
+        elif public_feedback is None:
             feedback_text = ""
         else:
-            feedback_text = f"{snapshot.feedback.kind}: {snapshot.feedback.text}"
-            feedback.add_class(snapshot.feedback.kind)
+            feedback_text = f"{public_feedback.kind}: {public_feedback.text}"
+            feedback.add_class(public_feedback.kind)
 
         self._update_text("feedback", feedback, feedback_text)
 
@@ -546,11 +461,14 @@ class GameScreen(Screen):
             self._board = self.query_one("#board", ChessBoard)
         return self._board
 
-    def _board_orientation_for(self, snapshot: Snapshot) -> PlayerSide:
-        if self.config.opponent == "local" and snapshot.side_to_move is not None:
-            return snapshot.side_to_move
+    def _board_orientation_for(self, view: ViewerSessionView) -> PlayerSide:
+        if (
+            self.selection.opponent == "local"
+            and view.snapshot.side_to_move is not None
+        ):
+            return view.snapshot.side_to_move
 
-        return self.config.player_side
+        return view.viewer_side or cast(PlayerSide, self.player_side)
 
     def _move_input_widget(self) -> Input:
         if self._move_input is None:
@@ -596,74 +514,3 @@ class GameScreen(Screen):
         if self._feedback is None:
             self._feedback = self.query_one("#feedback", Static)
         return self._feedback
-
-
-def _new_request_id() -> RequestId:
-    return RequestId(str(uuid4()))
-
-
-def _can_confirm_move(view: ViewerSessionView, draft: LocalDraftView) -> bool:
-    if not view.can_submit_move:
-        return False
-    if draft.submit_text is None:
-        return False
-    return draft.status not in {"empty", "no_match", "ambiguous", "stale"}
-
-
-def _legacy_parse_status(draft: LocalDraftView) -> ParseStatus:
-    if draft.status in {"empty", "no_match", "ambiguous", "resolved"}:
-        return cast(ParseStatus, draft.status)
-    if not draft.text.strip():
-        return "empty"
-    return "no_match"
-
-
-def _legacy_timed_game(snapshot: AuthoritativeSnapshot) -> TimedGameView | None:
-    timed_game = snapshot.timed_game
-    if timed_game is None:
-        return None
-
-    return TimedGameView(
-        white=ClockView(
-            remaining_ms=timed_game.white.remaining_ms,
-            display_text=timed_game.white.display_text,
-            is_active=timed_game.white.is_active,
-            is_flagged=timed_game.white.is_flagged,
-        ),
-        black=ClockView(
-            remaining_ms=timed_game.black.remaining_ms,
-            display_text=timed_game.black.display_text,
-            is_active=timed_game.black.is_active,
-            is_flagged=timed_game.black.is_flagged,
-        ),
-        active_side=timed_game.active_side,
-        timeout_side=timed_game.timeout_side,
-        increment_seconds=timed_game.increment_seconds,
-    )
-
-
-def _legacy_outcome(snapshot: AuthoritativeSnapshot) -> OutcomeView | None:
-    outcome = snapshot.outcome
-    if outcome is None:
-        return None
-
-    return OutcomeView(
-        winner=outcome.winner,
-        reason=outcome.reason,
-        banner=outcome.banner,
-    )
-
-
-def _legacy_feedback(snapshot: AuthoritativeSnapshot) -> FeedbackView | None:
-    feedback = snapshot.feedback
-    if feedback is None:
-        return None
-
-    if feedback.kind not in {"error", "action"}:
-        return FeedbackView(kind="action", text=feedback.text)
-
-    assert feedback.kind == "error" or feedback.kind == "action"
-    return FeedbackView(
-        kind=feedback.kind,
-        text=feedback.text,
-    )

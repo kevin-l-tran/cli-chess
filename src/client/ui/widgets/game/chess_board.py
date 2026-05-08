@@ -6,11 +6,8 @@ from textual.events import Click
 from textual.message import Message
 from textual.widgets import Static
 
-from src.application.legacy.session_types import (
-    PlayerSide,
-    Snapshot,
-    Square as BoardCoordinate,
-)
+from src.application.viewer_types import AuthoritativeSnapshot, LocalDraftView
+from src.shared.protocol_types import PlayerSide, Square as BoardCoordinate
 
 
 FILES = "abcdefgh"
@@ -189,7 +186,12 @@ class ChessBoard(Container):
         self.orientation = orientation
         self._sync_orientation_widgets()
 
-    def refresh_from_snapshot(self, snapshot: Snapshot) -> None:
+    def refresh_from_view(
+        self,
+        *,
+        snapshot: AuthoritativeSnapshot,
+        draft: LocalDraftView,
+    ) -> None:
         highlighted: dict[tuple[int, int], set[str]] = {}
 
         def add_highlight(square: BoardCoordinate | None, css_class: str) -> None:
@@ -199,7 +201,7 @@ class ChessBoard(Container):
                 css_class
             )
 
-        for from_square, to_square in snapshot.candidate_moves:
+        for from_square, to_square in draft.candidate_moves:
             add_highlight(from_square, "candidate")
             add_highlight(
                 to_square,
@@ -254,7 +256,11 @@ class ChessBoard(Container):
                         display_col,
                     )
 
-    def _square_has_piece(self, snapshot: Snapshot, square: BoardCoordinate) -> bool:
+    def _square_has_piece(
+        self,
+        snapshot: AuthoritativeSnapshot,
+        square: BoardCoordinate,
+    ) -> bool:
         file, rank = square
         glyph = snapshot.board_glyphs[7 - rank][file].strip()
         return bool(glyph and glyph not in EMPTY_GLYPHS)

@@ -7,33 +7,31 @@ from textual.events import Click, Key
 from textual.message import Message
 from textual.widgets import Static
 
-from src.application.legacy.session_types import Snapshot
+from src.application.viewer_types import LocalDraftView, ViewerSessionView
 
 
 GameAction = Literal[
     "confirm",
     "toggle_draw_offer",
     "accept_draw",
-    "undo_halfmove",
-    "undo_fullmove",
+    "request_undo",
     "resign",
-    "restart",
     "back",
 ]
 
 
 class ActionButton(Static):
-    """Small clickable control with stable layout and low-cost hover styling.
-
-    The visual brackets are part of the rendered label rather than CSS borders.
-    This keeps the action area compact on short terminals while preserving a
-    large enough mouse target for each command.
-    """
+    """Small clickable control with stable layout and low-cost hover styling."""
 
     can_focus = True
 
     def __init__(self, label: str, action: GameAction, *, id: str) -> None:
-        super().__init__(self._display_label(label), id=id, classes="action-button", markup=False)
+        super().__init__(
+            self._display_label(label),
+            id=id,
+            classes="action-button",
+            markup=False,
+        )
         self.action = action
         self._label = label
         self._enabled = True
@@ -87,10 +85,8 @@ class GameControls(Grid):
             ("confirm", "Confirm", "confirm"),
             ("offer-draw", "Offer draw", "toggle_draw_offer"),
             ("accept-draw", "Accept draw", "accept_draw"),
-            ("undo-half", "Undo move", "undo_halfmove"),
-            ("undo-full", "Undo turn", "undo_fullmove"),
+            ("undo", "Undo", "request_undo"),
             ("resign", "Resign", "resign"),
-            ("restart", "Restart", "restart"),
             ("back", "Back", "back"),
         )
         for button_id, label, action in specs:
@@ -98,23 +94,33 @@ class GameControls(Grid):
             self._buttons[button_id] = button
             yield button
 
-    def sync(self, snapshot: Snapshot, *, offer_draw: bool) -> None:
-        self._button("confirm").set_enabled(snapshot.can_confirm_move)
-        self._button("offer-draw").set_enabled(snapshot.can_offer_draw)
-        self._button("accept-draw").set_enabled(self._can_accept_draw(snapshot))
-        self._button("undo-half").set_enabled(snapshot.can_undo_halfmove)
-        self._button("undo-full").set_enabled(snapshot.can_undo_fullmove)
-        self._button("resign").set_enabled(snapshot.can_resign)
+    def sync(
+        self,
+        *,
+        view: ViewerSessionView,
+        draft: LocalDraftView,
+        offer_draw: bool,
+    ) -> None:
+        self._button("confirm").set_enabled(self._can_confirm_move(view, draft))
+        self._button("offer-draw").set_enabled(view.can_offer_draw)
+        self._button("accept-draw").set_enabled(view.can_accept_draw)
+        self._button("undo").set_enabled(view.can_request_undo)
+        self._button("resign").set_enabled(view.can_resign)
 
         self._button("offer-draw").set_label(
             "Cancel draw" if offer_draw else "Offer draw"
         )
 
-    def _can_accept_draw(self, snapshot: Snapshot) -> bool:
-        explicit = getattr(snapshot, "can_accept_draw", None)
-        if explicit is not None:
-            return bool(explicit)
-        return snapshot.draw_offered_by is not None and not snapshot.is_game_over
+    def _can_confirm_move(
+        self,
+        view: ViewerSessionView,
+        draft: LocalDraftView,
+    ) -> bool:
+        if not view.can_submit_move:
+            return False
+        if draft.submit_text is None:
+            return False
+        return draft.status not in {"empty", "no_match", "ambiguous", "stale"}
 
     def _button(self, button_id: str) -> ActionButton:
         button = self._buttons.get(button_id)

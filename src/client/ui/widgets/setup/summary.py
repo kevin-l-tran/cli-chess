@@ -42,11 +42,14 @@ class SetupSummary(Vertical):
             else f"Bot (Level {selection.bot_level})"
         )
 
-        side = {
-            "random": "Random side",
-            "white": "White",
-            "black": "Black",
-        }[selection.side_choice]
+        if selection.side_choice == "random" and selection.player_side is not None:
+            side = f"Random side ({self._title_case(selection.player_side)})"
+        else:
+            side = {
+                "random": "Random side",
+                "white": "White",
+                "black": "Black",
+            }[selection.side_choice]
 
         if selection.time_control is None:
             time = "No Clock"
@@ -58,3 +61,6 @@ class SetupSummary(Vertical):
         self.query_one("#summary_body", Static).update(
             f"Ready: {opponent} | {side} | {time} | Standard"
         )
+
+    def _title_case(self, value: str) -> str:
+        return value[:1].upper() + value[1:] if value else value

@@ -7,9 +7,17 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from src.application.legacy.session_types import OpponentType, TimeControl
-from src.client.ui.models.setup_models import SetupSelection, SideChoice
-from src.client.ui.widgets.setup.inputs import CustomTimeInput, TerminalOption, TerminalStep
+from src.client.ui.models.setup_models import (
+    OpponentChoice,
+    SetupSelection,
+    SetupTimeControl,
+    SideChoice,
+)
+from src.client.ui.widgets.setup.inputs import (
+    CustomTimeInput,
+    TerminalOption,
+    TerminalStep,
+)
 
 
 class SetupForm(Vertical):
@@ -30,7 +38,7 @@ class SetupForm(Vertical):
         ("custom", "Custom"),
     )
 
-    opponent: reactive[OpponentType] = reactive("local")
+    opponent: reactive[OpponentChoice] = reactive("local")
     side_choice: reactive[SideChoice] = reactive("random")
     time_choice: reactive[str] = reactive("5+0")
     bot_level: reactive[int] = reactive(4)
@@ -159,7 +167,7 @@ class SetupForm(Vertical):
         index = values.index(self.time_choice)
         self.time_choice = values[(index + 1) % len(values)]
 
-    def watch_opponent(self, _: OpponentType) -> None:
+    def watch_opponent(self, _: OpponentChoice) -> None:
         self._sync_after_state_change(rows=True, controls=True)
 
     def watch_side_choice(self, _: SideChoice) -> None:
@@ -214,7 +222,7 @@ class SetupForm(Vertical):
 
         self._emit()
 
-    def _selected_time_control(self) -> TimeControl | None:
+    def _selected_time_control(self) -> SetupTimeControl | None:
         if self.time_choice == "none":
             return None
 
@@ -223,13 +231,13 @@ class SetupForm(Vertical):
                 return None
 
             mins, inc = self.custom_time_value
-            return TimeControl(
+            return SetupTimeControl(
                 initial_seconds=mins * 60,
                 increment_seconds=inc,
             )
 
         mins_s, inc_s = self.time_choice.split("+")
-        return TimeControl(
+        return SetupTimeControl(
             initial_seconds=int(mins_s) * 60,
             increment_seconds=int(inc_s),
         )

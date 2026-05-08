@@ -4,8 +4,9 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static
 
-from src.application.legacy.session_types import SessionConfig, Snapshot
+from src.application.viewer_types import AuthoritativeSnapshot, ViewerSessionView
 from src.client.ui.models.setup_models import SetupSelection
+from src.shared.protocol_types import PlayerSide
 
 
 class GameSidePanel(Vertical):
@@ -13,11 +14,7 @@ class GameSidePanel(Vertical):
 
     Draft text, completions, and feedback are rendered beside the move input in
     GameScreen. This widget owns only committed/read-only game data: clocks,
-    game status, and move history.
-
-    Widths are intentionally protected by CSS min-widths. When the terminal is
-    too narrow, the screen-level horizontal scroll wrapper should scroll instead
-    of squeezing these panels until labels wrap.
+    game status, permissions, and move history.
     """
 
     DEFAULT_CSS = (Path(__file__).parent / "css" / "side_panel.tcss").read_text()
@@ -32,7 +29,9 @@ class GameSidePanel(Vertical):
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="side-panel-scroll"):
             with Horizontal(id="game_header_row"):
-                clock_panel = Vertical(classes="frame panel titled-frame", id="clock_panel")
+                clock_panel = Vertical(
+                    classes="frame panel titled-frame", id="clock_panel"
+                )
                 clock_panel.border_title = "Clocks"
                 with clock_panel:
                     self._clock = Static(
@@ -43,7 +42,9 @@ class GameSidePanel(Vertical):
                     )
                     yield self._clock
 
-                status_panel = Vertical(classes="frame panel titled-frame", id="status_panel")
+                status_panel = Vertical(
+                    classes="frame panel titled-frame", id="status_panel"
+                )
                 status_panel.border_title = "Game"
                 with status_panel:
                     self._status = Static(
@@ -63,20 +64,21 @@ class GameSidePanel(Vertical):
 
     def sync(
         self,
-        snapshot: Snapshot,
         *,
+        view: ViewerSessionView,
         selection: SetupSelection,
-        config: SessionConfig,
+        player_side: PlayerSide,
         offer_draw: bool,
     ) -> None:
+        snapshot = view.snapshot
         self._update_text("clock", self._clock_widget(), self._format_clock(snapshot))
         self._update_text(
             "status",
             self._status_widget(),
             self._format_status(
-                snapshot,
+                view,
                 selection=selection,
-                config=config,
+                player_side=player_side,
                 offer_draw=offer_draw,
             ),
         )
@@ -86,7 +88,7 @@ class GameSidePanel(Vertical):
             self._format_moves(snapshot) or "No moves yet.",
         )
 
-    def _format_clock(self, snapshot: Snapshot) -> str:
+    def _format_clock(self, snapshot: AuthoritativeSnapshot) -> str:
         if snapshot.timed_game is None:
             return "Black: -\nWhite: -\nIncrement: -"
 
@@ -105,12 +107,13 @@ class GameSidePanel(Vertical):
 
     def _format_status(
         self,
-        snapshot: Snapshot,
+        view: ViewerSessionView,
         *,
         selection: SetupSelection,
-        config: SessionConfig,
+        player_side: PlayerSide,
         offer_draw: bool,
     ) -> str:
+        snapshot = view.snapshot
         side = self._title_case(snapshot.side_to_move or "-")
         opponent = selection.opponent
         bot_note = f" (level {selection.bot_level})" if opponent == "bot" else ""
@@ -124,17 +127,19 @@ class GameSidePanel(Vertical):
             else "Draw: -"
         )
         offer_line = "Offer: next move offers draw" if offer_draw else "Offer: -"
+        role_line = f"Role: {self._title_case(view.viewer_role)}"
 
         return (
             f"Turn: {side}\n"
             f"State: {state}\n"
             f"Mode: {self._title_case(opponent)}{bot_note}\n"
-            f"View: {self._title_case(config.player_side)}\n"
+            f"View: {self._title_case(player_side)}\n"
+            f"{role_line}\n"
             f"{draw_line}\n"
             f"{offer_line}"
         )
 
-    def _format_moves(self, snapshot: Snapshot) -> str:
+    def _format_moves(self, snapshot: AuthoritativeSnapshot) -> str:
         rows: dict[int, list[str]] = {}
         for item in snapshot.move_list[-120:]:
             move_number = max(1, (item.ply + 1) // 2)

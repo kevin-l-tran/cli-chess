@@ -9,6 +9,11 @@ from textual.widgets import Footer, Static
 from src.application.legacy.session import GameSession
 from src.application.legacy.session_client import LegacyGameSessionClient
 from src.application.legacy.session_draft_controller import LegacySessionDraftController
+from src.application.legacy.session_types import (
+    SessionConfig as LegacySessionConfig,
+    TimeControl as LegacyTimeControl,
+)
+from src.client.ui.models.setup_models import SetupSelection, SetupTimeControl
 
 from ..widgets.setup.actions import SetupActions
 from ..widgets.setup.form import SetupForm
@@ -62,9 +67,13 @@ class SetupScreen(Screen):
         self.action_back()
 
     def action_start(self) -> None:
-        selection = self.query_one(SetupForm).settings()
-        session = GameSession(selection.to_session_config())
+        form = self.query_one(SetupForm)
+        if not form.is_valid:
+            self.app.notify("Fix the setup form before starting.", severity="warning")
+            return
 
+        selection = form.settings().with_resolved_player_side()
+        session = GameSession(_legacy_session_config(selection))
         client = LegacyGameSessionClient(session)
         draft = LegacySessionDraftController(session)
 
@@ -87,3 +96,23 @@ class SetupScreen(Screen):
 
     def action_cycle_time(self) -> None:
         self.query_one(SetupForm).cycle_time()
+
+
+def _legacy_session_config(selection: SetupSelection) -> LegacySessionConfig:
+    return LegacySessionConfig(
+        player_side=selection.require_player_side(),
+        opponent=selection.opponent,
+        time_control=_legacy_time_control(selection.time_control),
+    )
+
+
+def _legacy_time_control(
+    time_control: SetupTimeControl | None,
+) -> LegacyTimeControl | None:
+    if time_control is None:
+        return None
+
+    return LegacyTimeControl(
+        initial_seconds=time_control.initial_seconds,
+        increment_seconds=time_control.increment_seconds,
+    )

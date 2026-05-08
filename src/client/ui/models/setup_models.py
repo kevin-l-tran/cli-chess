@@ -1,34 +1,42 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from random import choice
 from typing import Literal, cast
 
-from src.application.legacy.session_types import (
-    OpponentType,
-    PlayerSide,
-    SessionConfig,
-    TimeControl,
-)
+from src.shared.protocol_types import PlayerSide
 
+
+OpponentChoice = Literal["local", "bot", "online"]
 SideChoice = Literal["random", "white", "black"]
 
 
 @dataclass(frozen=True)
-class SetupSelection:
-    opponent: OpponentType
-    side_choice: SideChoice
-    time_control: TimeControl | None
-    bot_level: int | None = None
+class SetupTimeControl:
+    initial_seconds: int
+    increment_seconds: int = 0
 
-    def to_session_config(self) -> SessionConfig:
-        player_side: PlayerSide
+
+@dataclass(frozen=True)
+class SetupSelection:
+    """UI-owned setup selection."""
+
+    opponent: OpponentChoice
+    side_choice: SideChoice
+    time_control: SetupTimeControl | None
+    bot_level: int | None = None
+    player_side: PlayerSide | None = None
+
+    def with_resolved_player_side(self) -> "SetupSelection":
+        if self.player_side is not None:
+            return self
 
         if self.side_choice == "random":
             player_side = choice(("white", "black"))
         else:
             player_side = cast(PlayerSide, self.side_choice)
 
-        return SessionConfig(
-            player_side=player_side,
-            opponent=self.opponent,
-            time_control=self.time_control,
-        )
+        return replace(self, player_side=player_side)
+
+    def require_player_side(self) -> PlayerSide:
+        if self.player_side is None:
+            raise ValueError("SetupSelection must be resolved before starting a game.")
+        return self.player_side
