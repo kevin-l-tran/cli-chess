@@ -1,12 +1,11 @@
-from typing import Literal, cast
+from typing import cast
 
 from textual.app import ComposeResult
 from textual.containers import Grid
 from textual.message import Message
 from textual.widgets import Button
 
-
-PromotionPiece = Literal["Q", "R", "B", "N"]
+from src.shared.protocol_types import PromotionPiece
 
 
 class PromotionPicker(Grid):

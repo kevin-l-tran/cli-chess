@@ -1,14 +1,11 @@
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import cast
 
 from src.application.legacy.session import GameSession
 from src.application.viewer_types import LocalDraftView, ViewerSessionView
-from src.shared.protocol_types import Square
+from src.shared.protocol_types import PromotionPiece, Square
 
 from .view_translation import local_draft_from_legacy_snapshot
-
-
-PromotionPiece = Literal["Q", "R", "B", "N"]
 
 
 @dataclass

@@ -6,6 +6,7 @@ from src.shared.protocol_types import (
     ConnectionState,
     ParticipantRole,
     PlayerSide,
+    PromotionPiece,
     Square,
 )
 
@@ -89,10 +90,19 @@ class AuthoritativeSnapshot:
 
 
 @dataclass(frozen=True)
+class MovePreviewCandidate:
+    canonical_text: str
+    aliases: set[str]
+    from_square: Square
+    to_square: Square
+    promotion_piece: PromotionPiece | None = None
+    promotion_prompt_position: Square | None = None
+
+
+@dataclass(frozen=True)
 class MovePreviewHints:
     base_ply: int
-    legal_move_texts: list[str]
-    legal_move_edges: set[tuple[Square, Square]]
+    legal_moves: list[MovePreviewCandidate]
 
 
 @dataclass(frozen=True)

@@ -1,15 +1,11 @@
 from dataclasses import dataclass
-from typing import Literal
 
 from src.application.command_types import CommandResult
 from src.application.game_client import GameClient
 from src.application.local_draft_controller import LocalDraftController
 from src.application.viewer_types import LocalDraftView, ViewerSessionView
 from src.shared.ids import RequestId
-from src.shared.protocol_types import Square
-
-
-PromotionPiece = Literal["Q", "R", "B", "N"]
+from src.shared.protocol_types import PromotionPiece, Square
 
 
 @dataclass
@@ -63,7 +59,9 @@ class GameInteractor:
 
     def clear_invalid_offer_draw_state(self) -> None:
         snapshot = self.latest_view.snapshot
-        if self.offer_draw and (snapshot.is_game_over or not self.latest_view.can_offer_draw):
+        if self.offer_draw and (
+            snapshot.is_game_over or not self.latest_view.can_offer_draw
+        ):
             self.offer_draw = False
 
     def confirm_move(self, *, request_id: RequestId) -> CommandResult | None:

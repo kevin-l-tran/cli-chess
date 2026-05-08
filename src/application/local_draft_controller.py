@@ -1,5 +1,7 @@
 from typing import Literal, Protocol
 
+from src.application import viewer_types as vt
+from src.application.local_click_draft_helper import click_to_move_text
 from src.application.viewer_types import LocalDraftView, ViewerSessionView
 from src.shared.protocol_types import Square
 
@@ -31,3 +33,311 @@ class LocalDraftController(Protocol):
     def view(self) -> LocalDraftView:
         """Return current local draft view."""
         ...
+
+
+class DefaultLocalDraftController:
+    """
+    Default client-local draft controller.
+
+    Owns only uncommitted draft state. It does not submit moves, mutate the
+    engine, call the server, or persist anything.
+    """
+
+    def __init__(self) -> None:
+        self._current_ply: int | None = None
+        self._draft_ply: int | None = None
+        self._hints: vt.MovePreviewHints | None = None
+        self._promotion_family: tuple[vt.MovePreviewCandidate, ...] = ()
+        self._view = _empty_view()
+
+    def sync_to_view(self, view: ViewerSessionView) -> None:
+        old_ply = self._current_ply
+        self._current_ply = view.current_ply
+
+        if (
+            view.preview_hints is not None
+            and view.preview_hints.base_ply == view.current_ply
+        ):
+            self._hints = view.preview_hints
+        else:
+            self._hints = None
+
+        if old_ply is None:
+            self._draft_ply = view.current_ply
+            return
+
+        if not self._has_active_draft():
+            self._draft_ply = view.current_ply
+            return
+
+        if self._draft_ply is not None and self._draft_ply != view.current_ply:
+            self._promotion_family = ()
+
+            if self._view.text:
+                self._view = LocalDraftView(
+                    text=self._view.text,
+                    status="stale",
+                    canonical_text=None,
+                    candidate_moves=set(),
+                    autocompletions=[],
+                    promotion_prompt_position=None,
+                    submit_text=None,
+                )
+            else:
+                self._view = _empty_view()
+
+            self._draft_ply = view.current_ply
+            return
+
+        # If a draft was created without hints, but hints later become
+        # available for the same ply, re-evaluate it locally.
+        if (
+            self._view.text
+            and self._view.status == "unvalidated"
+            and self._hints is not None
+        ):
+            self.set_text(self._view.text)
+
+    def set_text(self, text: str) -> LocalDraftView:
+        self._draft_ply = self._current_ply
+        self._promotion_family = ()
+
+        if _normalize(text) == "":
+            self._view = _empty_view()
+            return self._view
+
+        if self._hints is None:
+            self._view = LocalDraftView(
+                text=text,
+                status="unvalidated",
+                canonical_text=None,
+                candidate_moves=set(),
+                autocompletions=[],
+                promotion_prompt_position=None,
+                submit_text=text,
+            )
+            return self._view
+
+        matches = self._matching_candidates(text)
+
+        if not matches:
+            self._view = LocalDraftView(
+                text=text,
+                status="no_match",
+                canonical_text=None,
+                candidate_moves=set(),
+                autocompletions=[],
+                promotion_prompt_position=None,
+                submit_text=None,
+            )
+            return self._view
+
+        if len(matches) == 1:
+            self._view = _resolved_view(
+                text=text,
+                candidate=matches[0],
+            )
+            return self._view
+
+        if _is_promotion_family(matches):
+            self._promotion_family = tuple(matches)
+
+            self._view = LocalDraftView(
+                text=text,
+                status="ambiguous",
+                canonical_text=None,
+                candidate_moves=_candidate_edges(matches),
+                autocompletions=_canonical_autocompletions(matches),
+                promotion_prompt_position=_common_promotion_prompt_position(matches),
+                submit_text=None,
+            )
+            return self._view
+
+        self._view = LocalDraftView(
+            text=text,
+            status="ambiguous",
+            canonical_text=None,
+            candidate_moves=_candidate_edges(matches),
+            autocompletions=_canonical_autocompletions(matches),
+            promotion_prompt_position=None,
+            submit_text=None,
+        )
+        return self._view
+
+    def clear(self) -> LocalDraftView:
+        self._draft_ply = self._current_ply
+        self._promotion_family = ()
+        self._view = _empty_view()
+        return self._view
+
+    def click_square(self, square: Square) -> LocalDraftView:
+        self._draft_ply = self._current_ply
+
+        if self._hints is None:
+            # With no local hints, clicks cannot be interpreted. Typed drafts
+            # can still be submitted as unvalidated text.
+            return self._view
+
+        matching_candidates = (
+            self._matching_candidates(self._view.text) if self._view.text else []
+        )
+
+        next_text = click_to_move_text(
+            current_status=self._view.status,
+            matching_candidates=matching_candidates,
+            hints=self._hints,
+            square=square,
+        )
+
+        return self.set_text(next_text)
+
+    def select_promotion_piece(
+        self,
+        piece: Literal["Q", "R", "B", "N"],
+    ) -> LocalDraftView:
+        matching = next(
+            (
+                candidate
+                for candidate in self._promotion_family
+                if candidate.promotion_piece == piece
+            ),
+            None,
+        )
+
+        if matching is None:
+            return self._view
+
+        self._promotion_family = ()
+        return self.set_text(matching.canonical_text)
+
+    def view(self) -> LocalDraftView:
+        return self._view
+
+    def _matching_candidates(
+        self,
+        text: str,
+    ) -> list[vt.MovePreviewCandidate]:
+        if self._hints is None:
+            return []
+
+        query = _normalize(text)
+
+        matches = [
+            candidate
+            for candidate in self._hints.legal_moves
+            if any(
+                _normalize(spelling).startswith(query)
+                for spelling in _candidate_spellings(candidate)
+            )
+        ]
+
+        return sorted(matches, key=lambda candidate: candidate.canonical_text)
+
+    def _has_active_draft(self) -> bool:
+        return (
+            bool(self._view.text)
+            or bool(self._view.candidate_moves)
+            or bool(self._promotion_family)
+        )
+
+
+def _empty_view() -> LocalDraftView:
+    return LocalDraftView(
+        text="",
+        status="empty",
+        canonical_text=None,
+        candidate_moves=set(),
+        autocompletions=[],
+        promotion_prompt_position=None,
+        submit_text=None,
+    )
+
+
+def _resolved_view(
+    *,
+    text: str,
+    candidate: vt.MovePreviewCandidate,
+) -> LocalDraftView:
+    return LocalDraftView(
+        text=text,
+        status="resolved",
+        canonical_text=candidate.canonical_text,
+        candidate_moves={(candidate.from_square, candidate.to_square)},
+        autocompletions=[],
+        promotion_prompt_position=None,
+        submit_text=candidate.canonical_text,
+    )
+
+
+def _candidate_spellings(
+    candidate: vt.MovePreviewCandidate,
+) -> tuple[str, ...]:
+    values = {candidate.canonical_text}
+    values.update(candidate.aliases)
+    return tuple(sorted(value for value in values if value))
+
+
+def _candidate_edges(
+    candidates: list[vt.MovePreviewCandidate],
+) -> set[tuple[Square, Square]]:
+    return {(candidate.from_square, candidate.to_square) for candidate in candidates}
+
+
+def _canonical_autocompletions(
+    candidates: list[vt.MovePreviewCandidate],
+    *,
+    limit: int = 12,
+) -> list[str]:
+    seen: set[str] = set()
+    values: list[str] = []
+
+    for candidate in sorted(candidates, key=lambda item: item.canonical_text):
+        if candidate.canonical_text in seen:
+            continue
+
+        seen.add(candidate.canonical_text)
+        values.append(candidate.canonical_text)
+
+        if len(values) >= limit:
+            break
+
+    return values
+
+
+def _is_promotion_family(
+    candidates: list[vt.MovePreviewCandidate],
+) -> bool:
+    if len(candidates) < 2:
+        return False
+
+    first = candidates[0]
+
+    if first.promotion_prompt_position is None:
+        return False
+
+    return all(
+        candidate.from_square == first.from_square
+        and candidate.to_square == first.to_square
+        and candidate.promotion_piece is not None
+        and candidate.promotion_prompt_position == first.promotion_prompt_position
+        for candidate in candidates
+    )
+
+
+def _common_promotion_prompt_position(
+    candidates: list[vt.MovePreviewCandidate],
+) -> Square | None:
+    positions = {
+        candidate.promotion_prompt_position
+        for candidate in candidates
+        if candidate.promotion_prompt_position is not None
+    }
+
+    if len(positions) != 1:
+        return None
+
+    return next(iter(positions))
+
+
+def _normalize(text: str) -> str:
+    return "".join(text.strip().split()).replace("0", "O").upper()

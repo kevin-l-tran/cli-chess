@@ -4,6 +4,7 @@ Square = tuple[int, int]
 
 PlayerSide = Literal["white", "black"]
 GameMode = Literal["local", "bot", "online"]
+PromotionPiece = Literal["Q", "R", "B", "N"]
 
 ParticipantRole = Literal[
     "white",

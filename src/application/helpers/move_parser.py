@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from src.application.viewer_types import DraftStatus
+from src.shared.protocol_types import Square
 from src.engine.moves import (
     Move,
     get_captured_piece,
@@ -9,7 +11,6 @@ from src.engine.moves import (
     get_piece,
     get_promotion,
 )
-from ..legacy.session_types import ParseStatus, Square
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,7 @@ class ParseResult:
             `raw_text` after trimming surrounding whitespace and removing internal
             spaces.
 
-        status (ParseStatus):
+        status (DraftStatus):
             Parse status for the current input: `"empty"`, `"no_match"`,
             `"ambiguous"`, or `"resolved"`.
 
@@ -47,7 +48,7 @@ class ParseResult:
 
     raw_text: str
     normalized_text: str
-    status: ParseStatus
+    status: DraftStatus
     matching_moves: list[Move]
     matching_spellings: list[str]
     source_to_target_highlights: list[tuple[Square, Square]]
@@ -189,7 +190,7 @@ def get_canonical(
     return text
 
 
-def _get_spellings(move: Move, legal_moves: set[Move]) -> set[str]:
+def get_spellings(move: Move, legal_moves: set[Move]) -> set[str]:
     """Returns the SAN/SAN-compatible representations of a move."""
     spellings = []
 
@@ -220,7 +221,7 @@ def _collect_matches(
     matched_spellings: set[str] = set()
 
     for move in sorted(legal_moves, key=get_canonical):
-        spellings = sorted(_get_spellings(move, legal_moves))
+        spellings = sorted(get_spellings(move, legal_moves))
         matched_for_move = [s for s in spellings if s.startswith(normalized)]
         if matched_for_move:
             move_to_spellings.append((move, matched_for_move))
@@ -272,7 +273,7 @@ def parse(text: str, legal_moves: set[Move]) -> ParseResult:
     ]
 
     if not matching_moves:
-        status: ParseStatus = "no_match"
+        status: DraftStatus = "no_match"
         resolved_move = None
         canonical_text = None
     elif len(matching_moves) == 1:

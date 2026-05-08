@@ -275,7 +275,7 @@ def test_online_preview_hints_are_omitted_but_local_hints_are_available() -> Non
 
     assert local_view.preview_hints is not None
     assert local_view.preview_hints.base_ply == local_view.current_ply
-    assert local_view.preview_hints.legal_move_texts
+    assert local_view.preview_hints.legal_moves
 
     assert online_view.preview_hints is None
 

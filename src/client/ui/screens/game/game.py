@@ -12,7 +12,7 @@ from src.application.local_draft_controller import LocalDraftController
 from src.application.viewer_types import LocalDraftView, ViewerSessionView
 from src.client.ui.models.setup_models import SetupSelection
 from src.client.ui.screens.game.debounced_input import DebouncedTextInput
-from src.client.ui.screens.game.game_interactor import GameInteractor, PromotionPiece
+from src.client.ui.screens.game.game_interactor import GameInteractor
 from src.client.ui.screens.game.game_layout import compose_game_screen
 from src.client.ui.screens.game.game_view import GameScreenView
 from src.client.ui.widgets.game.chess_board import ChessBoard
@@ -21,7 +21,7 @@ from src.client.ui.widgets.game.game_over_panel import GameOverPanel
 from src.client.ui.widgets.game.promotion_picker import PromotionPicker
 from src.client.ui.widgets.game.side_panel import GameSidePanel
 from src.shared.ids import new_request_id
-from src.shared.protocol_types import PlayerSide
+from src.shared.protocol_types import PlayerSide, PromotionPiece
 
 
 class GameScreen(Screen):

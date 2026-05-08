@@ -1,10 +1,17 @@
+from typing import cast
+
 from src.application import viewer_types as vt
-from src.application.helpers.move_parser import get_canonical
+from src.application.helpers.move_parser import get_canonical, get_spellings
 from src.engine.board import Piece, get_name, is_white
 from src.engine.game import Game
-from src.engine.moves import Move, get_final_position, get_initial_position
+from src.engine.moves import (
+    Move,
+    get_final_position,
+    get_initial_position,
+    get_promotion,
+)
 from src.shared.ids import LobbyId, PlayerId
-from src.shared.protocol_types import ConnectionState, PlayerSide
+from src.shared.protocol_types import ConnectionState, PlayerSide, PromotionPiece
 
 from .authoritative_permissions import ViewerPermissions
 from .authoritative_session_types import (
@@ -53,13 +60,13 @@ class AuthoritativeSessionProjection:
     ) -> vt.MovePreviewHints | None:
         if not include_preview_hints or phase.is_game_over:
             return None
+
         return vt.MovePreviewHints(
             base_ply=current_ply,
-            legal_move_texts=sorted(get_canonical(move) for move in legal_moves),
-            legal_move_edges={
-                (get_initial_position(move), get_final_position(move))
-                for move in legal_moves
-            },
+            legal_moves=sorted(
+                (_build_preview_candidate(move, legal_moves) for move in legal_moves),
+                key=lambda candidate: candidate.canonical_text,
+            ),
         )
 
     @staticmethod
@@ -174,4 +181,22 @@ def _build_outcome(terminal: TerminalState | None) -> vt.OutcomeView | None:
         winner=terminal.winner,
         reason=terminal.reason,
         banner=banner,
+    )
+
+
+def _build_preview_candidate(
+    move: Move,
+    legal_moves: set[Move],
+) -> vt.MovePreviewCandidate:
+    from_square = get_initial_position(move)
+    to_square = get_final_position(move)
+    promotion_piece = cast(PromotionPiece, get_promotion(move))
+
+    return vt.MovePreviewCandidate(
+        canonical_text=get_canonical(move),
+        aliases=get_spellings(move, legal_moves),
+        from_square=from_square,
+        to_square=to_square,
+        promotion_piece=promotion_piece,
+        promotion_prompt_position=to_square if promotion_piece is not None else None,
     )
