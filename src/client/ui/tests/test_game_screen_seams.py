@@ -1,9 +1,11 @@
+import asyncio
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Awaitable
 
 import pytest
 
 from src.application.command_types import CommandResult
+from src.application.local_draft_controller import LocalDraftController
 from src.application.viewer_types import (
     AuthoritativeSnapshot,
     LocalDraftView,
@@ -12,6 +14,7 @@ from src.application.viewer_types import (
 from src.client.ui.models.setup_models import SetupSelection
 from src.client.ui.screens.game import game as game_screen_module
 from src.client.ui.screens.game.game import GameScreen
+from src.client.ui.screens.game.game_interactor import GameInteractor
 from src.shared.ids import LobbyId, PlayerId, RequestId
 from src.shared.protocol_types import PlayerSide
 
@@ -103,11 +106,13 @@ class FakeClient:
         self.accept_draw_calls: list[dict[str, Any]] = []
         self.resign_calls: list[dict[str, Any]] = []
         self.undo_calls: list[dict[str, Any]] = []
+        self.get_view_calls = 0
 
-    def get_view(self) -> ViewerSessionView:
+    async def get_view(self) -> ViewerSessionView:
+        self.get_view_calls += 1
         return self.view
 
-    def submit_move(
+    async def submit_move(
         self,
         move_text: str,
         *,
@@ -130,7 +135,7 @@ class FakeClient:
             self.view = self.submit_result.view
         return self.submit_result
 
-    def accept_draw_offer(
+    async def accept_draw_offer(
         self,
         *,
         request_id: RequestId,
@@ -141,16 +146,16 @@ class FakeClient:
         )
         return CommandResult(ok=True, status="accepted", view=self.view)
 
-    def resign(self, *, request_id: RequestId) -> CommandResult:
+    async def resign(self, *, request_id: RequestId) -> CommandResult:
         self.resign_calls.append({"request_id": request_id})
         return CommandResult(ok=True, status="accepted", view=self.view)
 
-    def request_undo(self, *, request_id: RequestId) -> CommandResult:
+    async def request_undo(self, *, request_id: RequestId) -> CommandResult:
         self.undo_calls.append({"request_id": request_id})
         return CommandResult(ok=True, status="accepted", view=self.view)
 
 
-class FakeDraft:
+class FakeDraft(LocalDraftController):
     def __init__(self, initial: LocalDraftView | None = None) -> None:
         self.current = initial or make_draft()
         self.sync_calls: list[ViewerSessionView] = []
@@ -207,6 +212,11 @@ class FocusTarget:
         self.focus_calls += 1
 
 
+def run_worker_immediately(awaitable: Awaitable[Any], **_kwargs: Any) -> Any:
+    """Run a Textual worker coroutine immediately for seam-level unit tests."""
+    return asyncio.run(awaitable) # type: ignore
+
+
 @pytest.fixture
 def screen_harness(monkeypatch: pytest.MonkeyPatch):
     view = make_view(current_ply=3)
@@ -214,11 +224,16 @@ def screen_harness(monkeypatch: pytest.MonkeyPatch):
     draft = FakeDraft(make_draft())
     screen = GameScreen(client=client, draft=draft, selection=make_selection())
 
+    # The real screen builds the interactor in async on_mount(). These tests do
+    # not mount a Textual app, so initialize the async interactor directly.
+    screen.interactor = asyncio.run(GameInteractor.create(client=client, draft=draft))
+
     refresh_calls: list[None] = []
     focus_target = FocusTarget()
 
     monkeypatch.setattr(screen, "_refresh_view", lambda: refresh_calls.append(None))
     monkeypatch.setattr(screen, "_move_input_widget", lambda: focus_target)
+    monkeypatch.setattr(screen, "run_worker", run_worker_immediately)
     monkeypatch.setattr(
         screen,
         "set_timer",

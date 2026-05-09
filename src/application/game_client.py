@@ -6,11 +6,18 @@ from src.shared.ids import RequestId
 
 
 class GameClient(Protocol):
-    def get_view(self) -> ViewerSessionView:
+    """
+    Async UI-facing interface for committed game state and commands.
+
+    Implementations may be local, bot-backed, or remote. Local clients can
+    return immediately, while remote clients can await network I/O.
+    """
+
+    async def get_view(self) -> ViewerSessionView:
         """Return the latest viewer-specific authoritative view."""
         ...
 
-    def submit_move(
+    async def submit_move(
         self,
         move_text: str,
         *,
@@ -21,7 +28,7 @@ class GameClient(Protocol):
         """Submit a committed move for the current viewer."""
         ...
 
-    def accept_draw_offer(
+    async def accept_draw_offer(
         self,
         *,
         request_id: RequestId,
@@ -30,7 +37,7 @@ class GameClient(Protocol):
         """Accept a pending draw offer if eligible."""
         ...
 
-    def resign(
+    async def resign(
         self,
         *,
         request_id: RequestId,
@@ -38,7 +45,7 @@ class GameClient(Protocol):
         """Resign on behalf of the current viewer."""
         ...
 
-    def request_undo(
+    async def request_undo(
         self,
         *,
         request_id: RequestId,

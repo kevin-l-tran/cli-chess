@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 
 from src.application.command_types import CommandResult
 from src.application.game_client import GameClient
@@ -22,9 +23,14 @@ class GameInteractor:
     latest_view: ViewerSessionView
     latest_draft_view: LocalDraftView
     offer_draw: bool = False
+    _client_lock: asyncio.Lock = field(
+        default_factory=asyncio.Lock,
+        init=False,
+        repr=False,
+    )
 
     @classmethod
-    def create(
+    async def create(
         cls,
         *,
         client: GameClient,
@@ -36,7 +42,7 @@ class GameInteractor:
         The initial authoritative view is fetched from the client, then the
         draft controller is synchronized to that view before use.
         """
-        view = client.get_view()
+        view = await client.get_view()
         draft.sync_to_view(view)
         return cls(
             client=client,
@@ -45,13 +51,16 @@ class GameInteractor:
             latest_draft_view=draft.view(),
         )
 
-    def refresh_from_client(self) -> None:
+    async def refresh_from_client(self) -> None:
         """Fetch the latest view from the client and sync the local draft."""
-        self.replace_view(self.client.get_view())
+        async with self._client_lock:
+            self.replace_view(await self.client.get_view())
 
     def apply_text(self, text: str) -> None:
         """
         Apply typed move text to the local draft when submission is allowed.
+
+        This updates only draft state; no committed game command is sent.
         """
         if self.latest_view.can_submit_for_side is None:
             return
@@ -60,6 +69,9 @@ class GameInteractor:
     def click_square(self, square: Square) -> bool:
         """
         Apply a board-square click to the local draft.
+
+        Returns True when the resulting draft is resolved and the UI should
+        auto-confirm the move.
         """
         if self.latest_view.can_submit_for_side is None:
             return False
@@ -70,6 +82,8 @@ class GameInteractor:
     def select_promotion_piece(self, piece: PromotionPiece) -> None:
         """
         Resolve a pending promotion draft with the selected promotion piece.
+
+        The selection is ignored when the current viewer cannot submit a move.
         """
         if self.latest_view.can_submit_for_side is None:
             return
@@ -78,11 +92,18 @@ class GameInteractor:
 
     def toggle_draw_offer(self) -> None:
         """Toggle whether the next submitted move should include a draw offer."""
+        if not self.latest_view.can_offer_draw:
+            self.offer_draw = False
+            return
+
         self.offer_draw = not self.offer_draw
 
     def clear_invalid_offer_draw_state(self) -> None:
         """
         Clear a pending draw-offer flag when it is no longer valid.
+
+        This prevents stale UI state from offering a draw after the game ends
+        or when the latest permissions no longer allow draw offers.
         """
         snapshot = self.latest_view.snapshot
         if self.offer_draw and (
@@ -90,82 +111,95 @@ class GameInteractor:
         ):
             self.offer_draw = False
 
-    def confirm_move(self, *, request_id: RequestId) -> CommandResult | None:
+    async def confirm_move(self, *, request_id: RequestId) -> CommandResult | None:
         """
         Submit the current resolved draft as an authoritative move command.
 
         Returns None when the viewer cannot submit or the draft has no submit
         text. On accepted results, the draft and draw-offer flag are cleared.
         """
-        view = self.latest_view
-        draft = self.latest_draft_view
+        async with self._client_lock:
+            view = self.latest_view
+            draft = self.latest_draft_view
 
-        if view.can_submit_for_side is None:
-            return None
-        if draft.submit_text is None:
-            return None
+            if view.can_submit_for_side is None:
+                return None
+            if draft.submit_text is None:
+                return None
 
-        result = self.client.submit_move(
-            draft.submit_text,
-            request_id=request_id,
-            expected_ply=view.current_ply,
-            offer_draw=self.offer_draw,
-        )
+            result = await self.client.submit_move(
+                draft.submit_text,
+                request_id=request_id,
+                expected_ply=view.current_ply,
+                offer_draw=self.offer_draw,
+            )
 
-        if result.view is not None:
-            self.replace_view(result.view)
+            if result.view is not None:
+                self.replace_view(result.view)
 
-        if result.ok:
-            self.latest_draft_view = self.draft.clear()
-            self.offer_draw = False
+            if result.ok:
+                self.latest_draft_view = self.draft.clear()
+                self.offer_draw = False
 
-        return result
+            return result
 
-    def accept_draw_offer(self, *, request_id: RequestId) -> CommandResult | None:
+    async def accept_draw_offer(self, *, request_id: RequestId) -> CommandResult | None:
         """
         Accept the currently available draw offer, if permitted.
+
+        The returned command result may include a replacement authoritative
+        view, which is applied immediately.
         """
-        view = self.latest_view
-        if not view.can_accept_draw:
-            return None
+        async with self._client_lock:
+            view = self.latest_view
+            if not view.can_accept_draw:
+                return None
 
-        result = self.client.accept_draw_offer(
-            request_id=request_id,
-            expected_ply=view.current_ply,
-        )
-        if result.view is not None:
-            self.replace_view(result.view)
+            result = await self.client.accept_draw_offer(
+                request_id=request_id,
+                expected_ply=view.current_ply,
+            )
+            if result.view is not None:
+                self.replace_view(result.view)
 
-        self.offer_draw = False
-        return result
+            self.offer_draw = False
+            return result
 
-    def request_undo(self, *, request_id: RequestId) -> CommandResult | None:
+    async def request_undo(self, *, request_id: RequestId) -> CommandResult | None:
         """
         Request an undo through the authoritative game client, if permitted.
+
+        Any returned view replaces the local authoritative view and resyncs the
+        local draft controller.
         """
-        if not self.latest_view.can_request_undo:
-            return None
+        async with self._client_lock:
+            if not self.latest_view.can_request_undo:
+                return None
 
-        result = self.client.request_undo(request_id=request_id)
-        if result.view is not None:
-            self.replace_view(result.view)
+            result = await self.client.request_undo(request_id=request_id)
+            if result.view is not None:
+                self.replace_view(result.view)
 
-        self.offer_draw = False
-        return result
+            self.offer_draw = False
+            return result
 
-    def resign(self, *, request_id: RequestId) -> CommandResult | None:
+    async def resign(self, *, request_id: RequestId) -> CommandResult | None:
         """
         Resign the game through the authoritative game client, if permitted.
+
+        Any returned view replaces the local authoritative view and the pending
+        draw-offer flag is cleared.
         """
-        if not self.latest_view.can_resign:
-            return None
+        async with self._client_lock:
+            if not self.latest_view.can_resign:
+                return None
 
-        result = self.client.resign(request_id=request_id)
-        if result.view is not None:
-            self.replace_view(result.view)
+            result = await self.client.resign(request_id=request_id)
+            if result.view is not None:
+                self.replace_view(result.view)
 
-        self.offer_draw = False
-        return result
+            self.offer_draw = False
+            return result
 
     def replace_view(self, view: ViewerSessionView) -> None:
         """
@@ -177,10 +211,14 @@ class GameInteractor:
         self.latest_view = view
         self.draft.sync_to_view(view)
         self.latest_draft_view = self.draft.view()
+        self.clear_invalid_offer_draw_state()
 
     def should_auto_confirm_click(self) -> bool:
         """
         Return whether the current click-built draft should auto-submit.
+
+        Auto-confirm is allowed only for resolved non-promotion drafts in an
+        active game where the viewer can submit for the current side.
         """
         view = self.latest_view
         draft = self.latest_draft_view

@@ -44,14 +44,11 @@ class GameScreen(Screen):
         self.selection = selection
         self.player_side = selection.require_player_side()
 
-        self.interactor = GameInteractor.create(client=client, draft=draft)
+        self._client = client
+        self._draft = draft
+        self.interactor: GameInteractor | None = None
+        self._screen_view: GameScreenView | None = None
 
-        self._screen_view = GameScreenView(
-            screen=self,
-            selection=selection,
-            player_side=self.player_side,
-            interactor=self.interactor,
-        )
         self._input_buffer = DebouncedTextInput(delay_seconds=0.04)
 
     @property
@@ -72,16 +69,29 @@ class GameScreen(Screen):
 
     @property
     def _syncing_input(self) -> bool:
+        if self._screen_view is None:
+            return False
         return self._screen_view.syncing_input
 
     @_syncing_input.setter
     def _syncing_input(self, value: bool) -> None:
-        self._screen_view.syncing_input = value
+        self._require_screen_view().syncing_input = value
 
     def compose(self) -> ComposeResult:
         yield from compose_game_screen()
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
+        self.interactor = await GameInteractor.create(
+            client=self._client,
+            draft=self._draft,
+        )
+        self._screen_view = GameScreenView(
+            screen=self,
+            selection=self.selection,
+            player_side=cast(PlayerSide, self.player_side),
+            interactor=self.interactor,
+        )
+
         self._screen_view.bind_widgets()
         self._sync_responsive_classes()
         self._refresh_view()
@@ -90,22 +100,45 @@ class GameScreen(Screen):
         # Keep clocks/bot state fresh without forcing a full repaint every frame.
         # This is intentionally slower than the old 0.5s full refresh because the
         # styled board is widget-heavy and Textual hover/input events already repaint.
-        self.set_interval(1.0, self._periodic_refresh)
+        self.set_interval(1.0, self._queue_periodic_refresh)
 
     def on_resize(self, event: Resize) -> None:
         self._sync_responsive_classes()
 
+    def _require_interactor(self) -> GameInteractor:
+        if self.interactor is None:
+            raise RuntimeError("Game interactor is not ready.")
+        return self.interactor
+
+    def _require_screen_view(self) -> GameScreenView:
+        if self._screen_view is None:
+            raise RuntimeError("Game screen view is not ready.")
+        return self._screen_view
+
     def _sync_responsive_classes(self) -> None:
+        if self._screen_view is None:
+            return
         self._screen_view.sync_responsive_classes()
 
-    def _periodic_refresh(self) -> None:
+    def _queue_periodic_refresh(self) -> None:
+        if self.interactor is None:
+            return
         if self._input_buffer.has_pending():
             return
 
-        self.interactor.refresh_from_client()
+        self.run_worker(
+            self._periodic_refresh_async(),
+            group="game-refresh",
+            exclusive=True,
+        )
+
+    async def _periodic_refresh_async(self) -> None:
+        await self._require_interactor().refresh_from_client()
         self._refresh_view()
 
     def on_input_changed(self, event: Input.Changed) -> None:
+        if self.interactor is None:
+            return
         if event.input.id != "move-input" or self._syncing_input:
             return
 
@@ -121,7 +154,7 @@ class GameScreen(Screen):
         if text is None:
             return
 
-        self.interactor.apply_text(text)
+        self._require_interactor().apply_text(text)
 
         if refresh:
             self._refresh_view()
@@ -134,10 +167,11 @@ class GameScreen(Screen):
     def on_chess_board_square_pressed(self, msg: ChessBoard.SquarePressed) -> None:
         self._apply_pending_input_now(refresh=False)
 
-        if self.interactor.latest_view.can_submit_for_side is None:
+        interactor = self._require_interactor()
+        if interactor.latest_view.can_submit_for_side is None:
             return
 
-        self.interactor.click_square(msg.square)
+        interactor.click_square(msg.square)
         if self._should_auto_confirm_click():
             self._confirm_move()
             return
@@ -151,10 +185,11 @@ class GameScreen(Screen):
     ) -> None:
         self._apply_pending_input_now(refresh=False)
 
-        if self.interactor.latest_view.can_submit_for_side is None:
+        interactor = self._require_interactor()
+        if interactor.latest_view.can_submit_for_side is None:
             return
 
-        self.interactor.select_promotion_piece(cast(PromotionPiece, msg.piece))
+        interactor.select_promotion_piece(cast(PromotionPiece, msg.piece))
         self._refresh_view()
         self._move_input_widget().focus()
 
@@ -163,11 +198,13 @@ class GameScreen(Screen):
         msg: GameControls.ActionPressed,
     ) -> None:
         self._apply_pending_input_now(refresh=False)
+        interactor = self._require_interactor()
+
         match msg.action:
             case "confirm":
                 self._confirm_move()
             case "toggle_draw_offer":
-                self.interactor.toggle_draw_offer()
+                interactor.toggle_draw_offer()
                 self._refresh_view()
             case "accept_draw":
                 self._accept_draw_offer()
@@ -186,7 +223,14 @@ class GameScreen(Screen):
         self._request_undo()
 
     def _confirm_move(self) -> None:
-        result = self.interactor.confirm_move(request_id=new_request_id())
+        if self.interactor is None:
+            return
+        self.run_worker(self._confirm_move_async(), group="game-command")
+
+    async def _confirm_move_async(self) -> None:
+        result = await self._require_interactor().confirm_move(
+            request_id=new_request_id(),
+        )
         if result is None:
             return
 
@@ -194,21 +238,42 @@ class GameScreen(Screen):
         self._move_input_widget().focus()
 
     def _accept_draw_offer(self) -> None:
-        result = self.interactor.accept_draw_offer(request_id=new_request_id())
+        if self.interactor is None:
+            return
+        self.run_worker(self._accept_draw_offer_async(), group="game-command")
+
+    async def _accept_draw_offer_async(self) -> None:
+        result = await self._require_interactor().accept_draw_offer(
+            request_id=new_request_id(),
+        )
         if result is None:
             return
 
         self._refresh_view()
 
     def _request_undo(self) -> None:
-        result = self.interactor.request_undo(request_id=new_request_id())
+        if self.interactor is None:
+            return
+        self.run_worker(self._request_undo_async(), group="game-command")
+
+    async def _request_undo_async(self) -> None:
+        result = await self._require_interactor().request_undo(
+            request_id=new_request_id(),
+        )
         if result is None:
             return
 
         self._refresh_view()
 
     def _resign(self) -> None:
-        result = self.interactor.resign(request_id=new_request_id())
+        if self.interactor is None:
+            return
+        self.run_worker(self._resign_async(), group="game-command")
+
+    async def _resign_async(self) -> None:
+        result = await self._require_interactor().resign(
+            request_id=new_request_id(),
+        )
         if result is None:
             return
 
@@ -217,18 +282,18 @@ class GameScreen(Screen):
     def _replace_view(self, view: ViewerSessionView) -> None:
         # Compatibility method for tests/callers that still patch or invoke this
         # private method. New code should prefer interactor.replace_view().
-        self.interactor.replace_view(view)
+        self._require_interactor().replace_view(view)
 
     def _should_auto_confirm_click(self) -> bool:
         # Compatibility method for tests/callers that still patch or invoke this
         # private method. New code should prefer interactor.should_auto_confirm_click().
-        return self.interactor.should_auto_confirm_click()
+        return self._require_interactor().should_auto_confirm_click()
 
     def _refresh_view(self) -> None:
-        self._screen_view.sync_all(pending_move_text=self._pending_move_text)
+        self._require_screen_view().sync_all(pending_move_text=self._pending_move_text)
 
     def _sync_move_input(self, view: ViewerSessionView, draft: LocalDraftView) -> None:
-        self._screen_view.sync_move_input(
+        self._require_screen_view().sync_move_input(
             view,
             draft,
             pending_move_text=self._pending_move_text,
@@ -239,40 +304,40 @@ class GameScreen(Screen):
         view: ViewerSessionView,
         draft: LocalDraftView,
     ) -> None:
-        self._screen_view.sync_move_composer(view, draft)
+        self._require_screen_view().sync_move_composer(view, draft)
 
     def _update_text(self, cache_key: str, widget: Static, text: str) -> None:
-        self._screen_view.update_text(cache_key, widget, text)
+        self._require_screen_view().update_text(cache_key, widget, text)
 
     def _board_widget(self) -> ChessBoard:
-        return self._screen_view.board_widget()
+        return self._require_screen_view().board_widget()
 
     def _board_orientation_for(self, view: ViewerSessionView) -> PlayerSide:
-        return self._screen_view.board_orientation_for(view)
+        return self._require_screen_view().board_orientation_for(view)
 
     def _move_input_widget(self) -> Input:
-        return self._screen_view.move_input_widget()
+        return self._require_screen_view().move_input_widget()
 
     def _side_panel_widget(self) -> GameSidePanel:
-        return self._screen_view.side_panel_widget()
+        return self._require_screen_view().side_panel_widget()
 
     def _actions_panel_widget(self) -> Vertical:
-        return self._screen_view.actions_panel_widget()
+        return self._require_screen_view().actions_panel_widget()
 
     def _game_over_panel_widget(self) -> GameOverPanel:
-        return self._screen_view.game_over_panel_widget()
+        return self._require_screen_view().game_over_panel_widget()
 
     def _controls_widget(self) -> GameControls:
-        return self._screen_view.controls_widget()
+        return self._require_screen_view().controls_widget()
 
     def _promotion_picker_widget(self) -> PromotionPicker:
-        return self._screen_view.promotion_picker_widget()
+        return self._require_screen_view().promotion_picker_widget()
 
     def _draft_status_widget(self) -> Static:
-        return self._screen_view.draft_status_widget()
+        return self._require_screen_view().draft_status_widget()
 
     def _autocomplete_widget(self) -> Static:
-        return self._screen_view.autocomplete_widget()
+        return self._require_screen_view().autocomplete_widget()
 
     def _feedback_widget(self) -> Static:
-        return self._screen_view.feedback_widget()
+        return self._require_screen_view().feedback_widget()
