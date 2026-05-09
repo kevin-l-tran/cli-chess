@@ -2,6 +2,56 @@
 
 A terminal-based chess program planned as a layered system (engine, application, UI, adapters) that will support local play, external engine integration, and a secure online multiplayer mode implemented via a custom cryptographic server.
 
+## Running the Project
+
+### 1. Install Python requirements
+
+From the root of the repository, install the project dependencies:
+
+```bash
+pip install -r requirements.txt
+````
+
+Depending on your environment, you may need to use a specific Python interpreter:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+or:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+### 2. Run the client
+
+From the root of the repository, start the terminal chess client with:
+
+```bash
+python -m src.client.main
+```
+
+Replace `python` with the Python interpreter used in your environment if needed:
+
+```bash
+python3 -m src.client.main
+```
+
+### 3. Run the server
+
+From the root of the repository, start the development server with:
+
+```bash
+python -m uvicorn src.server.main:app --reload
+```
+
+If your environment uses `python3`, run:
+
+```bash
+python3 -m uvicorn src.server.main:app
+```
+
 ## Target feature set
 
 ### 1) Responsive terminal UI (TUI)
