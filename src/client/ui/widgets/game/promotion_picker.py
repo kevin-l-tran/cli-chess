@@ -1,39 +1,71 @@
 from typing import cast
 
 from textual.app import ComposeResult
-from textual.containers import Grid
+from textual.containers import Horizontal
+from textual.events import Click, Key
 from textual.message import Message
-from textual.widgets import Button
+from textual.widgets import Static
 
 from src.shared.protocol_types import PromotionPiece
 
 
-class PromotionPicker(Grid):
+class PromotionButton(Static):
+    can_focus = True
+
+    def __init__(self, label: str, piece: PromotionPiece, *, id: str) -> None:
+        super().__init__(
+            f"[ {label} ]",
+            id=id,
+            classes="promotion-button",
+            markup=False,
+        )
+        self.piece = piece
+
+    def on_click(self, event: Click) -> None:
+        event.stop()
+        self.post_message(
+            PromotionPicker.PieceSelected(cast(PromotionPiece, self.piece))
+        )
+
+    def on_key(self, event: Key) -> None:
+        if event.key in {"enter", "space"}:
+            event.stop()
+            self.post_message(
+                PromotionPicker.PieceSelected(cast(PromotionPiece, self.piece))
+            )
+
+
+class PromotionPicker(Horizontal):
     DEFAULT_CSS = """
     PromotionPicker {
-        height: auto;
+        height: 1;
+        min-height: 1;
         width: 1fr;
-        grid-size: 4;
-        grid-columns: 1fr 1fr 1fr 1fr;
-        grid-gutter: 0 1;
+        align: center middle;
         margin-top: 1;
     }
 
-    PromotionPicker Button {
-        width: 1fr;
-        height: 3;
+    PromotionPicker .promotion-button {
+        width: auto;
         min-width: 8;
-        margin: 0;
-        border: ascii $border;
+        height: 1;
+        margin: 0 1;
+        padding: 0;
+        border: none;
         background: $background;
         color: $foreground;
+        content-align: center middle;
+        text-style: bold;
     }
 
-    PromotionPicker Button:hover,
-    PromotionPicker Button:focus {
-        border: heavy $accent;
+    PromotionPicker .promotion-button:hover {
         color: $accent;
-        text-style: bold;
+    }
+
+    PromotionPicker .promotion-button:focus {
+        color: $foreground;
+        background: $surface;
+        text-style: bold reverse;
     }
     """
 
@@ -45,21 +77,7 @@ class PromotionPicker(Grid):
             self.piece = piece
 
     def compose(self) -> ComposeResult:
-        yield Button("Queen", id="promote-q")
-        yield Button("Rook", id="promote-r")
-        yield Button("Bishop", id="promote-b")
-        yield Button("Knight", id="promote-n")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        pieces = {
-            "promote-q": "Q",
-            "promote-r": "R",
-            "promote-b": "B",
-            "promote-n": "N",
-        }
-
-        if event.button.id in pieces:
-            event.stop()
-            self.post_message(
-                self.PieceSelected(cast(PromotionPiece, pieces[event.button.id]))
-            )
+        yield PromotionButton("Q", cast(PromotionPiece, "Q"), id="promote-q")
+        yield PromotionButton("R", cast(PromotionPiece, "R"), id="promote-r")
+        yield PromotionButton("B", cast(PromotionPiece, "B"), id="promote-b")
+        yield PromotionButton("N", cast(PromotionPiece, "N"), id="promote-n")
