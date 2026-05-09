@@ -1,4 +1,4 @@
-from typing import Literal, Protocol
+from typing import Literal
 
 from src.application import viewer_types as vt
 from src.application.local_click_draft_helper import click_to_move_text
@@ -6,36 +6,7 @@ from src.application.viewer_types import LocalDraftView, ViewerSessionView
 from src.shared.protocol_types import Square
 
 
-class LocalDraftController(Protocol):
-    def sync_to_view(self, view: ViewerSessionView) -> None:
-        """Refresh preview hints and mark or clear stale draft state."""
-        ...
-
-    def set_text(self, text: str) -> LocalDraftView:
-        """Update typed draft locally."""
-        ...
-
-    def clear(self) -> LocalDraftView:
-        """Clear local draft."""
-        ...
-
-    def click_square(self, square: Square) -> LocalDraftView:
-        """Update local draft from a logical board-square click."""
-        ...
-
-    def select_promotion_piece(
-        self,
-        piece: Literal["Q", "R", "B", "N"],
-    ) -> LocalDraftView:
-        """Resolve a local promotion draft if possible."""
-        ...
-
-    def view(self) -> LocalDraftView:
-        """Return current local draft view."""
-        ...
-
-
-class DefaultLocalDraftController:
+class LocalDraftController:
     """
     Default client-local draft controller.
 
@@ -132,15 +103,11 @@ class DefaultLocalDraftController:
             )
             return self._view
 
-        if len(matches) == 1:
-            self._view = _resolved_view(
-                text=text,
-                candidate=matches[0],
-            )
-            return self._view
-
         if _is_promotion_family(matches):
-            self._promotion_family = tuple(matches)
+            prompt_position = _get_promotion_prompt_position(text, matches)
+            self._promotion_family = (
+                tuple(matches) if prompt_position is not None else ()
+            )
 
             self._view = LocalDraftView(
                 text=text,
@@ -148,8 +115,15 @@ class DefaultLocalDraftController:
                 canonical_text=None,
                 candidate_moves=_candidate_edges(matches),
                 autocompletions=_canonical_autocompletions(matches),
-                promotion_prompt_position=_common_promotion_prompt_position(matches),
+                promotion_prompt_position=prompt_position,
                 submit_text=None,
+            )
+            return self._view
+
+        if len(matches) == 1:
+            self._view = _resolved_view(
+                text=text,
+                candidate=matches[0],
             )
             return self._view
 
@@ -324,9 +298,24 @@ def _is_promotion_family(
     )
 
 
-def _common_promotion_prompt_position(
+def _get_promotion_prompt_position(
+    text: str,
     candidates: list[vt.MovePreviewCandidate],
 ) -> Square | None:
+    if not _is_promotion_family(candidates):
+        return None
+
+    canonical_texts = [
+        candidate.canonical_text
+        for candidate in sorted(candidates, key=lambda item: item.canonical_text)
+    ]
+    prefix = _common_prefix(canonical_texts)
+
+    if _normalize(text) != _normalize(prefix):
+        return None
+    if not prefix.endswith("="):
+        return None
+
     positions = {
         candidate.promotion_prompt_position
         for candidate in candidates
@@ -337,6 +326,21 @@ def _common_promotion_prompt_position(
         return None
 
     return next(iter(positions))
+
+
+def _common_prefix(values: list[str]) -> str:
+    if not values:
+        return ""
+
+    prefix = values[0]
+
+    for value in values[1:]:
+        i = 0
+        while i < len(prefix) and i < len(value) and prefix[i] == value[i]:
+            i += 1
+        prefix = prefix[:i]
+
+    return prefix
 
 
 def _normalize(text: str) -> str:

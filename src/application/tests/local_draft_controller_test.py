@@ -1,6 +1,8 @@
 import pytest
 
-from src.application.local_draft_controller import DefaultLocalDraftController
+from src.application.local_draft_controller import (
+    LocalDraftController,
+)
 from src.application.viewer_types import (
     AuthoritativeSnapshot,
     LocalDraftView,
@@ -158,8 +160,8 @@ def promotion_hints() -> MovePreviewHints:
     )
 
 
-def synced_controller(hints: MovePreviewHints | None) -> DefaultLocalDraftController:
-    controller = DefaultLocalDraftController()
+def synced_controller(hints: MovePreviewHints | None) -> LocalDraftController:
+    controller = LocalDraftController()
     controller.sync_to_view(view(hints=hints))
     return controller
 
@@ -175,7 +177,7 @@ def assert_empty(draft: LocalDraftView) -> None:
 
 
 def test_initial_view_is_empty() -> None:
-    controller = DefaultLocalDraftController()
+    controller = LocalDraftController()
 
     assert_empty(controller.view())
 
@@ -476,3 +478,35 @@ def test_unvalidated_text_reparses_when_hints_arrive() -> None:
     assert draft.status == "resolved"
     assert draft.canonical_text == "Pe2-e4"
     assert draft.submit_text == "Pe2-e4"
+
+
+def test_click_new_movable_source_replaces_existing_partial_source_draft(
+    opening_hints: MovePreviewHints,
+) -> None:
+    controller = synced_controller(opening_hints)
+
+    controller.click_square(E2)
+    draft = controller.click_square(G1)
+
+    assert draft.status == "ambiguous"
+    assert draft.text == "Ng1"
+    assert draft.canonical_text is None
+    assert draft.candidate_moves == {(G1, F3), (G1, H3)}
+    assert draft.autocompletions == ["Ng1-f3", "Ng1-h3"]
+    assert draft.promotion_prompt_position is None
+    assert draft.submit_text is None
+
+
+def test_click_promotion_source_only_does_not_show_prompt(
+    promotion_hints: MovePreviewHints,
+) -> None:
+    controller = synced_controller(promotion_hints)
+
+    draft = controller.click_square(E7)
+
+    assert draft.status == "ambiguous"
+    assert draft.text == "Pe7"
+    assert draft.canonical_text is None
+    assert draft.candidate_moves == {(E7, E8)}
+    assert draft.promotion_prompt_position is None
+    assert draft.submit_text is None

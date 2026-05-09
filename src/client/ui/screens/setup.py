@@ -6,14 +6,12 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Static
 
-from src.application.legacy.session import GameSession
-from src.application.legacy.session_client import LegacyGameSessionClient
-from src.application.legacy.session_draft_controller import LegacySessionDraftController
-from src.application.legacy.session_types import (
-    SessionConfig as LegacySessionConfig,
-    TimeControl as LegacyTimeControl,
+from src.application.authoritative_helpers.authoritative_session_types import (
+    TimeControl,
 )
-from src.client.ui.models.setup_models import SetupSelection, SetupTimeControl
+from src.application.local_draft_controller import LocalDraftController
+from src.application.local_game_client import LocalGameClient
+from src.client.ui.models.setup_models import SetupTimeControl
 
 from ..widgets.setup.actions import SetupActions
 from ..widgets.setup.form import SetupForm
@@ -73,9 +71,11 @@ class SetupScreen(Screen):
             return
 
         selection = form.settings().with_resolved_player_side()
-        session = GameSession(_legacy_session_config(selection))
-        client = LegacyGameSessionClient(session)
-        draft = LegacySessionDraftController(session)
+
+        client = LocalGameClient.local(
+            time_control=_time_control(selection.time_control),
+        )
+        draft = LocalDraftController()
 
         self.app.push_screen(
             GameScreen(
@@ -98,21 +98,13 @@ class SetupScreen(Screen):
         self.query_one(SetupForm).cycle_time()
 
 
-def _legacy_session_config(selection: SetupSelection) -> LegacySessionConfig:
-    return LegacySessionConfig(
-        player_side=selection.require_player_side(),
-        opponent=selection.opponent,
-        time_control=_legacy_time_control(selection.time_control),
-    )
-
-
-def _legacy_time_control(
+def _time_control(
     time_control: SetupTimeControl | None,
-) -> LegacyTimeControl | None:
+) -> TimeControl | None:
     if time_control is None:
         return None
 
-    return LegacyTimeControl(
+    return TimeControl(
         initial_seconds=time_control.initial_seconds,
         increment_seconds=time_control.increment_seconds,
     )

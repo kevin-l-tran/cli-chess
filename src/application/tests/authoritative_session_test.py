@@ -4,10 +4,16 @@ import pytest
 
 from src.application.authoritative_helpers.authoritative_session_types import (
     AuthoritativeSessionConfig,
+    TimeControl,
 )
 from src.application.authoritative_session import AuthoritativeGameSession
 from src.application.command_types import CommandResult
 from src.application.helpers.move_parser import get_canonical
+from src.engine.game import (
+    GameConcludedError,
+    IllegalMoveError,
+    NoDrawOfferError,
+)
 from src.shared.ids import LobbyId, PlayerId, RequestId
 
 
@@ -15,6 +21,17 @@ LOCAL = PlayerId("local-controller")
 WHITE = PlayerId("white-player")
 BLACK = PlayerId("black-player")
 SPECTATOR = PlayerId("spectator")
+
+
+class FakeClock:
+    def __init__(self, now_ms: int = 0) -> None:
+        self.now_ms = now_ms
+
+    def __call__(self) -> int:
+        return self.now_ms
+
+    def advance(self, delta_ms: int) -> None:
+        self.now_ms += delta_ms
 
 
 def req(value: str) -> RequestId:
@@ -499,3 +516,495 @@ def test_command_results_always_include_view_for_handled_commands() -> None:
 
     for result in results:
         assert result.view is not None
+
+
+def test_submit_ambiguous_move_returns_ambiguous_move_without_mutating() -> None:
+    session = local_session()
+
+    result = session.submit_move(
+        LOCAL,
+        "Pe2",
+        request_id=req("ambiguous-move"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is False
+    assert result.status == "ambiguous_move"
+    assert result.message == "Move is ambiguous."
+    assert_no_extra_moves(session, 0)
+    assert result.view is not None
+    assert result.view.current_ply == 0
+
+
+def test_submit_move_maps_illegal_move_error_without_mutating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = local_session()
+    move_text = first_legal_move_text(session)
+
+    def raise_illegal(*args: object, **kwargs: object) -> None:
+        raise IllegalMoveError("illegal move")
+
+    monkeypatch.setattr(session.game, "make_move", raise_illegal)
+
+    result = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("engine-illegal"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is False
+    assert result.status == "invalid_move"
+    assert result.message == "Could not apply illegal move."
+    assert_no_extra_moves(session, 0)
+    assert result.view is not None
+    assert result.view.snapshot.feedback is not None
+    assert result.view.snapshot.feedback.kind == "error"
+    assert result.view.snapshot.feedback.text == "Could not apply illegal move."
+
+
+def test_submit_move_maps_engine_game_concluded_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = local_session()
+    move_text = first_legal_move_text(session)
+
+    def raise_game_concluded(*args: object, **kwargs: object) -> None:
+        raise GameConcludedError("1-0")
+
+    monkeypatch.setattr(session.game, "make_move", raise_game_concluded)
+
+    result = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("engine-game-over"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is False
+    assert result.status == "game_over"
+    assert result.message == "Game has concluded."
+    assert_no_extra_moves(session, 0)
+
+
+def test_submit_move_maps_unexpected_engine_error_without_mutating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = local_session()
+    move_text = first_legal_move_text(session)
+
+    def raise_unexpected(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(session.game, "make_move", raise_unexpected)
+
+    result = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("engine-boom"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is False
+    assert result.status == "error"
+    assert result.message == "Could not apply move."
+    assert_no_extra_moves(session, 0)
+    assert result.view is not None
+    assert result.view.snapshot.feedback is not None
+    assert result.view.snapshot.feedback.text == "Could not apply move."
+
+
+def test_non_offer_reply_clears_pending_draw_offer() -> None:
+    session = online_session()
+
+    offer_result, _ = submit_first_legal(
+        session,
+        WHITE,
+        "white-offers-draw-for-decline",
+        offer_draw=True,
+    )
+    reply_result, _ = submit_first_legal(
+        session,
+        BLACK,
+        "black-declines-by-moving",
+    )
+
+    assert offer_result.ok is True
+    assert reply_result.ok is True
+    assert reply_result.view is not None
+    assert reply_result.view.snapshot.draw_offered_by is None
+    assert_no_extra_moves(session, 2)
+
+
+def test_cannot_counter_offer_while_draw_offer_is_pending() -> None:
+    session = online_session()
+
+    offer_result, _ = submit_first_legal(
+        session,
+        WHITE,
+        "white-offers-draw-before-counter",
+        offer_draw=True,
+    )
+    counter_result, _ = submit_first_legal(
+        session,
+        BLACK,
+        "black-counter-offer",
+        offer_draw=True,
+    )
+
+    assert offer_result.ok is True
+    assert counter_result.ok is False
+    assert counter_result.status == "draw_unavailable"
+    assert counter_result.message == "Draw offers are not available."
+    assert counter_result.view is not None
+    assert counter_result.view.snapshot.draw_offered_by == "white"
+    assert_no_extra_moves(session, 1)
+
+
+def test_accept_draw_offer_maps_engine_no_offer_to_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = online_session()
+    submit_first_legal(
+        session, WHITE, "white-offers-before-engine-no-offer", offer_draw=True
+    )
+
+    def raise_no_draw_offer() -> None:
+        raise NoDrawOfferError(None)
+
+    monkeypatch.setattr(session.game, "accept_draw", raise_no_draw_offer)
+
+    result = session.accept_draw_offer(
+        BLACK,
+        request_id=req("black-accepts-engine-no-offer"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is False
+    assert result.status == "draw_unavailable"
+    assert result.message == "No draw offer is available."
+    assert result.view is not None
+    assert result.view.snapshot.is_game_over is False
+
+
+def test_accept_draw_offer_maps_engine_game_concluded_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = online_session()
+    submit_first_legal(
+        session, WHITE, "white-offers-before-engine-game-over", offer_draw=True
+    )
+
+    def raise_game_concluded() -> None:
+        raise GameConcludedError("1-0")
+
+    monkeypatch.setattr(session.game, "accept_draw", raise_game_concluded)
+
+    result = session.accept_draw_offer(
+        BLACK,
+        request_id=req("black-accepts-engine-game-over"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is False
+    assert result.status == "game_over"
+    assert result.message == "Game has concluded."
+
+
+def test_accept_draw_offer_maps_unexpected_engine_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = online_session()
+    submit_first_legal(
+        session, WHITE, "white-offers-before-engine-error", offer_draw=True
+    )
+
+    def raise_unexpected() -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(session.game, "accept_draw", raise_unexpected)
+
+    result = session.accept_draw_offer(
+        BLACK,
+        request_id=req("black-accepts-engine-error"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is False
+    assert result.status == "error"
+    assert result.message == "Could not accept draw offer."
+    assert result.view is not None
+    assert result.view.snapshot.feedback is not None
+    assert result.view.snapshot.feedback.text == "Could not accept draw offer."
+
+
+def test_black_resignation_sets_white_winner_and_preserves_last_move_highlight() -> (
+    None
+):
+    session = online_session()
+    white_move_result, _ = submit_first_legal(
+        session, WHITE, "white-moves-before-black-resigns"
+    )
+    assert white_move_result.view is not None
+    last_move_from = white_move_result.view.snapshot.last_move_from
+    last_move_to = white_move_result.view.snapshot.last_move_to
+
+    result = session.resign(BLACK, request_id=req("black-resigns-after-white-move"))
+
+    assert result.ok is True
+    assert result.status == "accepted"
+    assert result.message == "Black resigns."
+    assert result.view is not None
+    assert result.view.snapshot.is_game_over is True
+    assert result.view.snapshot.outcome is not None
+    assert result.view.snapshot.outcome.reason == "resignation"
+    assert result.view.snapshot.outcome.winner == "white"
+    assert result.view.snapshot.last_move_from == last_move_from
+    assert result.view.snapshot.last_move_to == last_move_to
+    assert_no_extra_moves(session, 1)
+
+
+def test_resign_maps_engine_game_concluded_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = online_session()
+
+    def raise_game_concluded() -> None:
+        raise GameConcludedError("1-0")
+
+    monkeypatch.setattr(session.game, "resign", raise_game_concluded)
+
+    result = session.resign(WHITE, request_id=req("resign-engine-game-over"))
+
+    assert result.ok is False
+    assert result.status == "game_over"
+    assert result.message == "Game has concluded."
+    assert_no_extra_moves(session, 0)
+
+
+def test_resign_maps_unexpected_engine_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = online_session()
+
+    def raise_unexpected() -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(session.game, "resign", raise_unexpected)
+
+    result = session.resign(WHITE, request_id=req("resign-engine-error"))
+
+    assert result.ok is False
+    assert result.status == "error"
+    assert result.message == "Could not resign game."
+    assert result.view is not None
+    assert result.view.snapshot.feedback is not None
+    assert result.view.snapshot.feedback.text == "Could not resign game."
+    assert_no_extra_moves(session, 0)
+
+
+def test_halfmove_undo_rewinds_last_move_highlight_to_previous_move() -> None:
+    session = local_session()
+    first_result, _ = submit_first_legal(session, LOCAL, "highlight-move-1")
+    assert first_result.view is not None
+    first_last_move_from = first_result.view.snapshot.last_move_from
+    first_last_move_to = first_result.view.snapshot.last_move_to
+
+    submit_first_legal(session, LOCAL, "highlight-move-2")
+
+    undo_result = session.request_undo(
+        LOCAL,
+        request_id=req("highlight-undo-halfmove"),
+        scope="halfmove",
+    )
+
+    assert undo_result.ok is True
+    assert undo_result.view is not None
+    assert undo_result.view.current_ply == 1
+    assert undo_result.view.snapshot.last_move_from == first_last_move_from
+    assert undo_result.view.snapshot.last_move_to == first_last_move_to
+
+
+def test_request_undo_maps_unexpected_engine_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = local_session()
+    submit_first_legal(session, LOCAL, "undo-error-move")
+
+    def raise_unexpected() -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(session.game, "undo_halfmove", raise_unexpected)
+
+    result = session.request_undo(
+        LOCAL,
+        request_id=req("undo-engine-error"),
+        scope="halfmove",
+    )
+
+    assert result.ok is False
+    assert result.status == "error"
+    assert result.message == "Could not undo move."
+    assert_no_extra_moves(session, 1)
+    assert result.view is not None
+    assert result.view.snapshot.feedback is not None
+    assert result.view.snapshot.feedback.text == "Could not undo move."
+
+
+def test_untimed_snapshot_exposes_no_timing_view() -> None:
+    view = local_session().snapshot_for(LOCAL)
+
+    assert view.snapshot.timed_game is None
+
+
+def test_timed_snapshot_projects_initial_clock_data() -> None:
+    clock = FakeClock(0)
+    session = AuthoritativeGameSession.local(
+        lobby_id=LobbyId("timed-initial"),
+        time_control=TimeControl(initial_seconds=60, increment_seconds=2),
+        time_source=clock,
+    )
+
+    view = session.snapshot_for(LOCAL)
+
+    assert view.snapshot.timed_game is not None
+    timed = view.snapshot.timed_game
+    assert timed.white.remaining_ms == 60_000
+    assert timed.black.remaining_ms == 60_000
+    assert timed.white.display_text == "1:00"
+    assert timed.black.display_text == "1:00"
+    assert timed.white.is_active is True
+    assert timed.black.is_active is False
+    assert timed.active_side == "white"
+    assert timed.timeout_side is None
+    assert timed.increment_seconds == 2
+
+
+def test_timed_snapshot_advances_active_clock() -> None:
+    clock = FakeClock(0)
+    session = AuthoritativeGameSession.local(
+        lobby_id=LobbyId("timed-advance"),
+        time_control=TimeControl(initial_seconds=60, increment_seconds=0),
+        time_source=clock,
+    )
+
+    clock.advance(5_000)
+    view = session.snapshot_for(LOCAL)
+
+    assert view.snapshot.timed_game is not None
+    timed = view.snapshot.timed_game
+    assert timed.white.remaining_ms == 55_000
+    assert timed.black.remaining_ms == 60_000
+    assert timed.white.display_text == "0:55"
+    assert timed.black.display_text == "1:00"
+    assert timed.white.is_active is True
+    assert timed.black.is_active is False
+
+
+def test_submit_move_applies_increment_and_switches_active_side() -> None:
+    clock = FakeClock(0)
+    session = AuthoritativeGameSession.local(
+        lobby_id=LobbyId("timed-submit"),
+        time_control=TimeControl(initial_seconds=30, increment_seconds=2),
+        time_source=clock,
+    )
+    move_text = first_legal_move_text(session)
+
+    clock.advance(5_000)
+    result = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("timed-move"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is True
+    assert result.view is not None
+    assert result.view.snapshot.timed_game is not None
+    timed = result.view.snapshot.timed_game
+    assert timed.white.remaining_ms == 27_000
+    assert timed.black.remaining_ms == 30_000
+    assert timed.white.display_text == "0:27"
+    assert timed.black.display_text == "0:30"
+    assert timed.white.is_active is False
+    assert timed.black.is_active is True
+    assert timed.active_side == "black"
+
+
+def test_timeout_blocks_submit_and_sets_terminal_state() -> None:
+    clock = FakeClock(0)
+    session = AuthoritativeGameSession.local(
+        lobby_id=LobbyId("timed-timeout"),
+        time_control=TimeControl(initial_seconds=5, increment_seconds=0),
+        time_source=clock,
+    )
+    move_text = first_legal_move_text(session)
+
+    clock.advance(5_000)
+    result = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("timed-timeout-submit"),
+        expected_ply=session.current_ply(),
+    )
+
+    assert result.ok is False
+    assert result.status == "game_over"
+    assert result.message == "Game has concluded."
+    assert_no_extra_moves(session, 0)
+    assert result.view is not None
+    assert result.view.snapshot.outcome is not None
+    assert result.view.snapshot.outcome.reason == "timeout"
+    assert result.view.snapshot.outcome.winner == "black"
+    assert result.view.snapshot.timed_game is not None
+    timed = result.view.snapshot.timed_game
+    assert timed.white.remaining_ms == 0
+    assert timed.black.remaining_ms == 5_000
+    assert timed.white.is_flagged is True
+    assert timed.black.is_flagged is False
+    assert timed.active_side is None
+    assert timed.timeout_side == "white"
+
+
+def test_undo_after_timeout_restores_clock_state() -> None:
+    clock = FakeClock(0)
+    session = AuthoritativeGameSession.local(
+        lobby_id=LobbyId("timed-undo-timeout"),
+        time_control=TimeControl(initial_seconds=5, increment_seconds=0),
+        time_source=clock,
+    )
+    move_text = first_legal_move_text(session)
+
+    clock.advance(1_000)
+    applied = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("timed-move-before-timeout"),
+        expected_ply=session.current_ply(),
+    )
+    assert applied.ok is True
+
+    clock.advance(6_000)
+    timeout_view = session.snapshot_for(LOCAL)
+    assert timeout_view.snapshot.outcome is not None
+    assert timeout_view.snapshot.outcome.reason == "timeout"
+    assert timeout_view.snapshot.outcome.winner == "white"
+
+    undo_result = session.request_undo(
+        LOCAL,
+        request_id=req("timed-undo-after-timeout"),
+        scope="halfmove",
+    )
+
+    assert undo_result.ok is True
+    assert undo_result.view is not None
+    assert undo_result.view.snapshot.outcome is None
+    assert undo_result.view.snapshot.timed_game is not None
+    restored = undo_result.view.snapshot.timed_game
+    assert restored.white.remaining_ms == 4_000
+    assert restored.black.remaining_ms == 5_000
+    assert restored.white.is_active is True
+    assert restored.black.is_active is False
+    assert restored.active_side == "white"
+    assert restored.timeout_side is None
