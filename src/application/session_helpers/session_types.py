@@ -12,29 +12,38 @@ SessionPhaseKind = Literal["active", "concluded", "timed_out"]
 
 @dataclass(frozen=True)
 class TimeControl:
+    """Configures the starting clock time and per-move increment."""
+
     initial_seconds: int
     increment_seconds: int = 0
 
 
 @dataclass(frozen=True)
 class TerminalState:
+    """Describes a completed game's winner and ending reason."""
+
     winner: PlayerSide | None
     reason: TerminalReason
 
 
 @dataclass(frozen=True)
 class SessionPhase:
+    """Represents the current lifecycle phase of an authoritative session."""
+
     kind: SessionPhaseKind
     side_to_move: PlayerSide | None
     terminal: TerminalState | None = None
 
     @property
     def is_game_over(self) -> bool:
+        """Return whether the phase represents a finished game."""
         return self.kind in ("concluded", "timed_out")
 
 
 @dataclass(frozen=True, init=False)
 class SessionConfig:
+    """Stores immutable configuration for a game session."""
+
     lobby_id: LobbyId
     mode: GameMode
     time_control: TimeControl | None
@@ -47,6 +56,7 @@ class SessionConfig:
         time_control: TimeControl | None = None,
         include_preview_hints: bool = True,
     ) -> None:
+        """Create a session configuration with optional clock and preview settings."""
         object.__setattr__(self, "lobby_id", lobby_id)
         object.__setattr__(self, "mode", mode)
         object.__setattr__(self, "time_control", time_control)
@@ -54,11 +64,14 @@ class SessionConfig:
 
     @property
     def opponent(self) -> GameMode:
+        """Return the configured game mode for legacy opponent callers."""
         return self.mode
 
 
 @dataclass(frozen=True)
 class CachedCommandResult:
+    """Stores the persisted outcome for an idempotent command."""
+
     fingerprint: str
     ok: bool
     status: CommandStatus
@@ -67,12 +80,16 @@ class CachedCommandResult:
 
 @dataclass(frozen=True)
 class BotPendingState:
+    """Tracks an outstanding bot move request and its side."""
+
     request_id: RequestId | None = None
     side: PlayerSide | None = None
 
 
 @dataclass
 class CommittedSessionState:
+    """Holds mutable committed-session projection state for snapshots."""
+
     last_move_from: Square | None = None
     last_move_to: Square | None = None
     feedback: FeedbackView | None = None

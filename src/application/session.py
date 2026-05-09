@@ -48,6 +48,8 @@ from .session_helpers.timing import (
 
 
 class GameSession:
+    """Authoritative controller for committed chess session state."""
+
     config: SessionConfig
 
     game: Game
@@ -103,6 +105,7 @@ class GameSession:
         time_control: TimeControl | None = None,
         time_source: TimeSource | None = None,
     ) -> "GameSession":
+        """Create a local-mode game session."""
         return cls(
             SessionConfig(
                 lobby_id=lobby_id,
@@ -121,6 +124,7 @@ class GameSession:
         expected_ply: int | None = None,
         offer_draw: bool = False,
     ) -> CommandResult:
+        """Validate and commit a submitted move command."""
         fingerprint = command_fingerprint(
             "submit_move",
             {
@@ -241,6 +245,7 @@ class GameSession:
         request_id: RequestId,
         expected_ply: int | None = None,
     ) -> CommandResult:
+        """Accept an opponent draw offer when available."""
         fingerprint = command_fingerprint(
             "accept_draw_offer",
             {"expected_ply": expected_ply},
@@ -352,6 +357,7 @@ class GameSession:
         *,
         request_id: RequestId,
     ) -> CommandResult:
+        """Resign the active game for the acting player."""
         fingerprint = command_fingerprint("resign", {})
         duplicate = self._duplicate_result(player_id, request_id, fingerprint)
         if duplicate is not None:
@@ -430,6 +436,7 @@ class GameSession:
         request_id: RequestId,
         scope: UndoScope | None = None,
     ) -> CommandResult:
+        """Undo a legal amount of move history for this session mode."""
         fingerprint = command_fingerprint("request_undo", {"scope": scope})
         duplicate = self._duplicate_result(player_id, request_id, fingerprint)
         if duplicate is not None:
@@ -517,6 +524,7 @@ class GameSession:
         connection_state: ConnectionState = "connected",
         viewer_status_text: str | None = None,
     ) -> ViewerSessionView:
+        """Build the latest viewer-specific session view."""
         self._sync_timing()
         phase = self._phase()
         draw_offered_by = self._get_draw_offered_by()
@@ -554,6 +562,7 @@ class GameSession:
         )
 
     def current_ply(self) -> int:
+        """Return the number of committed half-moves."""
         return len(self.game.moves_list)
 
     def _commit_move(

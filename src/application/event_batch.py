@@ -7,6 +7,8 @@ from src.shared.protocol_types import GameEventKind, PlayerSide
 
 @dataclass(frozen=True)
 class GameEvent:
+    """Records one sequenced game event visible to clients."""
+
     seq: int
     kind: GameEventKind
     ply: int
@@ -18,6 +20,8 @@ class GameEvent:
 
 @dataclass(frozen=True)
 class EventBatch:
+    """Bundles ordered game events with the resulting viewer snapshot."""
+
     events: list[GameEvent]
     view: ViewerSessionView
     from_seq: int

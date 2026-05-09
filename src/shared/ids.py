@@ -8,4 +8,5 @@ EventSeq = NewType("EventSeq", int)
 
 
 def new_request_id() -> RequestId:
+    """Return a new unique request identifier for command idempotency."""
     return RequestId(str(uuid4()))

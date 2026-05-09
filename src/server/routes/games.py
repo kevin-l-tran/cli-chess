@@ -12,6 +12,12 @@ from src.shared.ids import LobbyId, PlayerId, RequestId
 
 
 def make_game_router(game_service: ServerGameService) -> APIRouter:
+    """
+    Build the FastAPI router for game-specific lobby endpoints.
+
+    The returned router delegates all authoritative game behavior to the
+    provided server game service and only handles request/response translation.
+    """
     router = APIRouter(prefix="/lobbies/{lobby_id}", tags=["games"])
 
     @router.get("/view")
@@ -19,6 +25,12 @@ def make_game_router(game_service: ServerGameService) -> APIRouter:
         lobby_id: str,
         player_id: PlayerId = Depends(require_player_id),
     ):
+        """
+        Return the latest viewer-specific game view for a lobby.
+
+        The authenticated player may be a player or spectator, subject to the
+        service's lobby access checks.
+        """
         try:
             view = await game_service.get_view(
                 lobby_id=LobbyId(lobby_id),
@@ -34,6 +46,12 @@ def make_game_router(game_service: ServerGameService) -> APIRouter:
         dto: SubmitMoveRequestDTO,
         player_id: PlayerId = Depends(require_player_id),
     ):
+        """
+        Submit a move command for the authenticated player.
+
+        The route converts wire DTO fields to domain IDs and delegates move
+        validation, idempotency, and state mutation to the service layer.
+        """
         try:
             result = await game_service.submit_move(
                 lobby_id=LobbyId(lobby_id),
@@ -53,6 +71,12 @@ def make_game_router(game_service: ServerGameService) -> APIRouter:
         dto: ExpectedPlyCommandDTO,
         player_id: PlayerId = Depends(require_player_id),
     ):
+        """
+        Accept a pending draw offer in the target lobby.
+
+        The expected ply guards against accepting a draw offer against a stale
+        client position.
+        """
         try:
             result = await game_service.accept_draw_offer(
                 lobby_id=LobbyId(lobby_id),
@@ -70,6 +94,11 @@ def make_game_router(game_service: ServerGameService) -> APIRouter:
         dto: RequestIdCommandDTO,
         player_id: PlayerId = Depends(require_player_id),
     ):
+        """
+        Resign the active game on behalf of the authenticated player.
+
+        The request ID lets the service treat retries as idempotent commands.
+        """
         try:
             result = await game_service.resign(
                 lobby_id=LobbyId(lobby_id),
@@ -86,6 +115,12 @@ def make_game_router(game_service: ServerGameService) -> APIRouter:
         dto: RequestIdCommandDTO,
         player_id: PlayerId = Depends(require_player_id),
     ):
+        """
+        Request an undo for the authenticated player.
+
+        Online undo availability is determined by the service/session policy,
+        not by the route handler.
+        """
         try:
             result = await game_service.request_undo(
                 lobby_id=LobbyId(lobby_id),

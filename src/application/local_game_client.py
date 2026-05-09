@@ -1,3 +1,4 @@
+from src.application.game_client import GameClient
 from src.application.session_helpers.session_types import (
     TimeControl,
 )
@@ -7,7 +8,7 @@ from src.application.viewer_types import ViewerSessionView
 from src.shared.ids import PlayerId, RequestId
 
 
-class LocalGameClient:
+class LocalGameClient(GameClient):
     def __init__(self, session: GameSession, viewer_id: PlayerId) -> None:
         self.session = session
         self.viewer_id = viewer_id

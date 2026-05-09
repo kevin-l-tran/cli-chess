@@ -8,10 +8,11 @@ from src.shared.protocol_types import Square
 
 class LocalDraftController:
     """
-    Default client-local draft controller.
+    Client-local draft controller.
 
-    Owns only uncommitted draft state. It does not submit moves, mutate the
-    engine, call the server, or persist anything.
+    Owns only uncommitted draft state. All data is derived from 
+    the ViewerSessionView passed down by the authoritative session 
+    controller.
     """
 
     def __init__(self) -> None:
@@ -22,6 +23,7 @@ class LocalDraftController:
         self._view = _empty_view()
 
     def sync_to_view(self, view: ViewerSessionView) -> None:
+        """Synchronize draft state with the latest authoritative view."""
         old_ply = self._current_ply
         self._current_ply = view.current_ply
 
@@ -70,6 +72,7 @@ class LocalDraftController:
             self.set_text(self._view.text)
 
     def set_text(self, text: str) -> LocalDraftView:
+        """Update the draft text and return its local validation view."""
         self._draft_ply = self._current_ply
         self._promotion_family = ()
 
@@ -139,12 +142,14 @@ class LocalDraftController:
         return self._view
 
     def clear(self) -> LocalDraftView:
+        """Clear the active draft and return an empty draft view."""
         self._draft_ply = self._current_ply
         self._promotion_family = ()
         self._view = _empty_view()
         return self._view
 
     def click_square(self, square: Square) -> LocalDraftView:
+        """Apply a board-square click to the current draft text."""
         self._draft_ply = self._current_ply
 
         if self._hints is None:
@@ -169,6 +174,7 @@ class LocalDraftController:
         self,
         piece: Literal["Q", "R", "B", "N"],
     ) -> LocalDraftView:
+        """Resolve a pending promotion draft with the selected piece."""
         matching = next(
             (
                 candidate
@@ -185,6 +191,7 @@ class LocalDraftController:
         return self.set_text(matching.canonical_text)
 
     def view(self) -> LocalDraftView:
+        """Return the current local draft view."""
         return self._view
 
     def _matching_candidates(

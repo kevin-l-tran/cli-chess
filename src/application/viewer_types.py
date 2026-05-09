@@ -35,12 +35,16 @@ FeedbackKind = Literal[
 
 @dataclass(frozen=True)
 class MoveListItem:
+    """Display entry for one committed move."""
+
     ply: int
     notation: str
 
 
 @dataclass(frozen=True)
 class ClockView:
+    """Viewer-facing state for one player's clock."""
+
     remaining_ms: int
     display_text: str
     is_active: bool
@@ -49,6 +53,8 @@ class ClockView:
 
 @dataclass(frozen=True)
 class TimedGameView:
+    """Viewer-facing state for both clocks in a timed game."""
+
     white: ClockView
     black: ClockView
     active_side: PlayerSide | None
@@ -58,6 +64,8 @@ class TimedGameView:
 
 @dataclass(frozen=True)
 class OutcomeView:
+    """Viewer-facing summary of a concluded game."""
+
     winner: PlayerSide | None
     reason: TerminalReason
     banner: str
@@ -65,12 +73,16 @@ class OutcomeView:
 
 @dataclass(frozen=True)
 class FeedbackView:
+    """Public game feedback shown in a session view."""
+
     kind: FeedbackKind
     text: str
 
 
 @dataclass(frozen=True)
 class AuthoritativeSnapshot:
+    """Committed game state projected for UI rendering."""
+
     board_glyphs: list[list[str]]
 
     side_to_move: PlayerSide | None
@@ -91,6 +103,8 @@ class AuthoritativeSnapshot:
 
 @dataclass(frozen=True)
 class MovePreviewCandidate:
+    """Preview metadata for one legal move candidate."""
+
     canonical_text: str
     aliases: set[str]
     from_square: Square
@@ -101,12 +115,16 @@ class MovePreviewCandidate:
 
 @dataclass(frozen=True)
 class MovePreviewHints:
+    """Position-scoped legal move hints for local drafting."""
+
     base_ply: int
     legal_moves: list[MovePreviewCandidate]
 
 
 @dataclass(frozen=True)
 class LocalDraftView:
+    """Client-local view of the active uncommitted move draft."""
+
     text: str
     status: DraftStatus
     canonical_text: str | None
@@ -120,6 +138,8 @@ class LocalDraftView:
 
 @dataclass(frozen=True)
 class ViewerSessionView:
+    """Viewer-specific authoritative state and permissions."""
+
     lobby_id: LobbyId
     viewer_id: PlayerId
     viewer_role: ParticipantRole
