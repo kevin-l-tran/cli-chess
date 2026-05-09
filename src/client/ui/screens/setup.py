@@ -6,7 +6,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Static
 
-from src.application.authoritative_helpers.authoritative_session_types import (
+from src.application.session_helpers.session_types import (
     TimeControl,
 )
 from src.application.local_draft_controller import LocalDraftController

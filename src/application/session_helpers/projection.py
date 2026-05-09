@@ -1,7 +1,7 @@
 from typing import cast
 
 from src.application import viewer_types as vt
-from src.application.helpers.move_parser import get_canonical, get_spellings
+from src.application.move_parser import get_canonical, get_spellings
 from src.engine.board import Piece, get_name, is_white
 from src.engine.game import Game
 from src.engine.moves import (
@@ -13,17 +13,17 @@ from src.engine.moves import (
 from src.shared.ids import LobbyId, PlayerId
 from src.shared.protocol_types import ConnectionState, PlayerSide, PromotionPiece
 
-from .authoritative_permissions import ViewerPermissions
-from .authoritative_session_types import (
+from .permissions import ViewerPermissions
+from .session_types import (
     CommittedSessionState,
     SessionPhase,
     TerminalState,
     TimeControl,
 )
-from .authoritative_timing import ClockState
+from .timing import ClockState
 
 
-class AuthoritativeSessionProjection:
+class SessionProjection:
     @staticmethod
     def snapshot(
         *,

@@ -1,9 +1,9 @@
 from src.shared.protocol_types import GameMode, PlayerSide
 
-from .authoritative_session_types import SessionPhase, UndoScope
+from .session_types import SessionPhase, UndoScope
 
 
-class AuthoritativeSessionPolicy:
+class SessionPolicy:
     @staticmethod
     def resolve_undo_scope(mode: GameMode, requested: UndoScope | None) -> UndoScope | None:
         if mode == "online":

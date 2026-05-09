@@ -5,7 +5,7 @@ from typing import Callable
 
 from src.shared.protocol_types import PlayerSide
 
-from .authoritative_session_types import TimeControl
+from .session_types import TimeControl
 
 
 TimeSource = Callable[[], int]

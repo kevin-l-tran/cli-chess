@@ -6,7 +6,7 @@ from typing import Any, Literal
 from src.shared.ids import PlayerId, RequestId
 from src.shared.protocol_types import CommandStatus
 
-from .authoritative_session_types import CachedCommandResult
+from .session_types import CachedCommandResult
 
 
 DuplicateKind = Literal["miss", "duplicate", "conflict"]

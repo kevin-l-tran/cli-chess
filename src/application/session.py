@@ -1,7 +1,7 @@
 from typing import Any, cast
 
 from src.application.command_types import CommandResult
-from src.application.helpers.move_parser import (
+from src.application.move_parser import (
     get_canonical,
     normalize_move_text,
     parse,
@@ -18,20 +18,20 @@ from src.engine.moves import Move, get_final_position, get_initial_position
 from src.shared.ids import LobbyId, PlayerId, RequestId
 from src.shared.protocol_types import CommandStatus, ConnectionState, PlayerSide
 
-from .authoritative_helpers.authoritative_command_cache import (
+from .session_helpers.command_cache import (
     CommandIdempotencyCache,
     command_fingerprint,
 )
-from .authoritative_helpers.authoritative_permissions import (
-    AuthoritativePermissionResolver,
+from .session_helpers.permissions import (
+    PermissionResolver,
 )
-from .authoritative_helpers.authoritative_policy import AuthoritativeSessionPolicy
-from .authoritative_helpers.authoritative_session_projection import (
-    AuthoritativeSessionProjection,
+from .session_helpers.policy import SessionPolicy
+from .session_helpers.projection import (
+    SessionProjection,
     move_history,
 )
-from .authoritative_helpers.authoritative_session_types import (
-    AuthoritativeSessionConfig,
+from .session_helpers.session_types import (
+    SessionConfig,
     CachedCommandResult,
     CommittedSessionState,
     SessionPhase,
@@ -39,7 +39,7 @@ from .authoritative_helpers.authoritative_session_types import (
     TimeControl,
     UndoScope,
 )
-from .authoritative_helpers.authoritative_timing import (
+from .session_helpers.timing import (
     ClockState,
     SessionTiming,
     TimeSource,
@@ -47,8 +47,8 @@ from .authoritative_helpers.authoritative_timing import (
 )
 
 
-class AuthoritativeGameSession:
-    config: AuthoritativeSessionConfig
+class GameSession:
+    config: SessionConfig
 
     game: Game
     legal_moves: set[Move]
@@ -63,7 +63,7 @@ class AuthoritativeGameSession:
 
     def __init__(
         self,
-        config: AuthoritativeSessionConfig,
+        config: SessionConfig,
         *,
         game: Game | None = None,
         player_sides: dict[PlayerId, PlayerSide] | None = None,
@@ -88,7 +88,7 @@ class AuthoritativeGameSession:
             time_control=config.time_control,
             time_source=self._time_source,
         )
-        self._permissions = AuthoritativePermissionResolver(
+        self._permissions = PermissionResolver(
             config=self.config,
             player_sides=self.player_sides,
         )
@@ -102,9 +102,9 @@ class AuthoritativeGameSession:
         lobby_id: LobbyId = LobbyId("local"),
         time_control: TimeControl | None = None,
         time_source: TimeSource | None = None,
-    ) -> "AuthoritativeGameSession":
+    ) -> "GameSession":
         return cls(
-            AuthoritativeSessionConfig(
+            SessionConfig(
                 lobby_id=lobby_id,
                 mode="local",
                 time_control=time_control,
@@ -447,7 +447,7 @@ class AuthoritativeGameSession:
                 public_feedback=False,
             )
 
-        resolved_scope = AuthoritativeSessionPolicy.resolve_undo_scope(
+        resolved_scope = SessionPolicy.resolve_undo_scope(
             self.config.mode,
             scope,
         )
@@ -526,7 +526,7 @@ class AuthoritativeGameSession:
             move_count=self.current_ply(),
             draw_offered_by=draw_offered_by,
         )
-        snapshot = AuthoritativeSessionProjection.snapshot(
+        snapshot = SessionProjection.snapshot(
             game=self.game,
             phase=phase,
             state=self._state,
@@ -534,7 +534,7 @@ class AuthoritativeGameSession:
             clock_state=self.clock_state,
             time_control=self.config.time_control,
         )
-        preview_hints = AuthoritativeSessionProjection.preview_hints(
+        preview_hints = SessionProjection.preview_hints(
             legal_moves=self.legal_moves,
             phase=phase,
             current_ply=self.current_ply(),
@@ -542,7 +542,7 @@ class AuthoritativeGameSession:
                 self.config.include_preview_hints and self.config.mode != "online"
             ),
         )
-        return AuthoritativeSessionProjection.viewer_session_view(
+        return SessionProjection.viewer_session_view(
             lobby_id=self.config.lobby_id,
             viewer_id=viewer_id,
             current_ply=self.current_ply(),

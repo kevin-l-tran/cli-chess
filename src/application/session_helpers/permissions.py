@@ -4,8 +4,8 @@ from typing import cast
 from src.shared.ids import PlayerId
 from src.shared.protocol_types import ParticipantRole, PlayerSide
 
-from .authoritative_policy import AuthoritativeSessionPolicy
-from .authoritative_session_types import AuthoritativeSessionConfig, SessionPhase
+from .policy import SessionPolicy
+from .session_types import SessionConfig, SessionPhase
 
 
 @dataclass(frozen=True)
@@ -21,11 +21,11 @@ class ViewerPermissions:
     can_spectate: bool
 
 
-class AuthoritativePermissionResolver:
+class PermissionResolver:
     def __init__(
         self,
         *,
-        config: AuthoritativeSessionConfig,
+        config: SessionConfig,
         player_sides: dict[PlayerId, PlayerSide],
     ) -> None:
         self._config = config
@@ -52,7 +52,7 @@ class AuthoritativePermissionResolver:
         )
         can_offer_draw = (
             can_submit_for_side is not None
-            and AuthoritativeSessionPolicy.can_offer_draw(
+            and SessionPolicy.can_offer_draw(
                 self._config.mode,
                 phase,
                 draw_offered_by,
@@ -60,11 +60,11 @@ class AuthoritativePermissionResolver:
         )
         can_resign = (
             can_submit_for_side is not None
-            and AuthoritativeSessionPolicy.can_resign(phase)
+            and SessionPolicy.can_resign(phase)
         )
         can_request_undo = self.viewer_is_player_or_local_controller(viewer_id) and (
-            AuthoritativeSessionPolicy.can_undo_halfmove(self._config.mode, move_count)
-            or AuthoritativeSessionPolicy.can_undo_fullmove(self._config.mode, move_count)
+            SessionPolicy.can_undo_halfmove(self._config.mode, move_count)
+            or SessionPolicy.can_undo_fullmove(self._config.mode, move_count)
         )
 
         return ViewerPermissions(

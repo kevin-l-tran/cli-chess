@@ -34,7 +34,7 @@ class SessionPhase:
 
 
 @dataclass(frozen=True, init=False)
-class AuthoritativeSessionConfig:
+class SessionConfig:
     lobby_id: LobbyId
     mode: GameMode
     time_control: TimeControl | None
