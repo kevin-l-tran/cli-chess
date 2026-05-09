@@ -114,7 +114,7 @@ class LocalDraftController:
                 status="ambiguous",
                 canonical_text=None,
                 candidate_moves=_candidate_edges(matches),
-                autocompletions=_canonical_autocompletions(matches),
+                autocompletions=_autocompletions(text, matches),
                 promotion_prompt_position=prompt_position,
                 submit_text=None,
             )
@@ -132,7 +132,7 @@ class LocalDraftController:
             status="ambiguous",
             canonical_text=None,
             candidate_moves=_candidate_edges(matches),
-            autocompletions=_canonical_autocompletions(matches),
+            autocompletions=_autocompletions(text, matches),
             promotion_prompt_position=None,
             submit_text=None,
         )
@@ -257,23 +257,28 @@ def _candidate_edges(
     return {(candidate.from_square, candidate.to_square) for candidate in candidates}
 
 
-def _canonical_autocompletions(
+def _autocompletions(
+    text: str,
     candidates: list[vt.MovePreviewCandidate],
     *,
     limit: int = 12,
 ) -> list[str]:
+    query = _normalize(text)
     seen: set[str] = set()
     values: list[str] = []
 
     for candidate in sorted(candidates, key=lambda item: item.canonical_text):
-        if candidate.canonical_text in seen:
-            continue
+        for spelling in _candidate_spellings(candidate):
+            if not _normalize(spelling).startswith(query):
+                continue
+            if spelling in seen:
+                continue
 
-        seen.add(candidate.canonical_text)
-        values.append(candidate.canonical_text)
+            seen.add(spelling)
+            values.append(spelling)
 
-        if len(values) >= limit:
-            break
+            if len(values) >= limit:
+                return values
 
     return values
 

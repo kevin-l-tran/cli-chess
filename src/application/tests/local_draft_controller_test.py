@@ -95,25 +95,25 @@ def opening_hints() -> MovePreviewHints:
                 "Pe2-e3",
                 E2,
                 E3,
-                aliases=set(["e3", "Pe2e3", "Pe2"]),
+                aliases=set(["e3", "Pe2e3"]),
             ),
             candidate(
                 "Pe2-e4",
                 E2,
                 E4,
-                aliases=set(["e4", "Pe2e4", "Pe2"]),
+                aliases=set(["e4", "Pe2e4"]),
             ),
             candidate(
                 "Ng1-f3",
                 G1,
                 F3,
-                aliases=set(["Nf3", "Ng1f3", "Ng1"]),
+                aliases=set(["Nf3", "Ng1f3"]),
             ),
             candidate(
                 "Ng1-h3",
                 G1,
                 H3,
-                aliases=set(["Nh3", "Ng1h3", "Ng1"]),
+                aliases=set(["Nh3", "Ng1h3"]),
             ),
         ],
     )
@@ -128,7 +128,7 @@ def promotion_hints() -> MovePreviewHints:
                 "Pe7-e8=B",
                 E7,
                 E8,
-                aliases=set(["e8=B", "Pe7e8=B", "Pe7"]),
+                aliases=set(["e8=B", "Pe7e8=B"]),
                 promotion_piece="B",
                 promotion_prompt_position=E8,
             ),
@@ -136,7 +136,7 @@ def promotion_hints() -> MovePreviewHints:
                 "Pe7-e8=N",
                 E7,
                 E8,
-                aliases=set(["e8=N", "Pe7e8=N", "Pe7"]),
+                aliases=set(["e8=N", "Pe7e8=N"]),
                 promotion_piece="N",
                 promotion_prompt_position=E8,
             ),
@@ -144,7 +144,7 @@ def promotion_hints() -> MovePreviewHints:
                 "Pe7-e8=Q",
                 E7,
                 E8,
-                aliases=set(["e8=Q", "Pe7e8=Q", "Pe7"]),
+                aliases=set(["e8=Q", "Pe7e8=Q"]),
                 promotion_piece="Q",
                 promotion_prompt_position=E8,
             ),
@@ -152,7 +152,7 @@ def promotion_hints() -> MovePreviewHints:
                 "Pe7-e8=R",
                 E7,
                 E8,
-                aliases=set(["e8=R", "Pe7e8=R", "Pe7"]),
+                aliases=set(["e8=R", "Pe7e8=R"]),
                 promotion_piece="R",
                 promotion_prompt_position=E8,
             ),
@@ -222,6 +222,28 @@ def test_set_text_alias_resolves_to_canonical_submit_text(
     assert draft.submit_text == "Pe2-e4"
 
 
+def test_set_text_san_prefix_returns_san_autocompletions(
+    opening_hints: MovePreviewHints,
+) -> None:
+    controller = synced_controller(opening_hints)
+
+    draft = controller.set_text("N")
+
+    assert draft.status == "ambiguous"
+    assert draft.canonical_text is None
+    assert draft.candidate_moves == {(G1, F3), (G1, H3)}
+    assert draft.autocompletions == [
+        "Nf3",
+        "Ng1-f3",
+        "Ng1f3",
+        "Ng1-h3",
+        "Ng1h3",
+        "Nh3",
+    ]
+    assert draft.promotion_prompt_position is None
+    assert draft.submit_text is None
+
+
 def test_set_text_ambiguous_prefix_returns_candidates_and_autocomplete(
     opening_hints: MovePreviewHints,
 ) -> None:
@@ -232,7 +254,12 @@ def test_set_text_ambiguous_prefix_returns_candidates_and_autocomplete(
     assert draft.status == "ambiguous"
     assert draft.canonical_text is None
     assert draft.candidate_moves == {(E2, E3), (E2, E4)}
-    assert draft.autocompletions == ["Pe2-e3", "Pe2-e4"]
+    assert draft.autocompletions == [
+        "Pe2-e3",
+        "Pe2e3",
+        "Pe2-e4",
+        "Pe2e4",
+    ]
     assert draft.promotion_prompt_position is None
     assert draft.submit_text is None
 
@@ -286,7 +313,12 @@ def test_click_source_square_creates_ambiguous_source_draft(
     assert draft.text == "Pe2"
     assert draft.canonical_text is None
     assert draft.candidate_moves == {(E2, E3), (E2, E4)}
-    assert draft.autocompletions == ["Pe2-e3", "Pe2-e4"]
+    assert draft.autocompletions == [
+        "Pe2-e3",
+        "Pe2e3",
+        "Pe2-e4",
+        "Pe2e4",
+    ]
     assert draft.submit_text is None
 
 
@@ -416,7 +448,7 @@ def test_sync_to_new_ply_marks_text_draft_stale(
                 "Pe7-e5",
                 E7,
                 (4, 4),
-                aliases=set(["e5", "Pe7e5", "Pe7"]),
+                aliases=set(["e5", "Pe7e5"]),
             )
         ],
     )
@@ -467,7 +499,7 @@ def test_unvalidated_text_reparses_when_hints_arrive() -> None:
                 "Pe2-e4",
                 E2,
                 E4,
-                aliases=set(["e4", "Pe2e4", "Pe2"]),
+                aliases=set(["e4", "Pe2e4"]),
             )
         ],
     )
@@ -492,7 +524,12 @@ def test_click_new_movable_source_replaces_existing_partial_source_draft(
     assert draft.text == "Ng1"
     assert draft.canonical_text is None
     assert draft.candidate_moves == {(G1, F3), (G1, H3)}
-    assert draft.autocompletions == ["Ng1-f3", "Ng1-h3"]
+    assert draft.autocompletions == [
+        "Ng1-f3",
+        "Ng1f3",
+        "Ng1-h3",
+        "Ng1h3",
+    ]
     assert draft.promotion_prompt_position is None
     assert draft.submit_text is None
 
@@ -508,5 +545,15 @@ def test_click_promotion_source_only_does_not_show_prompt(
     assert draft.text == "Pe7"
     assert draft.canonical_text is None
     assert draft.candidate_moves == {(E7, E8)}
+    assert draft.autocompletions == [
+        "Pe7-e8=B",
+        "Pe7e8=B",
+        "Pe7-e8=N",
+        "Pe7e8=N",
+        "Pe7-e8=Q",
+        "Pe7e8=Q",
+        "Pe7-e8=R",
+        "Pe7e8=R",
+    ]
     assert draft.promotion_prompt_position is None
     assert draft.submit_text is None
