@@ -1,3 +1,5 @@
+## This branch points to the last commit on 5/8/26: main branch will be updated past that date
+
 ## Project description
 
 A terminal-based chess program planned as a layered system (engine, application, UI, adapters) that will support local play, external engine integration, and a secure online multiplayer mode implemented via a custom cryptographic server.
