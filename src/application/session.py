@@ -80,6 +80,7 @@ class GameSession:
         self.player_sides = dict(player_sides or {})
 
         self.request_id_cache = {}
+        self._view_revision = int(0)
         self._command_cache = CommandIdempotencyCache(self.request_id_cache)
         self._time_source = time_source or system_time_ms
         self._state = CommittedSessionState()
@@ -153,7 +154,6 @@ class GameSession:
 
         if phase.is_game_over:
             self._refresh_position_state()
-            self._set_feedback("error", "Game has concluded.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -161,6 +161,7 @@ class GameSession:
                 ok=False,
                 status="game_over",
                 message="Game has concluded.",
+                public_feedback=False,
             )
 
         if self._permissions.submit_side_for_viewer(player_id, phase) is None:
@@ -176,7 +177,6 @@ class GameSession:
 
         if offer_draw and not self._can_offer_draw(player_id, phase):
             self._refresh_position_state()
-            self._set_feedback("error", "Draw offers are not available.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -184,11 +184,11 @@ class GameSession:
                 ok=False,
                 status="draw_unavailable",
                 message="Draw offers are not available.",
+                public_feedback=False,
             )
 
         parse_result = parse(move_text, self.legal_moves)
         if parse_result.status == "empty":
-            self._set_feedback("error", "Enter a move first.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -196,9 +196,9 @@ class GameSession:
                 ok=False,
                 status="invalid_move",
                 message="Enter a move first.",
+                public_feedback=False,
             )
         if parse_result.status == "ambiguous":
-            self._set_feedback("error", "Move is ambiguous.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -206,9 +206,9 @@ class GameSession:
                 ok=False,
                 status="ambiguous_move",
                 message="Move is ambiguous.",
+                public_feedback=False,
             )
         if parse_result.status == "no_match":
-            self._set_feedback("error", "No legal move matches the submitted text.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -216,11 +216,11 @@ class GameSession:
                 ok=False,
                 status="invalid_move",
                 message="No legal move matches the submitted text.",
+                public_feedback=False,
             )
 
         move = parse_result.resolved_move
         if move is None:
-            self._set_feedback("error", "Could not resolve move.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -228,6 +228,7 @@ class GameSession:
                 ok=False,
                 status="error",
                 message="Could not resolve move.",
+                public_feedback=False,
             )
 
         return self._commit_move(
@@ -269,7 +270,6 @@ class GameSession:
             )
         if phase.is_game_over:
             self._refresh_position_state()
-            self._set_feedback("error", "Game has concluded.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -277,6 +277,7 @@ class GameSession:
                 ok=False,
                 status="game_over",
                 message="Game has concluded.",
+                public_feedback=False,
             )
 
         actor_side = self._permissions.actor_side_for_command(player_id, phase)
@@ -293,7 +294,6 @@ class GameSession:
             )
         if offered_by is None or offered_by == actor_side:
             self._refresh_position_state()
-            self._set_feedback("error", "No draw offer is available.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -301,13 +301,13 @@ class GameSession:
                 ok=False,
                 status="draw_unavailable",
                 message="No draw offer is available.",
+                public_feedback=False,
             )
 
         try:
             self.game.accept_draw()
         except NoDrawOfferError:
             self._refresh_position_state()
-            self._set_feedback("error", "No draw offer is available.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -315,10 +315,10 @@ class GameSession:
                 ok=False,
                 status="draw_unavailable",
                 message="No draw offer is available.",
+                public_feedback=False,
             )
         except GameConcludedError:
             self._refresh_position_state()
-            self._set_feedback("error", "Game has concluded.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -326,10 +326,10 @@ class GameSession:
                 ok=False,
                 status="game_over",
                 message="Game has concluded.",
+                public_feedback=False,
             )
         except Exception:
             self._refresh_position_state()
-            self._set_feedback("error", "Could not accept draw offer.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -337,6 +337,7 @@ class GameSession:
                 ok=False,
                 status="error",
                 message="Could not accept draw offer.",
+                public_feedback=False,
             )
 
         self._set_terminal(TerminalState(winner=None, reason="draw"))
@@ -349,6 +350,7 @@ class GameSession:
             ok=True,
             status="accepted",
             message="Draw offer accepted.",
+            bump_revision=True,
         )
 
     def resign(
@@ -368,7 +370,6 @@ class GameSession:
 
         if phase.is_game_over:
             self._refresh_position_state()
-            self._set_feedback("error", "Game has concluded.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -376,6 +377,7 @@ class GameSession:
                 ok=False,
                 status="game_over",
                 message="Game has concluded.",
+                public_feedback=False,
             )
 
         if self._permissions.submit_side_for_viewer(player_id, phase) is None:
@@ -393,7 +395,6 @@ class GameSession:
             self.game.resign()
         except GameConcludedError:
             self._refresh_position_state()
-            self._set_feedback("error", "Game has concluded.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -401,10 +402,10 @@ class GameSession:
                 ok=False,
                 status="game_over",
                 message="Game has concluded.",
+                public_feedback=False,
             )
         except Exception:
             self._refresh_position_state()
-            self._set_feedback("error", "Could not resign game.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -412,6 +413,7 @@ class GameSession:
                 ok=False,
                 status="error",
                 message="Could not resign game.",
+                public_feedback=False,
             )
 
         winner: PlayerSide = "black" if self.game.outcome == "0-1" else "white"
@@ -427,6 +429,7 @@ class GameSession:
             ok=True,
             status="accepted",
             message=message,
+            bump_revision=True,
         )
 
     def request_undo(
@@ -465,7 +468,6 @@ class GameSession:
                 if self.config.mode == "online"
                 else "Halfmove undo is only available in local games."
             )
-            self._set_feedback("error", message)
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -473,6 +475,7 @@ class GameSession:
                 ok=False,
                 status="undo_unavailable",
                 message=message,
+                public_feedback=False,
             )
 
         move_count = len(self.game.moves_list)
@@ -495,7 +498,6 @@ class GameSession:
             return self._undo_unavailable(player_id, request_id, fingerprint)
         except Exception:
             self._refresh_position_state()
-            self._set_feedback("error", "Could not undo move.")
             return self._record_and_return(
                 player_id,
                 request_id,
@@ -503,6 +505,7 @@ class GameSession:
                 ok=False,
                 status="error",
                 message="Could not undo move.",
+                public_feedback=False,
             )
 
         self._clear_terminal()
@@ -515,6 +518,7 @@ class GameSession:
             ok=True,
             status="accepted",
             message=message,
+            bump_revision=True,
         )
 
     def snapshot_for(
@@ -554,6 +558,7 @@ class GameSession:
             lobby_id=self.config.lobby_id,
             viewer_id=viewer_id,
             current_ply=self.current_ply(),
+            view_revision=self._view_revision,
             connection_state=connection_state,
             status_text=viewer_status_text,
             permissions=permissions,
@@ -628,6 +633,7 @@ class GameSession:
             ok=True,
             status="accepted",
             message=message,
+            bump_revision=True,
         )
 
     def _record_and_return(
@@ -640,6 +646,7 @@ class GameSession:
         status: CommandStatus,
         message: str | None,
         public_feedback: bool = True,
+        bump_revision: bool = False,
     ) -> CommandResult:
         self._command_cache.record(
             player_id=player_id,
@@ -649,6 +656,10 @@ class GameSession:
             status=status,
             message=message,
         )
+
+        if bump_revision:
+            self._bump_view_revision()
+
         return CommandResult(
             ok=ok,
             status=status,
@@ -727,6 +738,7 @@ class GameSession:
             winner: PlayerSide = "black" if loser == "white" else "white"
             self._set_terminal(TerminalState(winner=winner, reason="timeout"))
             self._refresh_position_state()
+            self._bump_view_revision()
 
     def _refresh_position_state(self) -> None:
         phase = self._phase()
@@ -802,3 +814,6 @@ class GameSession:
             move_count=self.current_ply(),
             draw_offered_by=self._get_draw_offered_by(),
         ).can_offer_draw
+
+    def _bump_view_revision(self) -> None:
+        self._view_revision += 1

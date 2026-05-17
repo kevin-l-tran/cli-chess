@@ -61,8 +61,16 @@ class GameInteractor:
 
     async def refresh_from_client(self) -> None:
         """Fetch the latest view from the client and sync the local draft."""
+        view = await self.client.get_view()
         async with self._client_lock:
-            self.replace_view(await self.client.get_view())
+            self.replace_view(view)
+
+    async def apply_pushed_view(self, view: ViewerSessionView) -> None:
+        """Apply a view pushed from the view stream."""
+        async with self._client_lock:
+            if view.view_revision <= self.authoritative_view.view_revision:
+                return
+            self._apply_view(view)
 
     def apply_text(self, text: str) -> None:
         """
@@ -142,8 +150,7 @@ class GameInteractor:
                 offer_draw=self.offer_draw,
             )
 
-            if result.view is not None:
-                self.replace_view(result.view)
+            self.replace_view(result.view)
 
             if result.ok:
                 self.latest_draft_view = self.draft.clear()
@@ -167,8 +174,7 @@ class GameInteractor:
                 request_id=request_id,
                 expected_ply=view.current_ply,
             )
-            if result.view is not None:
-                self.replace_view(result.view)
+            self.replace_view(result.view)
 
             self.offer_draw = False
             return result
@@ -185,8 +191,7 @@ class GameInteractor:
                 return None
 
             result = await self.client.request_undo(request_id=request_id)
-            if result.view is not None:
-                self.replace_view(result.view)
+            self.replace_view(result.view)
 
             self.offer_draw = False
             return result
@@ -203,24 +208,24 @@ class GameInteractor:
                 return None
 
             result = await self.client.resign(request_id=request_id)
-            if result.view is not None:
-                self.replace_view(result.view)
+            self.replace_view(result.view)
 
             self.offer_draw = False
             return result
 
     def replace_view(self, view: ViewerSessionView) -> None:
         """
-        Replace the latest authoritative view and resync draft state.
+        Directly replace the latest authoritative view and resync draft state.
 
         Use this after command results, polling, or any other client refresh
         that returns a newer viewer-specific session view.
         """
-        self.authoritative_view = view
-        self.clock_projector.reset_anchor()
-        self.draft.sync_to_view(view)
-        self.latest_draft_view = self.draft.view()
-        self.clear_invalid_offer_draw_state()
+        if view.view_revision < self.authoritative_view.view_revision:
+            return
+        if view.view_revision == self.authoritative_view.view_revision:
+            if view == self.authoritative_view:
+                return
+        self._apply_view(view)
 
     def should_auto_confirm_click(self) -> bool:
         """
@@ -247,3 +252,10 @@ class GameInteractor:
     def view_for_render(self) -> ViewerSessionView:
         """Returns a view with the clock locally updated."""
         return self.clock_projector.project(self.authoritative_view)
+
+    def _apply_view(self, view: ViewerSessionView) -> None:
+        self.authoritative_view = view
+        self.clock_projector.reset_anchor()
+        self.draft.sync_to_view(view)
+        self.latest_draft_view = self.draft.view()
+        self.clear_invalid_offer_draw_state()

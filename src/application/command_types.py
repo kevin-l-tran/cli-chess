@@ -10,5 +10,5 @@ class CommandResult:
 
     ok: bool
     status: CommandStatus
+    view: ViewerSessionView
     message: str | None = None
-    view: ViewerSessionView | None = None

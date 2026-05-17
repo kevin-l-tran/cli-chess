@@ -146,6 +146,7 @@ class ViewerSessionView:
     viewer_side: PlayerSide | None
 
     current_ply: int
+    view_revision: int
 
     can_submit_for_side: PlayerSide | None
     can_offer_draw: bool

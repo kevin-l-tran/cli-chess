@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import AsyncIterator, Protocol
 
 from src.application.command_types import CommandResult
 from src.application.viewer_types import ViewerSessionView
@@ -14,7 +14,11 @@ class GameClient(Protocol):
     """
 
     async def get_view(self) -> ViewerSessionView:
-        """Return the latest viewer-specific authoritative view."""
+        """Return the latest authoritative view."""
+        ...
+
+    def view_updates(self) -> AsyncIterator[ViewerSessionView]:
+        """Return a stream of views pushed by the game session."""
         ...
 
     async def submit_move(
@@ -51,4 +55,8 @@ class GameClient(Protocol):
         request_id: RequestId,
     ) -> CommandResult:
         """Request an undo if supported."""
+        ...
+
+    async def close(self) -> None:
+        """Release any client resources such as websocket listeners."""
         ...

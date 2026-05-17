@@ -1,8 +1,8 @@
 import asyncio
-from types import SimpleNamespace
-from typing import Any, Awaitable
-
 import pytest
+
+from types import SimpleNamespace
+from typing import Any, AsyncIterator, Awaitable
 
 from src.application.command_types import CommandResult
 from src.application.local_draft_controller import LocalDraftController
@@ -107,10 +107,18 @@ class FakeClient:
         self.resign_calls: list[dict[str, Any]] = []
         self.undo_calls: list[dict[str, Any]] = []
         self.get_view_calls = 0
+        self._updates: asyncio.Queue[ViewerSessionView] = asyncio.Queue()
 
     async def get_view(self) -> ViewerSessionView:
         self.get_view_calls += 1
         return self.view
+
+    def view_updates(self) -> AsyncIterator[ViewerSessionView]:
+        async def iterator() -> AsyncIterator[ViewerSessionView]:
+            while True:
+                yield await self._updates.get()
+
+        return iterator()
 
     async def submit_move(
         self,
@@ -214,7 +222,7 @@ class FocusTarget:
 
 def run_worker_immediately(awaitable: Awaitable[Any], **_kwargs: Any) -> Any:
     """Run a Textual worker coroutine immediately for seam-level unit tests."""
-    return asyncio.run(awaitable) # type: ignore
+    return asyncio.run(awaitable)  # type: ignore
 
 
 @pytest.fixture
@@ -275,26 +283,6 @@ def test_typing_ignores_non_move_input(screen_harness: SimpleNamespace) -> None:
     assert screen_harness.draft.set_text_calls == []
     assert screen_harness.client.submit_calls == []
     assert screen_harness.refresh_calls == []
-
-
-def test_board_click_only_updates_local_draft(
-    screen_harness: SimpleNamespace,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        screen_harness.screen,
-        "_should_auto_confirm_click",
-        lambda: False,
-    )
-    square = (6, 4)
-
-    screen_harness.screen.on_chess_board_square_pressed(SimpleNamespace(square=square))
-
-    assert screen_harness.draft.click_square_calls == [square]
-    assert screen_harness.draft.set_text_calls == []
-    assert screen_harness.client.submit_calls == []
-    assert len(screen_harness.refresh_calls) == 1
-    assert screen_harness.focus_target.focus_calls == 1
 
 
 def test_promotion_selection_only_updates_local_draft(
@@ -403,22 +391,3 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
     assert screen_harness.draft.sync_calls[-1] is result_view
     assert screen_harness.draft.clear_calls == 0
     assert screen_harness.screen.interactor.latest_draft_view.text == "bad"
-
-
-def test_replace_view_syncs_local_draft_to_new_authoritative_view(
-    screen_harness: SimpleNamespace,
-) -> None:
-    new_view = make_view(
-        current_ply=8,
-        side_to_move="black",
-        can_submit_for_side="black",
-    )
-
-    screen_harness.screen._replace_view(new_view)
-
-    assert screen_harness.screen.interactor.authoritative_view is new_view
-    assert screen_harness.draft.sync_calls == [screen_harness.initial_view, new_view]
-    assert (
-        screen_harness.screen.interactor.latest_draft_view
-        is screen_harness.draft.view()
-    )

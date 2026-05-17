@@ -97,10 +97,17 @@ class GameScreen(Screen):
         self._refresh_view()
         self._screen_view.focus_move_input()
 
+        self.run_worker(
+            self._watch_game_updates(),
+            group="game-updates",
+            exclusive=True,
+        )
+
         # Keep clocks/bot state fresh without forcing a full repaint every frame.
-        # This is intentionally slower than the old 0.5s full refresh because the
-        # styled board is widget-heavy and Textual hover/input events already repaint.
-        self.set_interval(1.0, self._queue_periodic_refresh)
+        self.set_interval(0.5, self._refresh_clock_projection)
+
+    async def on_unmount(self) -> None:
+        await self._client.close()
 
     def on_resize(self, event: Resize) -> None:
         self._sync_responsive_classes()
@@ -120,20 +127,16 @@ class GameScreen(Screen):
             return
         self._screen_view.sync_responsive_classes()
 
-    def _queue_periodic_refresh(self) -> None:
+    async def _watch_game_updates(self) -> None:
+        interactor = self._require_interactor()
+
+        async for view in interactor.client.view_updates():
+            await interactor.apply_pushed_view(view)
+            self._refresh_view()
+
+    def _refresh_clock_projection(self) -> None:
         if self.interactor is None:
             return
-        if self._input_buffer.has_pending():
-            return
-
-        self.run_worker(
-            self._periodic_refresh_async(),
-            group="game-refresh",
-            exclusive=True,
-        )
-
-    async def _periodic_refresh_async(self) -> None:
-        await self._require_interactor().refresh_from_client()
         self._refresh_view()
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -172,7 +175,7 @@ class GameScreen(Screen):
             return
 
         interactor.click_square(msg.square)
-        if self._should_auto_confirm_click():
+        if self._require_interactor().should_auto_confirm_click():
             self._confirm_move()
             return
 
@@ -278,16 +281,6 @@ class GameScreen(Screen):
             return
 
         self._refresh_view()
-
-    def _replace_view(self, view: ViewerSessionView) -> None:
-        # Compatibility method for tests/callers that still patch or invoke this
-        # private method. New code should prefer interactor.replace_view().
-        self._require_interactor().replace_view(view)
-
-    def _should_auto_confirm_click(self) -> bool:
-        # Compatibility method for tests/callers that still patch or invoke this
-        # private method. New code should prefer interactor.should_auto_confirm_click().
-        return self._require_interactor().should_auto_confirm_click()
 
     def _refresh_view(self) -> None:
         self._require_screen_view().sync_all(pending_move_text=self._pending_move_text)
