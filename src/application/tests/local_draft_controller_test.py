@@ -66,6 +66,7 @@ def snapshot() -> AuthoritativeSnapshot:
 def view(
     *,
     ply: int = 0,
+    view_revision: int = 0,
     hints: MovePreviewHints | None = None,
 ) -> ViewerSessionView:
     return ViewerSessionView(
@@ -74,6 +75,7 @@ def view(
         viewer_role="local_controller",
         viewer_side=None,
         current_ply=ply,
+        view_revision=view_revision,
         can_submit_for_side="white",
         can_offer_draw=True,
         can_accept_draw=False,

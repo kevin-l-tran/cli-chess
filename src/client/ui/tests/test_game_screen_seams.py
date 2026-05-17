@@ -1,8 +1,9 @@
 import asyncio
-import pytest
-
+from contextlib import suppress
 from types import SimpleNamespace
 from typing import Any, AsyncIterator, Awaitable
+
+import pytest
 
 from src.application.command_types import CommandResult
 from src.application.local_draft_controller import LocalDraftController
@@ -53,11 +54,13 @@ def make_snapshot(
 def make_view(
     *,
     current_ply: int = 0,
+    view_revision: int = 0,
     can_submit_for_side: PlayerSide | None = "white",
     can_accept_draw: bool = False,
     can_resign: bool = True,
     can_request_undo: bool = False,
     side_to_move: PlayerSide | None = "white",
+    status_text: str | None = None,
 ) -> ViewerSessionView:
     return ViewerSessionView(
         lobby_id=LobbyId("test-lobby"),
@@ -65,12 +68,13 @@ def make_view(
         viewer_role="local_controller",
         viewer_side=None,
         current_ply=current_ply,
+        view_revision=view_revision,
         can_submit_for_side=can_submit_for_side,
         can_offer_draw=can_submit_for_side is not None,
         can_accept_draw=can_accept_draw,
         can_resign=can_resign,
         can_request_undo=can_request_undo,
-        status_text=None,
+        status_text=status_text,
         snapshot=make_snapshot(
             is_game_over=can_submit_for_side is None and side_to_move is None,
             side_to_move=side_to_move,
@@ -107,6 +111,7 @@ class FakeClient:
         self.resign_calls: list[dict[str, Any]] = []
         self.undo_calls: list[dict[str, Any]] = []
         self.get_view_calls = 0
+        self.close_calls = 0
         self._updates: asyncio.Queue[ViewerSessionView] = asyncio.Queue()
 
     async def get_view(self) -> ViewerSessionView:
@@ -119,6 +124,12 @@ class FakeClient:
                 yield await self._updates.get()
 
         return iterator()
+
+    def push_update(self, view: ViewerSessionView) -> None:
+        self._updates.put_nowait(view)
+
+    async def close(self) -> None:
+        self.close_calls += 1
 
     async def submit_move(
         self,
@@ -139,8 +150,7 @@ class FakeClient:
         assert self.submit_result is not None, (
             "Set FakeClient.submit_result before confirming."
         )
-        if self.submit_result.view is not None:
-            self.view = self.submit_result.view
+        self.view = self.submit_result.view
         return self.submit_result
 
     async def accept_draw_offer(
@@ -222,12 +232,12 @@ class FocusTarget:
 
 def run_worker_immediately(awaitable: Awaitable[Any], **_kwargs: Any) -> Any:
     """Run a Textual worker coroutine immediately for seam-level unit tests."""
-    return asyncio.run(awaitable)  # type: ignore
+    return asyncio.run(awaitable)  # type: ignore[arg-type]
 
 
 @pytest.fixture
 def screen_harness(monkeypatch: pytest.MonkeyPatch):
-    view = make_view(current_ply=3)
+    view = make_view(current_ply=3, view_revision=3)
     client = FakeClient(view)
     draft = FakeDraft(make_draft())
     screen = GameScreen(client=client, draft=draft, selection=make_selection())
@@ -261,6 +271,40 @@ def screen_harness(monkeypatch: pytest.MonkeyPatch):
         focus_target=focus_target,
         initial_view=view,
     )
+
+
+async def build_async_screen_harness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> SimpleNamespace:
+    view = make_view(current_ply=3, view_revision=3)
+    client = FakeClient(view)
+    draft = FakeDraft(make_draft())
+    screen = GameScreen(client=client, draft=draft, selection=make_selection())
+    screen.interactor = await GameInteractor.create(client=client, draft=draft)
+
+    refresh_event = asyncio.Event()
+    refresh_calls: list[None] = []
+
+    def refresh_view() -> None:
+        refresh_calls.append(None)
+        refresh_event.set()
+
+    monkeypatch.setattr(screen, "_refresh_view", refresh_view)
+
+    return SimpleNamespace(
+        screen=screen,
+        client=client,
+        draft=draft,
+        refresh_event=refresh_event,
+        refresh_calls=refresh_calls,
+        initial_view=view,
+    )
+
+
+async def stop_task(task: asyncio.Task[Any]) -> None:
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
 
 
 def test_typing_only_updates_local_draft(screen_harness: SimpleNamespace) -> None:
@@ -311,7 +355,7 @@ def test_confirm_move_calls_game_client_submit_move(
         ok=False,
         status="invalid_move",
         message="No legal move matches the current draft.",
-        view=screen_harness.initial_view,
+        view=make_view(current_ply=3, view_revision=3, status_text="Invalid move."),
     )
 
     screen_harness.screen._confirm_move()
@@ -334,6 +378,7 @@ def test_confirm_uses_offer_draw_and_accepted_submit_clears_draft(
 ) -> None:
     new_view = make_view(
         current_ply=4,
+        view_revision=4,
         side_to_move="black",
         can_submit_for_side="black",
     )
@@ -376,7 +421,11 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
         submit_text="bad",
     )
     screen_harness.screen.interactor.latest_draft_view = screen_harness.draft.current
-    result_view = make_view(current_ply=3)
+    result_view = make_view(
+        current_ply=3,
+        view_revision=3,
+        status_text="Invalid move.",
+    )
     screen_harness.client.submit_result = CommandResult(
         ok=False,
         status="invalid_move",
@@ -391,3 +440,88 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
     assert screen_harness.draft.sync_calls[-1] is result_view
     assert screen_harness.draft.clear_calls == 0
     assert screen_harness.screen.interactor.latest_draft_view.text == "bad"
+
+
+@pytest.mark.asyncio
+async def test_watch_game_updates_applies_newer_pushed_view(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = await build_async_screen_harness(monkeypatch)
+    task = asyncio.create_task(harness.screen._watch_game_updates())
+
+    try:
+        pushed_view = make_view(
+            current_ply=4,
+            view_revision=4,
+            side_to_move="black",
+            can_submit_for_side="black",
+        )
+        harness.client.push_update(pushed_view)
+
+        await asyncio.wait_for(harness.refresh_event.wait(), timeout=1)
+
+        assert harness.screen.interactor.authoritative_view is pushed_view
+        assert harness.draft.sync_calls[-1] is pushed_view
+        assert len(harness.refresh_calls) == 1
+    finally:
+        await stop_task(task)
+
+
+@pytest.mark.asyncio
+async def test_watch_game_updates_ignores_stale_pushed_view(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = await build_async_screen_harness(monkeypatch)
+    initial_sync_count = len(harness.draft.sync_calls)
+    task = asyncio.create_task(harness.screen._watch_game_updates())
+
+    try:
+        stale_view = make_view(
+            current_ply=99,
+            view_revision=2,
+            side_to_move="black",
+            can_submit_for_side="black",
+        )
+        harness.client.push_update(stale_view)
+
+        assert harness.screen.interactor.authoritative_view is harness.initial_view
+        assert len(harness.draft.sync_calls) == initial_sync_count
+        assert len(harness.refresh_calls) == 0
+    finally:
+        await stop_task(task)
+
+
+@pytest.mark.asyncio
+async def test_watch_game_updates_ignores_same_revision_echo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = await build_async_screen_harness(monkeypatch)
+    initial_sync_count = len(harness.draft.sync_calls)
+    task = asyncio.create_task(harness.screen._watch_game_updates())
+
+    try:
+        same_revision_echo = make_view(
+            current_ply=4,
+            view_revision=3,
+            side_to_move="black",
+            can_submit_for_side="black",
+        )
+        harness.client.push_update(same_revision_echo)
+
+        assert harness.screen.interactor.authoritative_view is harness.initial_view
+        assert len(harness.draft.sync_calls) == initial_sync_count
+        assert len(harness.refresh_calls) == 0
+    finally:
+        await stop_task(task)
+
+
+@pytest.mark.asyncio
+async def test_on_unmount_closes_client() -> None:
+    view = make_view(current_ply=3, view_revision=3)
+    client = FakeClient(view)
+    draft = FakeDraft(make_draft())
+    screen = GameScreen(client=client, draft=draft, selection=make_selection())
+
+    await screen.on_unmount()
+
+    assert client.close_calls == 1

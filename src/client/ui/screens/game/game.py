@@ -131,8 +131,9 @@ class GameScreen(Screen):
         interactor = self._require_interactor()
 
         async for view in interactor.client.view_updates():
-            await interactor.apply_pushed_view(view)
-            self._refresh_view()
+            applied = await interactor.apply_pushed_view(view)
+            if applied:
+                self._refresh_view()
 
     def _refresh_clock_projection(self) -> None:
         if self.interactor is None:

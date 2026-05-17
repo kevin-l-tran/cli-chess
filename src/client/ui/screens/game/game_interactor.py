@@ -65,12 +65,14 @@ class GameInteractor:
         async with self._client_lock:
             self.replace_view(view)
 
-    async def apply_pushed_view(self, view: ViewerSessionView) -> None:
+    async def apply_pushed_view(self, view: ViewerSessionView) -> bool:
         """Apply a view pushed from the view stream."""
         async with self._client_lock:
             if view.view_revision <= self.authoritative_view.view_revision:
-                return
+                return False
+
             self._apply_view(view)
+            return True
 
     def apply_text(self, text: str) -> None:
         """

@@ -124,9 +124,6 @@ def test_submit_empty_move_returns_validation_error_without_mutating() -> None:
     assert_no_extra_moves(session, 0)
     assert result.view is not None
     assert result.view.current_ply == 0
-    assert result.view.snapshot.feedback is not None
-    assert result.view.snapshot.feedback.kind == "error"
-    assert result.view.snapshot.feedback.text == "Enter a move first."
 
 
 @pytest.mark.parametrize("move_text", ["not-a-move", "zzzz"])
@@ -346,8 +343,6 @@ def test_draw_offer_cannot_be_accepted_by_offering_side() -> None:
     assert result.message == "No draw offer is available."
     assert result.view is not None
     assert result.view.snapshot.is_game_over is False
-    assert result.view.snapshot.feedback is not None
-    assert result.view.snapshot.feedback.kind == "error"
 
 
 def test_accept_draw_without_offer_is_rejected() -> None:
@@ -488,9 +483,6 @@ def test_online_undo_is_rejected_by_policy() -> None:
     assert result.status == "undo_unavailable"
     assert result.message == "Can't undo in an online game."
     assert result.view is not None
-    assert result.view.snapshot.feedback is not None
-    assert result.view.snapshot.feedback.kind == "error"
-    assert result.view.snapshot.feedback.text == "Can't undo in an online game."
     assert_no_extra_moves(session, 0)
 
 
@@ -735,8 +727,6 @@ def test_accept_draw_offer_maps_unexpected_engine_error(
     assert result.status == "error"
     assert result.message == "Could not accept draw offer."
     assert result.view is not None
-    assert result.view.snapshot.feedback is not None
-    assert result.view.snapshot.feedback.text == "Could not accept draw offer."
 
 
 def test_black_resignation_sets_white_winner_and_preserves_last_move_highlight() -> (
@@ -799,8 +789,6 @@ def test_resign_maps_unexpected_engine_error(
     assert result.status == "error"
     assert result.message == "Could not resign game."
     assert result.view is not None
-    assert result.view.snapshot.feedback is not None
-    assert result.view.snapshot.feedback.text == "Could not resign game."
     assert_no_extra_moves(session, 0)
 
 
@@ -848,8 +836,6 @@ def test_request_undo_maps_unexpected_engine_error(
     assert result.message == "Could not undo move."
     assert_no_extra_moves(session, 1)
     assert result.view is not None
-    assert result.view.snapshot.feedback is not None
-    assert result.view.snapshot.feedback.text == "Could not undo move."
 
 
 def test_untimed_snapshot_exposes_no_timing_view() -> None:
@@ -1008,3 +994,121 @@ def test_undo_after_timeout_restores_clock_state() -> None:
     assert restored.black.is_active is False
     assert restored.active_side == "white"
     assert restored.timeout_side is None
+
+
+def test_view_revision_starts_at_zero() -> None:
+    session = local_session()
+
+    view = session.snapshot_for(LOCAL)
+
+    assert view.view_revision == 0
+    assert view.current_ply == 0
+
+
+def test_view_revision_increments_on_committed_move_only_once() -> None:
+    session = local_session()
+
+    result, _ = submit_first_legal(session, LOCAL, "revision-move-1")
+
+    assert result.ok is True
+    assert result.view is not None
+    assert result.view.current_ply == 1
+    assert result.view.view_revision == 1
+    assert session.snapshot_for(LOCAL).view_revision == 1
+
+
+def test_view_revision_does_not_increment_for_private_stale_position_error() -> None:
+    session = local_session()
+    before = session.snapshot_for(LOCAL)
+    move_text = first_legal_move_text(session)
+
+    result = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("revision-stale-ply"),
+        expected_ply=session.current_ply() + 1,
+    )
+
+    assert result.ok is False
+    assert result.status == "stale_position"
+    assert result.view is not None
+    assert result.view.status_text == "Position changed."
+    assert result.view.view_revision == before.view_revision
+    assert session.snapshot_for(LOCAL).view_revision == before.view_revision
+
+
+def test_view_revision_does_not_increment_for_duplicate_retries() -> None:
+    session = local_session()
+    move_text = first_legal_move_text(session)
+
+    first = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("revision-duplicate"),
+        expected_ply=0,
+    )
+    duplicate = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("revision-duplicate"),
+        expected_ply=0,
+    )
+    conflict = session.submit_move(
+        LOCAL,
+        move_text,
+        request_id=req("revision-duplicate"),
+        expected_ply=0,
+        offer_draw=True,
+    )
+
+    assert first.ok is True
+    assert first.view is not None
+    assert first.view.view_revision == 1
+
+    assert duplicate.status == "duplicate"
+    assert duplicate.view is not None
+    assert duplicate.view.view_revision == first.view.view_revision
+
+    assert conflict.status == "duplicate_conflict"
+    assert conflict.view is not None
+    assert conflict.view.view_revision == first.view.view_revision
+    assert_no_extra_moves(session, 1)
+
+
+def test_view_revision_increments_for_non_move_public_state_changes() -> None:
+    session = local_session()
+    submit_first_legal(session, LOCAL, "revision-before-undo-1")
+    second, _ = submit_first_legal(session, LOCAL, "revision-before-undo-2")
+    assert second.view is not None
+    assert second.view.view_revision == 2
+
+    undo = session.request_undo(
+        LOCAL,
+        request_id=req("revision-undo"),
+        scope="halfmove",
+    )
+
+    assert undo.ok is True
+    assert undo.view is not None
+    assert undo.view.current_ply == 1
+    assert undo.view.view_revision == 3
+
+
+def test_view_revision_increments_when_snapshot_detects_timeout() -> None:
+    clock = FakeClock(0)
+    session = GameSession.local(
+        lobby_id=LobbyId("revision-timeout"),
+        time_control=TimeControl(initial_seconds=5, increment_seconds=0),
+        time_source=clock,
+    )
+
+    initial = session.snapshot_for(LOCAL)
+    assert initial.view_revision == 0
+
+    clock.advance(5_000)
+    timeout = session.snapshot_for(LOCAL)
+
+    assert timeout.view_revision == 1
+    assert timeout.snapshot.outcome is not None
+    assert timeout.snapshot.outcome.reason == "timeout"
+    assert session.snapshot_for(LOCAL).view_revision == 1
