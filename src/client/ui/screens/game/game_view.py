@@ -58,7 +58,7 @@ class GameScreenView:
     def sync_all(self, *, pending_move_text: str | None) -> None:
         self.interactor.clear_invalid_offer_draw_state()
 
-        view = self.interactor.latest_view
+        view = self.interactor.view_for_render()
         snapshot = view.snapshot
         draft = self.interactor.latest_draft_view
         orientation = self.board_orientation_for(view)

@@ -168,7 +168,7 @@ class GameScreen(Screen):
         self._apply_pending_input_now(refresh=False)
 
         interactor = self._require_interactor()
-        if interactor.latest_view.can_submit_for_side is None:
+        if interactor.authoritative_view.can_submit_for_side is None:
             return
 
         interactor.click_square(msg.square)
@@ -186,7 +186,7 @@ class GameScreen(Screen):
         self._apply_pending_input_now(refresh=False)
 
         interactor = self._require_interactor()
-        if interactor.latest_view.can_submit_for_side is None:
+        if interactor.authoritative_view.can_submit_for_side is None:
             return
 
         interactor.select_promotion_piece(cast(PromotionPiece, msg.piece))

@@ -372,7 +372,7 @@ def test_confirm_uses_offer_draw_and_accepted_submit_clears_draft(
             "offer_draw": True,
         }
     ]
-    assert screen_harness.screen.interactor.latest_view is new_view
+    assert screen_harness.screen.interactor.authoritative_view is new_view
     assert screen_harness.draft.sync_calls[-1] is new_view
     assert screen_harness.draft.clear_calls == 1
     assert screen_harness.screen.interactor.latest_draft_view.text == ""
@@ -399,7 +399,7 @@ def test_rejected_submit_with_view_resyncs_but_does_not_clear_draft(
     screen_harness.screen._confirm_move()
 
     assert screen_harness.client.submit_calls[0]["move_text"] == "bad"
-    assert screen_harness.screen.interactor.latest_view is result_view
+    assert screen_harness.screen.interactor.authoritative_view is result_view
     assert screen_harness.draft.sync_calls[-1] is result_view
     assert screen_harness.draft.clear_calls == 0
     assert screen_harness.screen.interactor.latest_draft_view.text == "bad"
@@ -416,7 +416,7 @@ def test_replace_view_syncs_local_draft_to_new_authoritative_view(
 
     screen_harness.screen._replace_view(new_view)
 
-    assert screen_harness.screen.interactor.latest_view is new_view
+    assert screen_harness.screen.interactor.authoritative_view is new_view
     assert screen_harness.draft.sync_calls == [screen_harness.initial_view, new_view]
     assert (
         screen_harness.screen.interactor.latest_draft_view

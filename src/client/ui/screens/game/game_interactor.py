@@ -5,6 +5,7 @@ from src.application.command_types import CommandResult
 from src.application.game_client import GameClient
 from src.application.local_draft_controller import LocalDraftController
 from src.application.viewer_types import LocalDraftView, ViewerSessionView
+from src.client.ui.screens.game.clock_projector import ClientClockProjector
 from src.shared.ids import RequestId
 from src.shared.protocol_types import PromotionPiece, Square
 
@@ -20,9 +21,15 @@ class GameInteractor:
 
     client: GameClient
     draft: LocalDraftController
-    latest_view: ViewerSessionView
+    authoritative_view: ViewerSessionView
     latest_draft_view: LocalDraftView
     offer_draw: bool = False
+    clock_projector: ClientClockProjector = field(
+        default_factory=ClientClockProjector,
+        init=False,
+        repr=False,
+    )
+
     _client_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
         init=False,
@@ -44,10 +51,11 @@ class GameInteractor:
         """
         view = await client.get_view()
         draft.sync_to_view(view)
+
         return cls(
             client=client,
             draft=draft,
-            latest_view=view,
+            authoritative_view=view,
             latest_draft_view=draft.view(),
         )
 
@@ -62,7 +70,7 @@ class GameInteractor:
 
         This updates only draft state; no committed game command is sent.
         """
-        if self.latest_view.can_submit_for_side is None:
+        if self.authoritative_view.can_submit_for_side is None:
             return
         self.latest_draft_view = self.draft.set_text(text)
 
@@ -73,7 +81,7 @@ class GameInteractor:
         Returns True when the resulting draft is resolved and the UI should
         auto-confirm the move.
         """
-        if self.latest_view.can_submit_for_side is None:
+        if self.authoritative_view.can_submit_for_side is None:
             return False
 
         self.latest_draft_view = self.draft.click_square(square)
@@ -85,14 +93,14 @@ class GameInteractor:
 
         The selection is ignored when the current viewer cannot submit a move.
         """
-        if self.latest_view.can_submit_for_side is None:
+        if self.authoritative_view.can_submit_for_side is None:
             return
 
         self.latest_draft_view = self.draft.select_promotion_piece(piece)
 
     def toggle_draw_offer(self) -> None:
         """Toggle whether the next submitted move should include a draw offer."""
-        if not self.latest_view.can_offer_draw:
+        if not self.authoritative_view.can_offer_draw:
             self.offer_draw = False
             return
 
@@ -105,9 +113,9 @@ class GameInteractor:
         This prevents stale UI state from offering a draw after the game ends
         or when the latest permissions no longer allow draw offers.
         """
-        snapshot = self.latest_view.snapshot
+        snapshot = self.authoritative_view.snapshot
         if self.offer_draw and (
-            snapshot.is_game_over or not self.latest_view.can_offer_draw
+            snapshot.is_game_over or not self.authoritative_view.can_offer_draw
         ):
             self.offer_draw = False
 
@@ -119,7 +127,7 @@ class GameInteractor:
         text. On accepted results, the draft and draw-offer flag are cleared.
         """
         async with self._client_lock:
-            view = self.latest_view
+            view = self.authoritative_view
             draft = self.latest_draft_view
 
             if view.can_submit_for_side is None:
@@ -151,7 +159,7 @@ class GameInteractor:
         view, which is applied immediately.
         """
         async with self._client_lock:
-            view = self.latest_view
+            view = self.authoritative_view
             if not view.can_accept_draw:
                 return None
 
@@ -173,7 +181,7 @@ class GameInteractor:
         local draft controller.
         """
         async with self._client_lock:
-            if not self.latest_view.can_request_undo:
+            if not self.authoritative_view.can_request_undo:
                 return None
 
             result = await self.client.request_undo(request_id=request_id)
@@ -191,7 +199,7 @@ class GameInteractor:
         draw-offer flag is cleared.
         """
         async with self._client_lock:
-            if not self.latest_view.can_resign:
+            if not self.authoritative_view.can_resign:
                 return None
 
             result = await self.client.resign(request_id=request_id)
@@ -208,7 +216,8 @@ class GameInteractor:
         Use this after command results, polling, or any other client refresh
         that returns a newer viewer-specific session view.
         """
-        self.latest_view = view
+        self.authoritative_view = view
+        self.clock_projector.reset_anchor()
         self.draft.sync_to_view(view)
         self.latest_draft_view = self.draft.view()
         self.clear_invalid_offer_draw_state()
@@ -220,7 +229,7 @@ class GameInteractor:
         Auto-confirm is allowed only for resolved non-promotion drafts in an
         active game where the viewer can submit for the current side.
         """
-        view = self.latest_view
+        view = self.authoritative_view
         draft = self.latest_draft_view
         canonical_text = draft.canonical_text
 
@@ -234,3 +243,7 @@ class GameInteractor:
             return False
 
         return draft.text.strip() == canonical_text.strip()
+
+    def view_for_render(self) -> ViewerSessionView:
+        """Returns a view with the clock locally updated."""
+        return self.clock_projector.project(self.authoritative_view)
